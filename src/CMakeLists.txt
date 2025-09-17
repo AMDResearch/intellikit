@@ -42,7 +42,7 @@ CPMAddPackage("gh:fmtlib/fmt#7.1.3")
 CPMAddPackage(
     NAME kernelDB
     GIT_REPOSITORY git@github.com:AARInternal/kerneldb.git
-    GIT_TAG 
+    GIT_TAG 125643cb4b5843b9630cf69fbe5a75c651fbf909
     
 )
 
