@@ -67,7 +67,7 @@ export NEXUS_OUTPUT_FILE=result.json
 cd test/
 hipcc vector_add.hip -g  -o vector_add
 cd ..
-./vector_add
+./test/vector_add
 ```
 
 
