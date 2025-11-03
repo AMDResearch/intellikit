@@ -1,18 +1,18 @@
 ################################################################################
 # MIT License
-# 
+#
 # Copyright (c) 2025 Advanced Micro Devices, Inc. All Rights Reserved.
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -39,11 +39,14 @@ FetchContent_MakeAvailable(spdlog)
 include(${PROJECT_SOURCE_DIR}/cmake/CPM.cmake)
 CPMAddPackage("gh:fmtlib/fmt#7.1.3")
 
+# Disable install rules for kernelDB dependency
+set(KERNELDB_SKIP_INSTALL ON CACHE BOOL "Skip kernelDB install rules" FORCE)
+
 CPMAddPackage(
     NAME kernelDB
     GIT_REPOSITORY https://github.com/AMDResearch/kerneldb.git
     GIT_TAG 125643cb4b5843b9630cf69fbe5a75c651fbf909
-    
+    EXCLUDE_FROM_ALL YES
 )
 
 CPMAddPackage("gh:nlohmann/json@3.11.3")
@@ -61,15 +64,15 @@ set(CMAKE_HIP_FLAGS_DEBUG "-O0 -ggdb")
 
 target_include_directories(nexus
     PUBLIC
-        "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
-        "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include/nexus>"
+        "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/csrc/include>"
+        "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>"
 )
 
 
 target_sources(nexus
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/log.hpp>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nexus.hpp>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/csrc/include/nexus/log.hpp>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/csrc/include/nexus/nexus.hpp>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/nexus.cpp
 )

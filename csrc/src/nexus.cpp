@@ -24,12 +24,12 @@
 
 #define __HIP_PLATFORM_AMD__
 
-#include "nexus.hpp"
+#include "nexus/nexus.hpp"
 
 #include <hip/hip_runtime.h>
 
 #include <fmt/core.h>
-#include "log.hpp"
+#include "nexus/log.hpp"
 
 #include <cxxabi.h>
 #include <dlfcn.h>
@@ -675,26 +675,23 @@ void nexus::on_submit_packet(const void* in_packets,
 nlohmann::json nexus::get_all_isa(const std::string& kernel_name) {
   nlohmann::json assembly_array = nlohmann::json::array();
 
-  std::vector<std::string> kernels;
-  kdb_->getKernels(kernels);
-  // search if the kernel_name is in the list of kernels
-  auto it = std::find(kernels.begin(), kernels.end(), kernel_name);
-  if (it == kernels.end()) {
-    LOG_ERROR("Kernel not found in the list of kernels: {}", kernel_name);
-    return assembly_array;
-  }
-
-  auto& kernel = kdb_->getKernel(kernel_name);
-  const auto& basic_blocks = kernel.getBasicBlocks();
-  for (const auto& bb : basic_blocks) {
-    const auto& isa = bb->getInstructions();
-    for (const auto& inst : isa) {
-      std::string instruction = inst.disassembly_;
-      instruction.erase(std::remove(instruction.begin(), instruction.end(), '\t'),
-                        instruction.end());
-      assembly_array.push_back(instruction);
-      LOG_DETAIL("{}", instruction);
+  try {
+    // Try to get the kernel directly without checking the list first
+    // (getKernels() might not return all kernels, especially for Triton)
+    auto& kernel = kdb_->getKernel(kernel_name);
+    const auto& basic_blocks = kernel.getBasicBlocks();
+    for (const auto& bb : basic_blocks) {
+      const auto& isa = bb->getInstructions();
+      for (const auto& inst : isa) {
+        std::string instruction = inst.disassembly_;
+        instruction.erase(std::remove(instruction.begin(), instruction.end(), '\t'),
+                          instruction.end());
+        assembly_array.push_back(instruction);
+        LOG_DETAIL("{}", instruction);
+      }
     }
+  } catch (const std::exception& e) {
+    LOG_ERROR("Failed to get assembly for kernel {}: {}", kernel_name, e.what());
   }
 
   return assembly_array;

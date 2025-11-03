@@ -1,0 +1,31 @@
+# Include documentation
+include README.md
+include LICENSE
+include INSTALL.md
+
+# Include build configuration
+include pyproject.toml
+include setup.py
+
+# Include Python package
+recursive-include nexus *.py *.md
+
+# Include examples
+recursive-include examples *.py *.md
+
+# Include CMake build system
+recursive-include cmake *.cmake
+include CMakeLists.txt
+
+# Include C/C++ source code
+recursive-include csrc *.cpp *.hpp *.h *.cmake CMakeLists.txt
+
+# Include scripts
+recursive-include scripts *
+
+# Exclude build artifacts
+global-exclude *.pyc
+global-exclude __pycache__
+prune build
+prune test
+

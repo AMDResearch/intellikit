@@ -24,38 +24,102 @@ SOFTWARE.
 
 # Nexus: HSA Packet Source Code Extractor
 
-> [!IMPORTANT]  
-> This project is intended for research purposes only and is provided by AMD Research and Advanced Development team. 
+> [!IMPORTANT]
+> This project is intended for research purposes only and is provided by AMD Research and Advanced Development team.
 This is not a product. Use it at your own risk and discretion.
-> 
+>
 Nexus is a custom tool that intercepts Heterogeneous System Architecture (HSA) packets, extracts the source code from them, and outputs it to a JSON file containing the assembly and the HIP code.
 
+## Installation
 
-## Build
+### From Git Repository (Recommended)
 
-To build Nexus, use CMake:
+```bash
+pip install git+https://github.com/AMDResearch/nexus.git
+```
+
+This will automatically build the native C++ library during installation.
+
+For development/editable install:
+
+```bash
+git clone https://github.com/AMDResearch/nexus.git
+cd nexus
+pip install -e .
+```
+
+### Manual Build (Optional)
+
+If you want to build the C++ library separately:
 
 ```bash
 cmake -B build\
     -DCMAKE_PREFIX_PATH=${ROCM_PATH}\
     -DLLVM_INSTALL_DIR=/opt/rocm/llvm\
-    -DCMAKE_BUILD_TYPE=Debug
+    -DCMAKE_BUILD_TYPE=Release
 
 cmake --build build --parallel 16
 ```
 
-This will build the Nexus library and its dependencies. You can adjust the `CMAKE_BUILD_TYPE` variable to change the build configuration (e.g., debug or release).
+This will build the Nexus library and its dependencies. You can adjust the `CMAKE_BUILD_TYPE` variable to change the build configuration (e.g., Debug or Release).
 
 ## Usage
 
-### Options
+### Python API
+
+After installation, you can use Nexus from Python:
+
+```python
+from nexus import Nexus
+
+# Create tracer
+nexus = Nexus(log_level=1)
+
+# Run and get trace
+trace = nexus.run(["python", "my_gpu_script.py"])
+
+# Iterate over kernels
+for kernel in trace:
+    print(f"{kernel.name}: {len(kernel.assembly)} instructions")
+
+    # Iterate through assembly instructions with line numbers
+    for i, asm_line in enumerate(kernel.assembly, 1):
+        print(f"  {i:3d}. {asm_line}")
+
+    # Iterate through HIP source with actual source line numbers
+    if kernel.lines and len(kernel.lines) == len(kernel.hip):
+        for line_no, hip_line in zip(kernel.lines, kernel.hip):
+            print(f"  {line_no:3d}. {hip_line}")
+    else:
+        # Fallback to sequential numbering if line numbers not available
+        for i, hip_line in enumerate(kernel.hip, 1):
+            print(f"  {i:3d}. {hip_line}")
+
+# Access specific kernel by name
+kernel = trace["vector_add(float*, float*, float*, int)"]
+print(kernel.assembly)   # Array of assembly strings
+print(kernel.hip)        # Array of HIP source lines
+print(kernel.signature)  # Kernel signature
+print(kernel.files)      # Source files
+print(kernel.lines)      # Line numbers
+
+# Save and load traces
+trace.save("my_trace.json")
+old_trace = Nexus.load("my_trace.json")
+```
+
+For more details, see the [Python package documentation](nexus/README.md) and [examples](examples/).
+
+### Command Line Usage
+
+#### Environment Variables
 
 * `NEXUS_LOG_LEVEL`: Verbosity level (0 = none, 1 = info, 2 = warning, 3 = error, 4 = detail)
 * `NEXUS_OUTPUT_FILE`: Path to the JSON output file
 * `NEXUS_EXTRA_SEARCH_PREFIX`: Additional search directories for HIP files with relative paths. Supports wildcards and is a colon-separated list.
+* `TRITON_DISABLE_LINE_INFO`: Set to `0` to enable line info in Triton kernels (automatically set by Python API)
 
-
-### Example
+#### Example
 
 To use Nexus, simply export the following environment variables and run your application:
 
@@ -77,7 +141,7 @@ Outputs:
 <p>
 
 ```terminal
-./test/vector_add 
+./test/vector_add
 [DETAIL]: [src/nexus.cpp:775] Creating maestro singleton
 [DETAIL]: [src/nexus.cpp:110] Saving current APIs.
 [DETAIL]: [src/nexus.cpp:112] Hooking new APIs.
@@ -358,7 +422,7 @@ Success
 ```
 
 </p>
-</details> 
+</details>
 
 
 <details><summary>JSON Output</summary>
@@ -366,7 +430,7 @@ Success
 
 
 ```console
-cat result.json 
+cat result.json
 {
     "kernels": {
         "vector_add(float const*, float const*, float*, int)": {
@@ -440,4 +504,4 @@ cat result.json
 ```
 
 </p>
-</details> 
+</details>

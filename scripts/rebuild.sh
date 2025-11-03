@@ -1,18 +1,19 @@
+#!/bin/bash
 ################################################################################
 # MIT License
-# 
+#
 # Copyright (c) 2025 Advanced Micro Devices, Inc. All Rights Reserved.
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -22,26 +23,26 @@
 # SOFTWARE.
 ################################################################################
 
-kernel="vector_add_thrust"
-# kernel="vector_add_template"
-kernel="vector_add_inline"
-# kernel="vector_add"
+# CC=${ROCM_PATH}/bin/hipcc CXX=${ROCM_PATH}/bin/hipcc
 
-kernel="gemm"
-output="$kernel.json"
+script_dir=$(cd $(dirname $0)/.. && pwd)
 
-echo "output: $output"
+pushd $script_dir
 
-export HSA_TOOLS_LIB=./build/lib/libnexus.so
-export NEXUS_OUTPUT_FILE=$output
-export NEXUS_LOG_LEVEL=0
+# Build the native C++ library
+cmake -B build\
+    -DCMAKE_PREFIX_PATH=${ROCM_PATH:-/opt/rocm}\
+    -DLLVM_INSTALL_DIR=${LLVM_INSTALL_DIR:-/opt/rocm/llvm}\
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-binary="python ./test/$kernel.py"
-# binary=./build/test/$kernel
-# binary=./test/vector_add_template
+cmake --build build --parallel 16
 
+echo ""
+echo "Build completed!"
+echo "Native library: build/lib/libnexus.so"
+echo ""
+echo "You can now use Nexus in two ways:"
+echo "  1. Python API: pip install -e . (installs with Python package)"
+echo "  2. Direct C++ library: Use scripts/nexus wrapper or export HSA_TOOLS_LIB"
 
-$binary
-
-
-echo "Nexus output file: $output"
+popd

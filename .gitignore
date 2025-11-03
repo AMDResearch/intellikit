@@ -12,6 +12,15 @@ build/
 
 # Python
 */__pycache__/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+.eggs/
+*.whl
 
 # Binaries
 vector_add

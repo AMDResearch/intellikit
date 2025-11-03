@@ -1,18 +1,18 @@
 ################################################################################
 # MIT License
-# 
+#
 # Copyright (c) 2025 Advanced Micro Devices, Inc. All Rights Reserved.
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -65,6 +65,9 @@ endif ()
 # enable tests if requested
 option(NEXUS_BUILD_TESTS "Build the test suite" ON)
 
+# Prevent dependencies from installing to system directories
+# This ensures CPM-fetched dependencies don't try to install headers/libs globally
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
 
 # target
 add_library(nexus SHARED)
@@ -72,12 +75,12 @@ add_library(nexus::nexus ALIAS nexus)
 
 target_include_directories(nexus
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/csrc/include>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
         "$<BUILD_INTERFACE:/tmp>"
         "$<INSTALL_INTERFACE:include>"
     PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/csrc/src"
 )
 
 
@@ -111,10 +114,25 @@ set_target_properties(nexus
         RUNTIME_OUTPUT_DIRECTORY    ${PROJECT_BINARY_DIR}/bin
 )
 
+# Install the library to the Python package
+install(TARGETS nexus
+    LIBRARY DESTINATION nexus
+    RUNTIME DESTINATION nexus
+)
+
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # sources
-add_subdirectory(src)
+add_subdirectory(csrc/src)
+
+# Install kernelDB library (dependency) to the nexus package
+# This ensures kernelDB is bundled with nexus at runtime
+if(TARGET kernelDB64)
+    install(TARGETS kernelDB64
+        LIBRARY DESTINATION nexus
+        RUNTIME DESTINATION nexus
+    )
+endif()
 
 
 if(NEXUS_BUILD_TESTS)
