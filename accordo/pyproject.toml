@@ -6,33 +6,23 @@ requires = ["scikit-build-core>=0.3.3", "setuptools-scm>=8"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "intellikit"
+name = "accordo"
 dynamic = ["version"]
-description = "IntelliKit: LLM-ready GPU profiling and analysis toolkit for AMD ROCm"
+description = "Accordo: Automated side-by-side correctness validation for GPU kernels"
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.8"
-
-# By default, install nothing (meta-package)
 dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/nexus"
 Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/blob/main/README.md"
+Documentation = "https://github.com/AMDResearch/nexus/tree/main/accordo"
 
 [project.optional-dependencies]
-# Install individual tools
-nexus = []
-accordo = []
-metrix = ["pandas>=1.5.0"]
-
-# Install all tools
-all = ["pandas>=1.5.0"]
-
 dev = [
     "pytest",
     "ruff",
@@ -40,29 +30,24 @@ dev = [
 
 [tool.scikit-build]
 cmake.build-type = "Release"
-# Install all three packages with their correct paths
-wheel.packages = ["nexus/nexus", "accordo", "metrix/src/metrix"]
-wheel.py-api = "cp38"
+wheel.packages = ["accordo"]
 
 [tool.scikit-build.cmake.define]
 CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
-LLVM_INSTALL_DIR = {env="LLVM_INSTALL_DIR", default="/opt/rocm/llvm"}
-# Control which components to build (only nexus needs building)
-BUILD_NEXUS = {env="BUILD_NEXUS", default="ON"}
 
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "node-and-date"
-fallback_version = "0.1.0"
+fallback_version = "0.2.0"
+root = ".."
 
 [tool.ruff]
 line-length = 120
 exclude = [
     "**/*.ipynb",
     "build/**",
-    "test/**",
-    "**/resources/**",
+    "test/**"
 ]
 
 [tool.ruff.lint]
@@ -71,3 +56,4 @@ ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
 
 [tool.ruff.format]
 quote-style = "double"
+
