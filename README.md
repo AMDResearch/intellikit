@@ -123,8 +123,7 @@ pip install -e ".[metrix]"
 
 - **Python**: >= 3.8 (3.9+ for metrix)
 - **ROCm**: >= 6.0 (tested on 6.3.2)
-- **OS**: Linux (tested on RHEL/CentOS)
-- **Hardware**: AMD GPUs (MI200/MI300 series recommended)
+- **Hardware**: MI300+ GPUs
 
 ## Documentation
 
