@@ -98,39 +98,46 @@ def main():
 
         # Profile with metrix
         print("Step 3: Profiling with Metrix...")
-        try:
-            from metrix.api import profile_application
 
-            # Profile the kernel
+        try:
+            from metrix import Metrix
+
+            # Initialize profiler (auto-detects GPU architecture)
+            profiler = Metrix()
+
+            # Select a few key metrics to display
+            metrics_to_collect = [
+                "memory.hbm_bandwidth_utilization",
+                "memory.l2_hit_rate",
+                "memory.coalescing_efficiency",
+                "compute.total_flops",
+            ]
+
             print(f"  Running: {binary_file}")
-            metrics = profile_application(
-                binary=[str(binary_file)],
-                working_directory=str(tmp_path),
+            results = profiler.profile(
+                command=str(binary_file),
+                metrics=metrics_to_collect,
+                cwd=str(tmp_path)
             )
 
             print()
             print("=" * 80)
-            print("PROFILING COMPLETE")
+            print("GPU PERFORMANCE METRICS")
             print("=" * 80)
-            print()
-            print("Metrics:")
-            for key, value in metrics.items():
-                print(f"  {key}: {value}")
-            print()
 
-        except ImportError:
-            print("  Metrix profiling API not fully implemented yet")
-            print("  Running kernel directly to verify compilation...")
-            result = subprocess.run([str(binary_file)], capture_output=True, text=True)
-            print(result.stdout)
-            if result.returncode == 0:
-                print("  Kernel executed successfully")
-            else:
-                print(f"  Kernel failed: {result.stderr}")
-                return 1
+            for kernel in results.kernels:
+                print(f"\nKernel: {kernel.name}")
+                print(f"  Duration: {kernel.duration_us.avg:.2f} μs")
+
+                # Display metrics
+                for metric_name, stats in kernel.metrics.items():
+                    print(f"  {metric_name}: {stats.avg:.2f}")
+
+            print("=" * 80)
+
         except Exception as e:
-            print(f"  Profiling not available: {e}")
-            print("  Running kernel directly...")
+            print(f"  Metrix profiling failed: {e}")
+            print("  Running kernel directly to verify compilation...")
             result = subprocess.run([str(binary_file)], capture_output=True, text=True)
             print(result.stdout)
             if result.returncode == 0:
