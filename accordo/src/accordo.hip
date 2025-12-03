@@ -45,6 +45,7 @@ SOFTWARE.
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <fstream>
 
 #include <hip/hip_runtime.h>
 #include "KernelArguments.hpp"
@@ -502,6 +503,40 @@ void accordo::write_packets(hsa_queue_t* queue,
   try {
     LOG_DETAIL("Executing packet: {}", packet_to_text(packet));
     auto instance = get_instance();
+
+    // Best-effort: write dispatch metadata (grid/block dims) once if env is set and kernel matches
+    static bool wrote_metadata = false;
+    if (!wrote_metadata) {
+      uint32_t type = get_header_type(packet);
+      if (type == HSA_PACKET_TYPE_KERNEL_DISPATCH) {
+        const hsa_kernel_dispatch_packet_t* disp =
+            reinterpret_cast<const hsa_kernel_dispatch_packet_t*>(packet);
+        const auto kernel_name = get_kernel_name(disp->kernel_object);
+        static const char* kernel_to_trace = std::getenv("KERNEL_TO_TRACE");
+        static const char* metadata_file = std::getenv("ACCORDO_METADATA_FILE");
+        if (metadata_file && kernel_to_trace && kernel_name.contains(kernel_to_trace)) {
+          std::ofstream ofs(metadata_file, std::ios::out | std::ios::trunc);
+          if (ofs) {
+            ofs << "{";
+            ofs << "\"kernel_name\":\"" << kernel_name << "\",";
+            ofs << "\"grid\":{"
+                << "\"x\":" << static_cast<uint32_t>(disp->grid_size_x) << ","
+                << "\"y\":" << static_cast<uint32_t>(disp->grid_size_y) << ","
+                << "\"z\":" << static_cast<uint32_t>(disp->grid_size_z) << "},";
+            ofs << "\"block\":{"
+                << "\"x\":" << static_cast<uint32_t>(disp->workgroup_size_x) << ","
+                << "\"y\":" << static_cast<uint32_t>(disp->workgroup_size_y) << ","
+                << "\"z\":" << static_cast<uint32_t>(disp->workgroup_size_z) << "}";
+            ofs << "}";
+            ofs.flush();
+            wrote_metadata = true;
+            LOG_DETAIL("Wrote dispatch metadata to {}", metadata_file);
+          } else {
+            LOG_ERROR("Failed to open metadata file {}", metadata_file);
+          }
+        }
+      }
+    }
 
     hsa_signal_t new_signal;
     auto status = hsa_core_call(instance, hsa_signal_create, 1, 0, nullptr, &new_signal);

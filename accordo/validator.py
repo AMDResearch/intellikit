@@ -3,6 +3,7 @@
 
 """AccordoValidator: Main validation class for Accordo."""
 
+import json
 import logging
 import os
 import signal
@@ -199,17 +200,39 @@ class Accordo:
 
 		try:
 			start_time = time.time()
+			# Prepare a metadata file path for exporter to write dispatch dims
+			metadata_file = f"/tmp/accordo_metadata_{int(start_time * 1000)}.json"
 			result_arrays = self._run_instrumented_app(
-				binary, working_directory, label="snapshot", baseline_time_ms=None
+				binary,
+				working_directory,
+				label="snapshot",
+				baseline_time_ms=None,
+				extra_env={"ACCORDO_METADATA_FILE": metadata_file},
 			)
 			signal.alarm(0)  # Cancel alarm on success
 			execution_time_ms = (time.time() - start_time) * 1000
 
+			# Try to read grid/block metadata if exporter produced it
+			grid = None
+			block = None
+			try:
+				if os.path.exists(metadata_file):
+					with open(metadata_file, "r") as f:
+						meta = json.load(f)
+					# Basic validation
+					if isinstance(meta, dict):
+						grid = meta.get("grid")
+						block = meta.get("block")
+			except Exception:
+				# TODO: WIP; current attempt doesn't catch parsing errors
+				pass
 			return Snapshot(
 				arrays=result_arrays,
 				execution_time_ms=execution_time_ms,
 				binary=binary,
 				working_directory=working_directory,
+				grid_size=grid,
+				block_size=block,
 			)
 		except _TimeoutException:
 			signal.alarm(0)
@@ -298,7 +321,12 @@ class Accordo:
 		return self.compare_snapshots(reference_snapshot, optimized_snapshot)
 
 	def _run_instrumented_app(
-		self, binary_cmd: list[str], working_directory: str, label: str, baseline_time_ms: Optional[float] = None
+		self,
+		binary_cmd: list[str],
+		working_directory: str,
+		label: str,
+		baseline_time_ms: Optional[float] = None,
+		extra_env: Optional[dict] = None,
 	) -> list[np.ndarray]:
 		"""Run an instrumented application and collect kernel argument data.
 
@@ -324,6 +352,8 @@ class Accordo:
 		env = os.environ.copy()
 		env["HSA_TOOLS_LIB"] = str(self._lib_path)
 		env["KERNEL_TO_TRACE"] = self.config.kernel_name
+		if extra_env:
+			env.update(extra_env)
 
 		# Set log level
 		debug_level = logging.getLogger().getEffectiveLevel()

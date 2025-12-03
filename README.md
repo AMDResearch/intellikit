@@ -157,7 +157,7 @@ IntelliKit tools provide clean APIs that LLMs can call to:
 ```python
 # 1. Profile baseline kernel with Metrix
 from metrix import profile
-baseline_metrics = profile("./app_baseline", gpu_arch="gfx942")
+baseline_metrics = profile("./app_baseline")
 
 # 2. Extract kernel source with Nexus
 from nexus import Nexus
