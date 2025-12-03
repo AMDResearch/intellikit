@@ -64,8 +64,12 @@ opt_snapshot = validator.capture_snapshot(
 )
 
 result = validator.compare_snapshots(ref_snapshot, opt_snapshot)
-print(f"Validation: {'✓ PASS' if result.passed else '✗ FAIL'}")
-print(f"Speedup: {result.speedup:.2f}x")
+print(f"Validation: {'✓ PASS' if result.is_valid else '✗ FAIL'}")
+if result.is_valid:
+    print(f"✓ {result.num_arrays_validated} arrays matched within tolerance")
+else:
+    print(f"✗ {result.num_mismatches} mismatches found")
+    print(result.summary())
 ```
 
 ## Requirements

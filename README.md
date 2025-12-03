@@ -1,4 +1,8 @@
-# IntelliKit 🧠
+# IntelliKit
+
+> [!IMPORTANT]
+> This project is intended for research purposes only and is provided by AMD Research and Advanced Development team.
+This is not a product. Use it at your own risk and discretion.
 
 > **LLM-Ready GPU Profiling and Analysis Toolkit for AMD ROCm**
 
@@ -6,14 +10,14 @@ IntelliKit is a collection of intelligent tools designed to make GPU kernel deve
 
 ## Philosophy
 
-Traditional GPU profiling tools expose raw hardware counters and assembly. IntelliKit tools are designed to:
+Traditional GPU profiling and analysis tools expose raw hardware counters and assembly. IntelliKit tools are designed to:
 - **Decode complexity**: Turn hardware metrics into human-readable insights
 - **Enable LLM integration**: Provide clean APIs suitable for LLM-driven workflows (MCP-ready)
 - **Focus on research**: Experimental tools for pushing GPU development forward
 
 ## Tools
 
-### 🔍 [Nexus](nexus/) - HSA Packet Source Code Extractor
+### [Nexus](nexus/) - HSA Packet Source Code Extractor
 Intercepts GPU kernel launches and extracts source code + assembly from HSA packets.
 
 **Use cases:**
@@ -52,7 +56,7 @@ config = Accordo.Config(
 )
 validator = Accordo(config)
 result = validator.validate(reference=["./ref"], optimized=["./opt"])
-print(f"✓ Speedup: {result.speedup:.2f}x" if result.passed else "✗ Failed")
+print(result.summary())  # ✓ Validation passed! or ✗ Validation failed
 ```
 
 ### [Metrix](metrix/) - Human-Readable GPU Metrics
@@ -67,14 +71,14 @@ Decodes hardware counters into actionable performance insights.
 ```python
 from metrix import profile
 
-metrics = profile("my_app", gpu_arch="gfx942")
+metrics = profile("my_app")
 print(f"Memory BW Utilization: {metrics.memory_bandwidth_util:.1f}%")
 print(f"Compute Efficiency: {metrics.compute_efficiency:.1f}%")
 ```
 
-## 🚀 Installation
+## Installation
 
-### Install All Tools (Recommended for IntelliPerf users)
+### Install All Tools
 
 ```bash
 pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[all]"
@@ -170,33 +174,29 @@ config = Accordo.Config(kernel_name="my_kernel", ...)
 validator = Accordo(config)
 result = validator.validate(reference=["./app_baseline"], optimized=["./app_opt"])
 
-if result.passed:
-    opt_metrics = profile("./app_opt", gpu_arch="gfx942")
-    print(f"Speedup: {result.speedup:.2f}x")
+if result.is_valid:
+    opt_metrics = profile("./app_opt")
+    print(f"✓ Validation passed! {result.num_arrays_validated} arrays matched")
     print(f"BW Improvement: {opt_metrics.memory_bandwidth_util - baseline_metrics.memory_bandwidth_util:.1f}%")
 ```
 
 ## Contributing
 
-This is a research project maintained by AMD Research and Advanced Development. While we welcome feedback and issues, please note:
+We welcome contributions and feedback! Open an issue or create a PR.
 
-> **⚠️ Research Project**: These tools are experimental and provided as-is for research purposes. Not production-ready.
-
-## 📄 License
+## License
 
 MIT License - Copyright (c) 2025 Advanced Micro Devices, Inc.
 
 See [LICENSE](LICENSE) for full details.
 
-## 🔗 Related Projects
 
-- **IntelliPerf**: LLM-driven GPU performance optimization framework (uses IntelliKit)
-- **ROCm**: AMD's open-source GPU computing platform
+## Support
 
-## 📞 Contact
+Need help? Here's how to reach us:
 
-- **Author**: Muhammad Awad (muhaawad@amd.com)
-- **Organization**: AMD Research and Advanced Development
+- **Issues**: Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/AMDResearch/nexus/issues)
+- **Contact**: Reach out to the development team at [muhaawad@amd.com](mailto:muhaawad@amd.com)
 
 ---
 
