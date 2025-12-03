@@ -4,7 +4,7 @@
 > This project is intended for research purposes only and is provided by AMD Research and Advanced Development team.
 This is not a product. Use it at your own risk and discretion.
 
-> **LLM-Ready GPU Profiling and Analysis Toolkit for AMD ROCm**
+**LLM-Ready GPU Profiling and Analysis Toolkit for AMD ROCm**
 
 IntelliKit is a collection of intelligent tools designed to make GPU kernel development, profiling, and validation accessible to LLMs and human developers alike. Built for AMD ROCm, these tools provide clean abstractions over complex GPU internals.
 
@@ -119,7 +119,7 @@ pip install -e ".[accordo]"
 pip install -e ".[metrix]"
 ```
 
-## 🔧 Requirements
+## Requirements
 
 - **Python**: >= 3.8 (3.9+ for metrix)
 - **ROCm**: >= 6.0 (tested on 6.3.2)
@@ -133,9 +133,9 @@ Each tool has its own detailed documentation:
 - [Accordo Documentation](accordo/README.md)
 - [Metrix Documentation](metrix/README.md)
 
-## 🎓 Use Cases
+## Use Cases
 
-### For LLM-Driven GPU Development (IntelliPerf)
+### For LLM-Driven GPU Development
 IntelliKit tools provide clean APIs that LLMs can call to:
 - Profile kernels and get human-readable feedback (Metrix)
 - Extract actual GPU code for analysis (Nexus)
@@ -152,7 +152,7 @@ IntelliKit tools provide clean APIs that LLMs can call to:
 - Compare optimization strategies
 - Track performance regressions
 
-## 🧪 Example Workflow
+## Example Workflow
 
 ```python
 # 1. Profile baseline kernel with Metrix
