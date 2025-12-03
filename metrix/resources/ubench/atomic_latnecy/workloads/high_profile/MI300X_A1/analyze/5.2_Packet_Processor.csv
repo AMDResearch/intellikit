@@ -1,8 +1,0 @@
-Metric,Avg,Min,Max,Unit
-CPC Utilization,100.0,100.0,100.0,Pct
-CPC Stall Rate,35.59,35.59,35.59,Pct
-CPC Packet Decoding Utilization,81.5,81.5,81.5,Pct
-CPC-Workgroup Manager Utilization,2.64,2.64,2.64,Pct
-CPC-L2 Utilization,1.16,1.16,1.16,Pct
-CPC-UTCL1 Stall,0.76,0.76,0.76,Pct
-CPC-UTCL2 Utilization,0.77,0.77,0.77,Pct

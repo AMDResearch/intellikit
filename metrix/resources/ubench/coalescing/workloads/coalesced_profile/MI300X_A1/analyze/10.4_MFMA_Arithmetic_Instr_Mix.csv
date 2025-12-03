@@ -1,6 +1,0 @@
-Metric,Avg,Min,Max,Unit
-MFMA-I8,0.0,0.0,0.0,Instr per wave
-MFMA-F16,0.0,0.0,0.0,Instr per wave
-MFMA-BF16,0.0,0.0,0.0,Instr per wave
-MFMA-F32,0.0,0.0,0.0,Instr per wave
-MFMA-F64,0.0,0.0,0.0,Instr per wave

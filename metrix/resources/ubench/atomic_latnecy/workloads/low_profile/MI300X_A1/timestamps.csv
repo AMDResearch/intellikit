@@ -1,2 +1,0 @@
-Dispatch_ID,Kernel_Name,GPU_ID,queue-id,queue-index,pid,tid,Grid_Size,Workgroup_Size,LDS_Per_Workgroup,Scratch_Per_Workitem,Arch_VGPR,Accum_VGPR,SGPR,wave_size,sig,obj,DispatchNs,Start_Timestamp,End_Timestamp,CompleteNs
-1,atomic_per_thread(unsigned int*) [clone .kd],1,0,1,3188245,3188245,8192,256,0,0,4,4,16,64,0x0,0x7fdf1a918800,2525317152706967,2525317152838774,2525317152842019,2525317152858883

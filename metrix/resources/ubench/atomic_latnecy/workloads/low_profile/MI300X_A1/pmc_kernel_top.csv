@@ -1,2 +1,0 @@
-Kernel_Name,Count,Sum(ms),Mean(ms),Median(ms),Pct
-atomic_per_thread(unsigned int*) [clone .kd],1,0.003245,0.003245,0.003245,100.0

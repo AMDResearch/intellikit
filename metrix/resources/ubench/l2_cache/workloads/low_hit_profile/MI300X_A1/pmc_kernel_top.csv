@@ -1,2 +1,0 @@
-Kernel_Name,Count,Sum(ms),Mean(ms),Median(ms),Pct
-"cache_unfriendly_sum(float*, float*, int, int) [clone .kd]",1,0.007531,0.007531,0.007531,100.0

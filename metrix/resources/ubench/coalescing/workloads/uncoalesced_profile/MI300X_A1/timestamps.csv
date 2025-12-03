@@ -1,2 +1,0 @@
-Dispatch_ID,Kernel_Name,GPU_ID,queue-id,queue-index,pid,tid,Grid_Size,Workgroup_Size,LDS_Per_Workgroup,Scratch_Per_Workitem,Arch_VGPR,Accum_VGPR,SGPR,wave_size,sig,obj,DispatchNs,Start_Timestamp,End_Timestamp,CompleteNs
-1,"memcpy_uncoalesced(float*, float const*, int) [clone .kd]",1,0,2,3394751,3394751,65536,256,0,0,4,4,16,64,0x0,0x7f2c17f18880,2526907557567805,2526907557704578,2526907557710467,2526907557736375

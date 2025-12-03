@@ -1,6 +1,0 @@
-Metric,Avg,Min,Max,Unit
-sL1D-L2 BW,1.25,1.25,1.25,Bytes per wave
-Read Req,0.02,0.02,0.02,Req per wave
-Write Req,0.0,0.0,0.0,Req per wave
-Atomic Req,0.0,0.0,0.0,Req per wave
-Stall Cycles,0.0,0.0,0.0,Cycles per wave
