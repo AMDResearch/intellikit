@@ -55,8 +55,14 @@ config = Accordo.Config(
     tolerance=1e-6
 )
 validator = Accordo(config)
-result = validator.validate(reference=["./ref"], optimized=["./opt"])
-print(result.summary())  # ✓ Validation passed! or ✗ Validation failed
+
+# Capture snapshots from both versions
+ref_snapshot = validator.capture_snapshot(binary=["./ref"], working_directory=".")
+opt_snapshot = validator.capture_snapshot(binary=["./opt"], working_directory=".")
+
+# Compare for correctness
+result = validator.compare_snapshots(ref_snapshot, opt_snapshot)
+print(result.summary())  # Shows validation results
 ```
 
 ### [Metrix](metrix/) - Human-Readable GPU Metrics
@@ -69,11 +75,14 @@ Decodes hardware counters into actionable performance insights.
 
 **Quick example:**
 ```python
-from metrix import profile
+from metrix import Metrix
 
-metrics = profile("my_app")
-print(f"Memory BW Utilization: {metrics.memory_bandwidth_util:.1f}%")
-print(f"Compute Efficiency: {metrics.compute_efficiency:.1f}%")
+profiler = Metrix()
+results = profiler.profile("./my_app", metrics=["memory.hbm_bandwidth_utilization"])
+
+for kernel in results.kernels:
+    print(f"{kernel.name}: {kernel.duration_us.avg:.2f} μs")
+    print(f"Memory BW: {kernel.metrics['memory.hbm_bandwidth_utilization'].avg:.1f}%")
 ```
 
 ## Installation
@@ -128,9 +137,9 @@ pip install -e ".[metrix]"
 ## Documentation
 
 Each tool has its own detailed documentation:
-- [Nexus Documentation](nexus/README.md)
-- [Accordo Documentation](accordo/README.md)
-- [Metrix Documentation](metrix/README.md)
+- [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
+- [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
+- [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
 
 ## Use Cases
 
@@ -155,14 +164,17 @@ IntelliKit tools provide clean APIs that LLMs can call to:
 
 ```python
 # 1. Profile baseline kernel with Metrix
-from metrix import profile
-baseline_metrics = profile("./app_baseline")
+from metrix import Metrix
+profiler = Metrix()
+baseline_results = profiler.profile("./app_baseline")
+baseline_bw = baseline_results.kernels[0].metrics['memory.hbm_bandwidth_utilization'].avg
 
 # 2. Extract kernel source with Nexus
 from nexus import Nexus
 nexus = Nexus()
 trace = nexus.run(["./app_baseline"])
-print(trace["my_kernel"].hip)
+for kernel in trace:
+    print(kernel.hip)  # Source code
 
 # 3. Apply optimization (external step)
 # ... modify kernel ...
@@ -171,12 +183,16 @@ print(trace["my_kernel"].hip)
 from accordo import Accordo
 config = Accordo.Config(kernel_name="my_kernel", ...)
 validator = Accordo(config)
-result = validator.validate(reference=["./app_baseline"], optimized=["./app_opt"])
+
+ref_snap = validator.capture_snapshot(binary=["./app_baseline"], working_directory=".")
+opt_snap = validator.capture_snapshot(binary=["./app_opt"], working_directory=".")
+result = validator.compare_snapshots(ref_snap, opt_snap)
 
 if result.is_valid:
-    opt_metrics = profile("./app_opt")
-    print(f"✓ Validation passed! {result.num_arrays_validated} arrays matched")
-    print(f"BW Improvement: {opt_metrics.memory_bandwidth_util - baseline_metrics.memory_bandwidth_util:.1f}%")
+    opt_results = profiler.profile("./app_opt")
+    opt_bw = opt_results.kernels[0].metrics['memory.hbm_bandwidth_utilization'].avg
+    print(f"VALIDATION PASSED: {result.num_arrays_validated} arrays matched")
+    print(f"BW Improvement: {opt_bw - baseline_bw:.1f}%")
 ```
 
 ## Contributing
