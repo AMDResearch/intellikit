@@ -1,0 +1,2 @@
+Kernel_Name,Count,Sum(ms),Mean(ms),Median(ms),Pct
+"transpose_conflict(float*, float const*, int, int) [clone .kd]",1,0.006249,0.006249,0.006249,100.0

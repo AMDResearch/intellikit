@@ -1,0 +1,6 @@
+Metric,Avg,Min,Max,Units
+Req,404.0,404.0,404.0,Req per wave
+Hit Ratio,99.83,99.83,99.83,Pct
+Hits,403.3,403.3,403.3,Req per wave
+Translation Misses,0.07,0.07,0.07,Req per wave
+Permission Misses,0.0,0.0,0.0,Req per wave

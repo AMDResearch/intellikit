@@ -1,0 +1,7 @@
+Metric,Avg,Min,Max,Unit
+Req,4.0,4.0,4.0,Req per wave
+Hits,3.0,3.0,3.0,Hits per wave
+Misses - Non Duplicated,0.14,0.14,0.14,Misses per wave
+Misses - Duplicated,0.86,0.86,0.86,Misses per wave
+Cache Hit Rate,75.0,75.0,75.0,Pct
+Instruction Fetch Latency,216.24,216.24,216.24,Cycles

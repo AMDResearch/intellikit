@@ -1,0 +1,12 @@
+Metric,Avg,Min,Max,Unit
+IPC,0.03,0.03,0.03,Instr/cycle
+IPC (Issued),1.0,1.0,1.0,Instr/cycle
+SALU Utilization,0.15,0.15,0.15,Pct
+VALU Utilization,0.15,0.15,0.15,Pct
+VMEM Utilization,0.05,0.05,0.05,Pct
+Branch Utilization,0.05,0.05,0.05,Pct
+VALU Active Threads,64.0,64.0,64.0,Threads
+MFMA Utilization,0.0,0.0,0.0,Pct
+MFMA Instr Cycles,,,,Cycles/instr
+VMEM Latency,730.07,730.07,730.07,Cycles
+SMEM Latency,906.54,906.54,906.54,Cycles

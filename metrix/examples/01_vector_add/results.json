@@ -1,0 +1,107 @@
+{
+  "kernels": [
+    {
+      "name": "1:vector_add(float*, float const*, float const*, int)",
+      "dispatch_count": 10,
+      "duration_us": {
+        "min": 5.848,
+        "max": 7.171,
+        "avg": 6.453399999999999
+      },
+      "counters": {
+        "lds.bank_conflict": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "cache.l1_total_accesses": {
+          "min": 786432.0,
+          "max": 786432.0,
+          "avg": 786432.0
+        },
+        "cache.l2_miss": {
+          "min": 98424.0,
+          "max": 98434.0,
+          "avg": 98428.7
+        },
+        "TCP_TCC_WRITE_REQ_sum": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        },
+        "memory.read_requests": {
+          "min": 65728.0,
+          "max": 65738.0,
+          "avg": 65732.7
+        },
+        "cache.l1_request": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        },
+        "cache.l2_hit": {
+          "min": 35880.0,
+          "max": 35880.0,
+          "avg": 35880.0
+        },
+        "gpu.active_cycles": {
+          "min": 216503.0,
+          "max": 245795.0,
+          "avg": 232061.3
+        },
+        "cache.l1_cache_accesses": {
+          "min": 196608.0,
+          "max": 196608.0,
+          "avg": 196608.0
+        },
+        "lds.instructions": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "memory.write_requests": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        }
+      },
+      "metrics": {
+        "memory.l2_hit_rate": {
+          "min": 26.713522045356402,
+          "max": 26.715511079342384,
+          "avg": 26.71457622018883
+        },
+        "memory.l1_hit_rate": {
+          "min": 66.66666666666666,
+          "max": 66.66666666666666,
+          "avg": 66.66666666666666
+        },
+        "memory.bytes_transferred_hbm": {
+          "min": 8400896.0,
+          "max": 8401536.0,
+          "avg": 8401196.8
+        },
+        "memory.global_store_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.coalescing_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.global_load_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.lds_bank_conflicts": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        }
+      }
+    }
+  ]
+}

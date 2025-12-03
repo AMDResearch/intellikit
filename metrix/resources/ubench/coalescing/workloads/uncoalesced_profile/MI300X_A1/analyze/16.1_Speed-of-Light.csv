@@ -1,0 +1,5 @@
+Metric,Avg,Unit
+Hit rate,0.0,Pct of peak
+Bandwidth,3.49,Pct of peak
+Utilization,38.84,Pct of peak
+Coalescing,25.0,Pct of peak

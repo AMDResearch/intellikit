@@ -1,0 +1,17 @@
+Metric,Avg,Min,Max,Unit
+Address Processing Unit Busy,48.1,48.1,48.1,Pct
+Address Stall,1.45,1.45,1.45,Pct
+Data Stall,0.38,0.38,0.38,Pct
+Data-Processor → Address Stall,0.0,0.0,0.0,Pct
+Total Instructions,101.0,101.0,101.0,Instructions per wave
+Global/Generic Instructions,101.0,101.0,101.0,Instructions per wave
+Global/Generic Read Instructions,100.0,100.0,100.0,Instructions per wave
+Global/Generic Write Instructions,1.0,1.0,1.0,Instructions per wave
+Global/Generic Atomic Instructions,0.0,0.0,0.0,Instructions per wave
+Spill/Stack Instructions,0.0,0.0,0.0,Instructions per wave
+Spill/Stack Read Instructions,0.0,0.0,0.0,Instructions per wave
+Spill/Stack Write Instructions,0.0,0.0,0.0,Instructions per wave
+Spill/Stack Atomic Instructions,0.0,0.0,0.0,Instructions per wave
+Spill/Stack Total Cycles,0.0,0.0,0.0,Cycles per wave
+Spill/Stack Coalesced Read,0.0,0.0,0.0,Cycles per wave
+Spill/Stack Coalesced Write,0.0,0.0,0.0,Cycles per wave

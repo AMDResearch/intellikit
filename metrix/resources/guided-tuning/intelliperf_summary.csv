@@ -1,0 +1,4 @@
+Count,Avg-Duration,Percentage,LDS Bank Conflicts,Kernel
+1,199135.0,96.71207595735898,0,"reduction_kernel(double const*, double*, unsigned long)"
+1,5288.0,2.568174643646342,0,__amd_rocclr_copyBuffer
+1,1482.0,0.719749398994682,0,__amd_rocclr_fillBufferAligned

@@ -1,0 +1,4 @@
+Metric,Avg,Unit
+Bandwidth,0.41,Pct of peak
+Cache Hit Rate,87.5,Pct of peak
+L1I-L2 Bandwidth,0.07,Pct of peak

@@ -1,0 +1,12 @@
+*.log
+build/
+# Python cache files
+*.pyc
+__pycache__/
+
+# Omniperf output
+workloads/
+
+# Duckdb files
+*.db
+!BASELINE.db

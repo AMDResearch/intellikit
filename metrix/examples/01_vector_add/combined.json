@@ -1,0 +1,127 @@
+{
+  "kernels": [
+    {
+      "name": "vector_add(float*, float const*, float const*, int)",
+      "dispatch_count": 3,
+      "duration_us": {
+        "min": 6.69,
+        "max": 6.931,
+        "avg": 6.797
+      },
+      "metrics": {
+        "memory.global_store_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.l1_hit_rate": {
+          "min": 66.66666666666666,
+          "max": 66.66666666666666,
+          "avg": 66.66666666666666
+        },
+        "memory.global_load_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.lds_bank_conflicts": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "memory.hbm_write_bandwidth": {
+          "min": 36.2145828022597,
+          "max": 38.03700213762875,
+          "avg": 37.3785403563069
+        },
+        "memory.coalescing_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.l2_hit_rate": {
+          "min": 26.71372093542695,
+          "max": 26.71570999903204,
+          "avg": 26.714450254306033
+        },
+        "memory.l2_bandwidth": {
+          "min": 0.6843366390614399,
+          "max": 0.7187250981732585,
+          "avg": 0.7063170043166178
+        },
+        "memory.hbm_bandwidth_utilization": {
+          "min": 1.3686732781228799,
+          "max": 1.437450196346517,
+          "avg": 1.4126340086332356
+        },
+        "memory.bytes_transferred_hbm": {
+          "min": 8400832.0,
+          "max": 8401472.0,
+          "avg": 8401237.333333334
+        },
+        "memory.hbm_read_bandwidth": {
+          "min": 36.32510093825292,
+          "max": 38.14785826873664,
+          "avg": 37.491062101254585
+        }
+      },
+      "counters": {
+        "cache.l1_cache_accesses": {
+          "min": 196608.0,
+          "max": 196608.0,
+          "avg": 196608.0
+        },
+        "lds.instructions": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "cache.l2_hit": {
+          "min": 35880.0,
+          "max": 35880.0,
+          "avg": 35880.0
+        },
+        "cache.l1_total_accesses": {
+          "min": 786432.0,
+          "max": 786432.0,
+          "avg": 786432.0
+        },
+        "gpu.active_cycles": {
+          "min": 231565.0,
+          "max": 243218.0,
+          "avg": 235761.0
+        },
+        "cache.l2_miss": {
+          "min": 98423.0,
+          "max": 98433.0,
+          "avg": 98429.33333333333
+        },
+        "lds.bank_conflict": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "TCP_TCC_WRITE_REQ_sum": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        },
+        "memory.write_requests": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        },
+        "cache.l1_request": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        },
+        "memory.read_requests": {
+          "min": 65727.0,
+          "max": 65737.0,
+          "avg": 65733.33333333333
+        }
+      }
+    }
+  ]
+}

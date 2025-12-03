@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
+[build-system]
+requires = ["scikit-build-core>=0.3.3", "setuptools-scm>=8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "accordo"
+dynamic = ["version"]
+description = "Accordo: Automated side-by-side correctness validation for GPU kernels"
+authors = [
+    { name = "Muhammad Awad", email = "muhaawad@amd.com" },
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/AMDResearch/nexus"
+Repository = "https://github.com/AMDResearch/nexus"
+Documentation = "https://github.com/AMDResearch/nexus/tree/main/accordo"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = ["accordo"]
+
+[tool.scikit-build.cmake.define]
+CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
+
+# ---- setuptools-scm versioning ----
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-date"
+fallback_version = "0.2.0"
+root = ".."
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    "**/*.ipynb",
+    "build/**",
+    "test/**"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+

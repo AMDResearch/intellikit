@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
+[build-system]
+requires = ["scikit-build-core>=0.3.3", "setuptools-scm>=8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "nexus"
+dynamic = ["version"]
+description = "HSA Packet Source Code Extractor for AMD ROCm - Research tool for intercepting and analyzing GPU kernels"
+authors = [
+    { name = "Muhammad Awad", email = "muhaawad@amd.com" },
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/AMDResearch/nexus"
+Repository = "https://github.com/AMDResearch/nexus"
+Documentation = "https://github.com/AMDResearch/nexus/tree/main/nexus"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = ["nexus"]
+
+[tool.scikit-build.cmake.define]
+CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
+LLVM_INSTALL_DIR = {env="LLVM_INSTALL_DIR", default="/opt/rocm/llvm"}
+
+# ---- setuptools-scm versioning ----
+[tool.setuptools_scm]
+version_scheme = "post-release"   # .postN after last tag
+local_scheme = "node-and-date"    # add commit hash (e.g. +gabc1234) and date (e.g. +20250914)
+fallback_version = "0.1.0"        # used if git metadata unavailable
+root = ".."                       # Look for git repo in parent directory
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    "**/*.ipynb",
+    "build/**",
+    "test/**"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+

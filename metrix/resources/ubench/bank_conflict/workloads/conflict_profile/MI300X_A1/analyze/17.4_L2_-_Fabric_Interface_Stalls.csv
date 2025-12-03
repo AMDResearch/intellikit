@@ -1,0 +1,8 @@
+Metric,Type,Transaction,Avg,Min,Max,Unit
+Read - PCIe Stall,PCIe Stall,Read,,,,Pct
+Read - Infinity Fabric™ Stall,Infinity Fabric™ Stall,Read,,,,Pct
+Read - HBM Stall,HBM Stall,Read,,,,Pct
+Write - PCIe Stall,PCIe Stall,Write,,,,Pct
+Write - Infinity Fabric™ Stall,Infinity Fabric™ Stall,Write,,,,Pct
+Write - HBM Stall,HBM Stall,Write,,,,Pct
+Write - Credit Starvation,Credit Starvation,Write,0.0,0.0,0.0,Pct

@@ -1,0 +1,6 @@
+Metric,Avg,Unit
+Utilization,32.01,Pct
+Bandwidth,2.6,Pct
+Hit Rate,21.79,Pct
+L2-Fabric Read BW,559.13,Gb/s
+L2-Fabric Write and Atomic BW,139.23,Gb/s

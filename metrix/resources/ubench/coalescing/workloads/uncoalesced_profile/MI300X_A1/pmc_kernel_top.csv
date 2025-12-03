@@ -1,0 +1,2 @@
+Kernel_Name,Count,Sum(ms),Mean(ms),Median(ms),Pct
+"memcpy_uncoalesced(float*, float const*, int) [clone .kd]",1,0.005889,0.005889,0.005889,100.0

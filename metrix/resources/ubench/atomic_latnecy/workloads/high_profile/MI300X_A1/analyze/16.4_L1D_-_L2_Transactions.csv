@@ -1,0 +1,13 @@
+Metric,Xfer,Coherency,Avg,Min,Max,Unit
+NC - Read,Read,NC,0.0,0.0,0.0,Req per wave
+UC - Read,Read,UC,0.0,0.0,0.0,Req per wave
+CC - Read,Read,CC,0.0,0.0,0.0,Req per wave
+RW - Read,Read,RW,0.0,0.0,0.0,Req per wave
+RW - Write,Write,RW,0.0,0.0,0.0,Req per wave
+NC - Write,Write,NC,0.0,0.0,0.0,Req per wave
+UC - Write,Write,UC,0.0,0.0,0.0,Req per wave
+CC - Write,Write,CC,0.0,0.0,0.0,Req per wave
+NC - Atomic,Atomic,NC,0.0,0.0,0.0,Req per wave
+UC - Atomic,Atomic,UC,0.0,0.0,0.0,Req per wave
+CC - Atomic,Atomic,CC,0.0,0.0,0.0,Req per wave
+RW - Atomic,Atomic,RW,1.0,1.0,1.0,Req per wave

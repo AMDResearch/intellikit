@@ -1,0 +1,20 @@
+Metric,Avg,Min,Max,Unit
+Bandwidth,794.38,794.38,794.38,Bytes per wave
+Req,6.21,6.21,6.21,Req per wave
+Read Req,2.21,2.21,2.21,Req per wave
+Write Req,4.0,4.0,4.0,Req per wave
+Atomic Req,0.0,0.0,0.0,Req per wave
+Streaming Req,0.0,0.0,0.0,Req per wave
+Probe Req,0.0,0.0,0.0,Req per wave
+Cache Hit,35.44,35.44,35.44,Pct
+Hits,2.2,2.2,2.2,Hits per wave
+Misses,4.01,4.01,4.01,Misses per wave
+Writeback,2.01,2.01,2.01,Cachelines per wave
+Writeback (Internal),0.0,0.0,0.0,Cachelines per wave
+Writeback (vL1D Req),2.0,2.0,2.0,Cachelines per wave
+Evict (Internal),0.0,0.0,0.0,Cachelines per wave
+Evict (vL1D Req),0.0,0.0,0.0,Cachelines per wave
+NC Req,0.0,0.0,0.0,Req per wave
+UC Req,0.0,0.0,0.0,Req per wave
+CC Req,0.0,0.0,0.0,Req per wave
+RW Req,6.21,6.21,6.21,Req per wave

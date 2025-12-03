@@ -1,0 +1,34 @@
+{
+  "jobs": [
+    {
+      "output_file": "pmc_perf_0",
+      "output_format": ["json"],
+      "pmc": ["SQ_ACTIVE_INST_ANY", "SQ_LDS_BANK_CONFLICT", "SQ_LDS_IDX_ACTIVE", "SQ_INSTS_MFMA", "SQ_INSTS_FLAT_LDS_ONLY", "SQ_INSTS_VALU_MFMA_MOPS_F16", "SQ_INSTS_VALU_MFMA_MOPS_BF16", "SQ_INSTS_VALU_MFMA_MOPS_F32", "SPI_RA_SGPR_SIMD_FULL_CSN", "SPI_RA_LDS_CU_FULL_CSN"]
+    },
+    {
+      "output_file": "pmc_perf_1",
+      "output_format": ["json"],
+      "pmc": ["SQ_INSTS_VALU_MFMA_MOPS_F64", "TCC_EA_ATOMIC_LEVEL_sum", "TCC_EA_ATOMIC_sum", "TCC_BUSY_sum", "TCP_GATE_EN1_sum", "TCP_GATE_EN2_sum"]
+    },
+    {
+      "output_file": "SQ_INSTS_LDS",
+      "output_format": ["json"],
+      "pmc": ["SQ_INSTS_LDS", "SQ_ACCUM_PREV_HIRES", "SQ_BUSY_CYCLES", "SQ_BUSY_CU_CYCLES", "SQ_INSTS_SALU", "SQ_INSTS", "SQ_INSTS_VALU", "SQ_INSTS_VALU_ADD_F16", "TA_TOTAL_WAVEFRONTS_sum", "TCP_TOTAL_ACCESSES_sum", "TCP_TCC_ATOMIC_WITH_RET_REQ_sum", "TCP_TCC_READ_REQ_LATENCY_sum", "TCP_TCC_WRITE_REQ_LATENCY_sum", "TCC_REQ_sum", "TCC_HIT_sum", "TCC_MISS_sum", "TCC_EA_WRREQ_sum", "SPI_CSN_WAVE", "SPI_RA_BAR_CU_FULL_CSN", "GRBM_SPI_BUSY"]
+    },
+    {
+      "output_file": "SQ_INSTS_SMEM",
+      "output_format": ["json"],
+      "pmc": ["SQ_INSTS_SMEM", "SQ_ACCUM_PREV_HIRES", "SQ_INSTS_VALU_TRANS_F64", "SQ_INSTS_VALU_INT32", "SQ_INSTS_VALU_INT64", "SQ_INSTS_BRANCH", "SQ_WAIT_ANY", "SQ_WAIT_INST_ANY", "SPI_RA_WAVE_SIMD_FULL_CSN", "SPI_RA_VGPR_SIMD_FULL_CSN"]
+    },
+    {
+      "output_file": "SQ_INSTS_VMEM",
+      "output_format": ["json"],
+      "pmc": ["SQ_INSTS_VMEM", "SQ_ACCUM_PREV_HIRES", "SQ_INSTS_VALU_MUL_F16", "SQ_INSTS_VALU_FMA_F16", "SQ_INSTS_VALU_TRANS_F16", "SQ_INSTS_VALU_ADD_F32", "SQ_INSTS_VALU_MUL_F32", "SQ_INSTS_VALU_FMA_F32", "TCP_TCC_READ_REQ_sum", "TCP_TCC_WRITE_REQ_sum", "TCP_TOTAL_CACHE_ACCESSES_sum", "TCP_TCC_ATOMIC_WITHOUT_RET_REQ_sum", "TCC_EA_WRREQ_64B_sum", "TCC_EA_RDREQ_sum", "TCC_EA_RDREQ_32B_sum", "TCC_EA_RDREQ_LEVEL_sum", "SPI_RA_TGLIM_CU_FULL_CSN", "SPI_RA_WVLIM_STALL_CSN"]
+    },
+    {
+      "output_file": "SQ_WAVE_CYCLES",
+      "output_format": ["json"],
+      "pmc": ["SQ_CYCLES", "SQ_WAVES", "SQ_WAVE_CYCLES", "SQ_ACCUM_PREV_HIRES", "SQ_INSTS_VALU_TRANS_F32", "SQ_INSTS_VALU_ADD_F64", "SQ_INSTS_VALU_MUL_F64", "SQ_INSTS_VALU_FMA_F64", "TCC_EA_WRREQ_LEVEL_sum", "SPI_RA_RES_STALL_CSN", "SPI_RA_TMP_STALL_CSN", "GRBM_COUNT", "GRBM_GUI_ACTIVE"]
+    }
+  ]
+}

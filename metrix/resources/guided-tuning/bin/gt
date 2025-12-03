@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+
+##############################################################################bl
+# MIT License
+#
+# Copyright (c) 2025 Advanced Micro Devices, Inc. All Rights Reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+##############################################################################el
+
+import os
+import argparse
+import sys
+import shutil
+import time
+
+# Add the project root directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.collect_perfmon import run_profiling
+from src.show import show
+from src.analyze import run_analyze
+from src.csv_convert import run_convert
+from src.logger import setup_console_handler, setup_logging_priority, console_error, console_log
+
+
+def add_general_group(parser):
+    general_group = parser.add_argument_group("General Options")
+
+    # general_group.add_argument(
+    #     "-v",
+    #     "--version",
+    #     action="version",
+    #     version=rocprof_compute_version["ver_pretty"],
+    # )
+    general_group.add_argument(
+        "-v",
+        "--verbose",
+        help="Increase output verbosity (use multiple times for higher levels)",
+        action="count",
+        default=0,
+    )
+    general_group.add_argument(
+        "-q", "--quiet", action="store_true", help="Reduce output and run quietly."
+    )
+
+
+def gt_parser(
+    parser
+):
+    ## General Command Line Options
+    add_general_group(parser)
+    parser._positionals.title = "Modes"
+    parser._optionals.title = "Help"
+
+    subparsers = parser.add_subparsers(
+        dest="mode", help="Select GT mode:"
+    )
+
+    ## 'profile' Command Line Options
+    profile_parser = subparsers.add_parser(
+        "profile",
+        help="Profile the target application and load into DB",
+        usage="""
+gt profile [options] -- <application-binary>
+        """,
+        prog="tool",
+        allow_abbrev=False,
+        formatter_class=lambda prog: argparse.RawTextHelpFormatter(
+            prog, max_help_position=40
+        ),
+    )
+    profile_parser._optionals.title = "Help"
+
+    add_general_group(profile_parser)
+    profile_group = profile_parser.add_argument_group("Profile Options")
+
+    profile_group.add_argument(
+        "remaining",
+        metavar="-- [ ...]",
+        default=None,
+        nargs=argparse.REMAINDER,
+        help="Provide command for profiling after double dash"
+    )
+    profile_group.add_argument(
+        "-n",
+        dest="name",
+        type=str,
+        metavar="",
+        default=None,
+        help="Give a name to this DB entry",
+    )
+    profile_group.add_argument(
+        "--top-n",
+        type=int,
+        metavar="",
+        help="Limit profiling to top-N kernels",
+    )
+    profile_group.add_argument(
+        "--db",
+        type=str,
+        default=None,
+        help="Specify path to output DB file"
+    )
+
+    ## 'db' Command Line Options
+    db_parser = subparsers.add_parser(
+        "db",
+        help="Query the db",
+        usage="""
+gt db [options]
+
+---------------------------------------------------------------------------------
+Examples:
+    Show all workloads in DB:           gt db
+    String match workloads in DB:       gt db -n softmax
+    Inspect a sigle workload:           gt db -w 1
+    Inspect a single dispatch:          gt db -w 1 -d 4
+    Match a kernel regex:               gt db -w 1 -k ".*kernel_name.*"
+    Compare two dispatches:             gt db -w 1 2 -d 3 4
+    Save summary to file:               gt db -w 1 --save babelstream.csv
+    Save report card to file:           gt db -w 1 -d 4 --save report_card.json
+---------------------------------------------------------------------------------
+""",
+        prog="tool",
+        allow_abbrev=False,
+        formatter_class=lambda prog: argparse.RawTextHelpFormatter(
+            prog, max_help_position=40
+        ),
+    )
+    db_parser._optionals.title = "Help"
+
+    add_general_group(db_parser)
+    db_group = db_parser.add_argument_group("DB Options")
+
+    db_group.add_argument(
+        "-w",
+        dest="workload",
+        nargs="+",
+        type=int,
+        metavar="",
+        default=None,
+        help="Workload ID(s) to target",
+    )
+    db_group.add_argument(
+        "-d",
+        dest="dispatch",
+        nargs="+",
+        type=int,
+        metavar="",
+        default=None,
+        help="Dispatch ID(s) to target",
+    )
+    db_group.add_argument(
+        "-k",
+        dest="kernel",
+        type=str,
+        metavar="",
+        default=None,
+        help="Regex of kernel(s) to target"
+    )
+    db_group.add_argument(
+        "-n",
+        dest="workload_name",
+        type=str,
+        metavar="",
+        default=None,
+        help="Show all workloads matching the given substring"
+    )
+    db_group.add_argument(
+        "--save",
+        type=str,
+        metavar="",
+        default=None,
+        help="Save output table to specified file",
+    )
+    db_group.add_argument(
+        "--separate",
+        action="store_true",
+        help="Separate output for each filter; separate report cards"
+    )
+    db_group.add_argument(
+        "--less",
+        type=int,
+        metavar="",
+        default=None,
+        help="Shorten kernel names to N characters in report card output",
+    )
+    db_group.add_argument(
+        "--db",
+        type=str,
+        metavar="",
+        default=None,
+        help="Specify path to custom DB file"
+    )
+    db_group.add_argument(
+        "--remove",
+        type=int,
+        metavar="",
+        default=None,
+        help="Remove given workload ID from DB"
+    )
+    
+
+    ## 'analyze' Command Line Options
+    analyze_parser = subparsers.add_parser(
+        "analyze",
+        help="Analyze database results",
+        usage="""
+gt analyze [options]
+        """,
+        prog="tool",
+        allow_abbrev=False,
+        formatter_class=lambda prog: argparse.RawTextHelpFormatter(
+            prog, max_help_position=40
+        ),
+    )
+    analyze_parser._optionals.title = "Help"
+
+    add_general_group(analyze_parser)
+    analyze_group = analyze_parser.add_argument_group("Analyze Options")
+
+    analyze_group.add_argument(
+       "workload_id",
+        type=int,
+        help="Workload ID to analyze",
+    )
+    analyze_group.add_argument(
+        "dispatch_id",
+        type=int,
+        help="Dispatch ID to analyze",
+    )
+    analyze_group.add_argument(
+        "-s", 
+        "--silence", 
+        action="store_true",
+        help="Silence mode, no questions will be asked",
+    )
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Command line interface for the Guided Tuning tool",
+        prog="tool",
+        formatter_class=lambda prog: argparse.RawTextHelpFormatter(
+            prog, max_help_position=30
+        ),
+        usage="gt [mode] [options]",
+    )
+    gt_parser(parser)
+    args = parser.parse_args()
+    setup_console_handler()
+    setup_logging_priority(args.verbose, args.quiet, args.mode)
+    start_time = time.time()
+    if args.mode == None:
+        parser.print_help()
+        sys.exit(1)
+    elif args.mode == "profile":
+        # Pre-processing of command line arguments
+        args.remaining = args.remaining[1:]
+        if args.remaining:
+            if not shutil.which(args.remaining[0]):
+                console_error(f"The binary '{args.remaining[0]}' does not point to an executable")
+            args.remaining = " ".join(args.remaining)
+        else:
+            console_error("You must provide a binary to profile after the '--' separator")
+        args.name = time.strftime("%m-%d-%Y-%H-%M") if not args.name else args.name
+        
+        # Run profiling and upload results to DB
+        output_dir = run_profiling(args)
+        run_convert(csv_dir=output_dir, db_file=args.db)
+    elif args.mode == "db":
+        show(args, parser)
+    elif args.mode == "analyze":
+        run_analyze(args)
+    else:
+        console_error(f"Unsupported mode: {args.mode}")
+    end_time = time.time()
+    console_log(f"GT finished in: {end_time - start_time:.2f} seconds")
+        
+
+if __name__ == "__main__":
+    main()

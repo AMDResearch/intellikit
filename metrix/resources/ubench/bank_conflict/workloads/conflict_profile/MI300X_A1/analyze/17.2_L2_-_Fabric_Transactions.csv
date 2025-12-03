@@ -1,0 +1,15 @@
+Metric,Avg,Min,Max,Unit
+Read BW,256.72,256.72,256.72,Bytes per wave
+HBM Read Traffic,100.02,100.02,100.02,Pct
+Remote Read Traffic,0.0,0.0,0.0,Pct
+Uncached Read Traffic,0.15,0.15,0.15,Pct
+Write and Atomic BW,256.0,256.0,256.0,Bytes per wave
+HBM Write and Atomic Traffic,100.0,100.0,100.0,Pct
+Remote Write and Atomic Traffic,0.0,0.0,0.0,Pct
+Atomic Traffic,0.0,0.0,0.0,Pct
+Uncached Write and Atomic Traffic,0.0,0.0,0.0,Pct
+Read Latency,1241.42,1241.42,1241.42,Cycles
+Write and Atomic Latency,589.67,589.67,589.67,Cycles
+Atomic Latency,,,,Cycles
+Read Stall,,,,Pct
+Write Stall,,,,Pct

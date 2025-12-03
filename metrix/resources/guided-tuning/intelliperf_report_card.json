@@ -1,0 +1,350 @@
+[
+    {
+        "name": "2025_10_16-17_21_40_clone",
+        "kernel": "reduction_kernel(double const*, double*, unsigned long)",
+        "count": 1,
+        "gpu_series": "MI300",
+        "cu_per_gpu": 304,
+        "max_sclk": 2100,
+        "hbm_bw": 8601.6,
+        "lds_banks_per_cu": 32,
+        "total_l2_chan": 128,
+        "se_per_gpu": 32,
+        "num_xcd": 8,
+        "grid": 10000384.0,
+        "workgroup": 512.0,
+        "durations": {
+            "ns": 199216.0,
+            "pct": 96.71207595735898
+        },
+        "flops": {
+            "f": 17500672.0,
+            "i": 250009216.0,
+            "flop_pop": 0.10750475196102054,
+            "iop_pop": 1.5357798120008883
+        },
+        "hbm": {
+            "rd": 80018176.0,
+            "wr": 625024.0,
+            "rd_pop": 4.669659230851605,
+            "wr_pop": 0.036474826558203395
+        },
+        "lds": {
+            "lds": 480018432.0,
+            "req": 937536.0,
+            "util": 2.8582897876267053,
+            "bc": 0.0,
+            "ins_cu_lds": 0.0,
+            "pop": 2.948701768073706,
+            "peak": 81715.2
+        },
+        "l1": {
+            "l1": 322500096.0,
+            "hr": 74.41858249865452,
+            "util": 97.83026873065567,
+            "rd_lat": null,
+            "wr_lat": null,
+            "coal": 25.0,
+            "pop": 1.981083516557839,
+            "peak": 81715.2
+        },
+        "l2": {
+            "l2": 82981632.0,
+            "hr": 0.5528355961955532,
+            "util": 54.801039058196295,
+            "rd_lat": 2272.405311826306,
+            "wr_lat": 9400.781486790907,
+            "pop": 1.2106497649356907,
+            "peak": 34406.4
+        },
+        "atomics": {
+            "atomic_lat": 9674.649447061232
+        },
+        "ai": {
+            "hbm": 0.2170136105710091,
+            "l2": 0.21089814189241302,
+            "l1": 0.05426563345891221
+        },
+        "wave": {
+            "count": 156256.0,
+            "cycles": 3452694.0,
+            "ins_per_wave": 144.124846405898,
+            "wave_cycles": 16629.17120622568,
+            "dep_wait_cycles": 14679.947522015154,
+            "issue_wait_cycles": 100.4499539217694,
+            "active_cycles": 542.5511724349785,
+            "occupancy": 0.0,
+            "pop": 0.0,
+            "max_waves": 9728
+        },
+        "ipc": {
+            "value": 0.22786239334063527
+        },
+        "cycles": {
+            "wave_cycles": 16629.17120622568,
+            "active": 542.5511724349785,
+            "dep_wait": 14679.947522015154,
+            "issue_wait": 100.4499539217694
+        },
+        "allocations": {
+            "vgpr": 0.0,
+            "agpr": 0.0,
+            "sgpr": 0.0,
+            "lds": 64.0,
+            "scratch": 0.0
+        },
+        "stalls": {
+            "scheduler_pipe": 12.97463971572752,
+            "scratch": 0.0,
+            "waveslots": 17.98155066891626,
+            "vgprs": 0.0,
+            "sgprs": 0.0,
+            "lds": 0.0,
+            "barriers": 0.0,
+            "workgroup_limit": 0.0,
+            "wavefront_limit": 0.0
+        },
+        "instruction_mix": {
+            "valu": 31,
+            "vmem": 1,
+            "lds": 6,
+            "mfma": 0,
+            "salu": 53,
+            "smem": 3,
+            "branch": 23,
+            "compute_mem_ratio": 12.0
+        }
+    },
+    {
+        "name": "2025_10_16-17_21_40_clone",
+        "kernel": "__amd_rocclr_copyBuffer",
+        "count": 1,
+        "gpu_series": "MI300",
+        "cu_per_gpu": 304,
+        "max_sclk": 2100,
+        "hbm_bw": 8601.6,
+        "lds_banks_per_cu": 32,
+        "total_l2_chan": 128,
+        "se_per_gpu": 32,
+        "num_xcd": 8,
+        "grid": 512.0,
+        "workgroup": 512.0,
+        "durations": {
+            "ns": 5488.0,
+            "pct": 2.568174643646342
+        },
+        "flops": {
+            "f": 0.0,
+            "i": 2560.0,
+            "flop_pop": 0.0,
+            "iop_pop": 0.0005708513265671467
+        },
+        "hbm": {
+            "rd": 1600.0,
+            "wr": 256.0,
+            "rd_pop": 0.003389429751492433,
+            "wr_pop": 0.0005423087602387894
+        },
+        "lds": {
+            "lds": 0.0,
+            "req": 0.0,
+            "util": 0.0,
+            "bc": 0,
+            "ins_cu_lds": 0.0,
+            "pop": 0.0,
+            "peak": 81715.2
+        },
+        "l1": {
+            "l1": 2048.0,
+            "hr": 43.75,
+            "util": 0.7586786245606131,
+            "rd_lat": null,
+            "wr_lat": null,
+            "coal": 100.0,
+            "pop": 0.00045668106125371744,
+            "peak": 81715.2
+        },
+        "l2": {
+            "l2": 4096.0,
+            "hr": 45.833333333333336,
+            "util": 4.067356844346037,
+            "rd_lat": 596.8333333333334,
+            "wr_lat": 674.5,
+            "pop": 0.0021692350409551575,
+            "peak": 34406.4
+        },
+        "atomics": {
+            "atomic_lat": 0
+        },
+        "ai": {
+            "hbm": 0.0,
+            "l2": 0.0,
+            "l1": 0.0
+        },
+        "wave": {
+            "count": 8.0,
+            "cycles": 280918.0,
+            "ins_per_wave": 35.875,
+            "wave_cycles": 2185.0,
+            "dep_wait_cycles": 2144.0,
+            "issue_wait_cycles": 4.0,
+            "active_cycles": 139.5,
+            "occupancy": 0.0,
+            "pop": 0.0,
+            "max_waves": 9728
+        },
+        "ipc": {
+            "value": 0.09788540245566166
+        },
+        "cycles": {
+            "wave_cycles": 2185.0,
+            "active": 139.5,
+            "dep_wait": 2144.0,
+            "issue_wait": 4.0
+        },
+        "allocations": {
+            "vgpr": 0.0,
+            "agpr": 0.0,
+            "sgpr": 0.0,
+            "lds": 64.0,
+            "scratch": 0.0
+        },
+        "stalls": {
+            "scheduler_pipe": 0.0,
+            "scratch": 0.0,
+            "waveslots": 0.0,
+            "vgprs": 0.0,
+            "sgprs": 0.0,
+            "lds": 0.0,
+            "barriers": 0.0,
+            "workgroup_limit": 0.0,
+            "wavefront_limit": 0.0
+        },
+        "instruction_mix": {
+            "valu": 7,
+            "vmem": 2,
+            "lds": 0,
+            "mfma": 0,
+            "salu": 19,
+            "smem": 0,
+            "branch": 5,
+            "compute_mem_ratio": 13.0
+        }
+    },
+    {
+        "name": "2025_10_16-17_21_40_clone",
+        "kernel": "__amd_rocclr_fillBufferAligned",
+        "count": 1,
+        "gpu_series": "MI300",
+        "cu_per_gpu": 304,
+        "max_sclk": 2100,
+        "hbm_bw": 8601.6,
+        "lds_banks_per_cu": 32,
+        "total_l2_chan": 128,
+        "se_per_gpu": 32,
+        "num_xcd": 8,
+        "grid": 256.0,
+        "workgroup": 256.0,
+        "durations": {
+            "ns": 1522.0,
+            "pct": 0.719749398994682
+        },
+        "flops": {
+            "f": 0.0,
+            "i": 1536.0,
+            "flop_pop": 0.0,
+            "iop_pop": 0.001235019216899015
+        },
+        "hbm": {
+            "rd": 4480.0,
+            "wr": 32.0,
+            "rd_pop": 0.034220324134910204,
+            "wr_pop": 0.00024443088667793004
+        },
+        "lds": {
+            "lds": 0.0,
+            "req": 0.0,
+            "util": 0.0,
+            "bc": 0,
+            "ins_cu_lds": 0.0,
+            "pop": 0.0,
+            "peak": 81715.2
+        },
+        "l1": {
+            "l1": 256.0,
+            "hr": 0.0,
+            "util": 0.12407096859403578,
+            "rd_lat": null,
+            "wr_lat": null,
+            "coal": 100.0,
+            "pop": 0.00020583653614983583,
+            "peak": 81715.2
+        },
+        "l2": {
+            "l2": 8960.0,
+            "hr": 20.0,
+            "util": 6.499491328359655,
+            "rd_lat": 267.71014492753625,
+            "wr_lat": 114.0,
+            "pop": 0.017110162067455102,
+            "peak": 34406.4
+        },
+        "atomics": {
+            "atomic_lat": 0
+        },
+        "ai": {
+            "hbm": 0.0,
+            "l2": 0.0,
+            "l1": 0.0
+        },
+        "wave": {
+            "count": 4.0,
+            "cycles": 165136.0,
+            "ins_per_wave": 39.75,
+            "wave_cycles": 1240.0,
+            "dep_wait_cycles": 1054.0,
+            "issue_wait_cycles": 2.0,
+            "active_cycles": 158.0,
+            "occupancy": 0.0,
+            "pop": 0.0,
+            "max_waves": 9728
+        },
+        "ipc": {
+            "value": 0.14058355437665782
+        },
+        "cycles": {
+            "wave_cycles": 1240.0,
+            "active": 158.0,
+            "dep_wait": 1054.0,
+            "issue_wait": 2.0
+        },
+        "allocations": {
+            "vgpr": 0.0,
+            "agpr": 0.0,
+            "sgpr": 0.0,
+            "lds": 64.0,
+            "scratch": 0.0
+        },
+        "stalls": {
+            "scheduler_pipe": 0.0,
+            "scratch": 0.0,
+            "waveslots": 0.0,
+            "vgprs": 0.0,
+            "sgprs": 0.0,
+            "lds": 0.0,
+            "barriers": 0.0,
+            "workgroup_limit": 0.0,
+            "wavefront_limit": 0.0
+        },
+        "instruction_mix": {
+            "valu": 8,
+            "vmem": 0,
+            "lds": 0,
+            "mfma": 0,
+            "salu": 21,
+            "smem": 0,
+            "branch": 8,
+            "compute_mem_ratio": 29.0
+        }
+    }
+]

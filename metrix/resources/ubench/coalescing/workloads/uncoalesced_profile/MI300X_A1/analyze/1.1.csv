@@ -1,0 +1,40 @@
+Info
+uncoalesced_profile
+./uncoalesced.out
+SQ|LDS|SQC|TA|TD|TCP|TCC|SPI|CPC|CPF|roofline
+Thu 16 Oct 2025 08:05:45 PM  (CDT)
+3
+k002-004-v3.hpcfund
+AMD EPYC 9684X 96-Core Processor
+EDK IIedk2-20241117-2.el9
+Rocky Linux 9.6 (Blue Onyx)
+5.14.0-503.38.1.el9_5.x86_64
+""
+245247356
+""
+6.4.1-83
+113-M3000100-103
+SPX
+NPS1
+MI300
+MI300X_A1
+gfx942
+32
+4096
+304
+4
+32
+64
+1024
+29857
+32
+2100
+1300
+2100
+1300
+128
+32
+160
+4
+5324.8
+8

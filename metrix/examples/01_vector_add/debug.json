@@ -1,0 +1,107 @@
+{
+  "kernels": [
+    {
+      "name": "vector_add(float*, float const*, float const*, int)",
+      "dispatch_count": 1,
+      "duration_us": {
+        "min": 6.009,
+        "max": 6.009,
+        "avg": 6.009
+      },
+      "metrics": {
+        "memory.l2_hit_rate": {
+          "min": 26.713919828459108,
+          "max": 26.713919828459108,
+          "avg": 26.713919828459108
+        },
+        "memory.lds_bank_conflicts": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "memory.coalescing_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.global_store_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        },
+        "memory.l1_hit_rate": {
+          "min": 66.66666666666666,
+          "max": 66.66666666666666,
+          "avg": 66.66666666666666
+        },
+        "memory.bytes_transferred_hbm": {
+          "min": 8401408.0,
+          "max": 8401408.0,
+          "avg": 8401408.0
+        },
+        "memory.global_load_efficiency": {
+          "min": 100.0,
+          "max": 100.0,
+          "avg": 100.0
+        }
+      },
+      "counters": {
+        "memory.read_requests": {
+          "min": 65736.0,
+          "max": 65736.0,
+          "avg": 65736.0
+        },
+        "cache.l1_total_accesses": {
+          "min": 786432.0,
+          "max": 786432.0,
+          "avg": 786432.0
+        },
+        "lds.bank_conflict": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "gpu.active_cycles": {
+          "min": 222671.0,
+          "max": 222671.0,
+          "avg": 222671.0
+        },
+        "cache.l1_request": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        },
+        "cache.l1_cache_accesses": {
+          "min": 196608.0,
+          "max": 196608.0,
+          "avg": 196608.0
+        },
+        "cache.l2_hit": {
+          "min": 35880.0,
+          "max": 35880.0,
+          "avg": 35880.0
+        },
+        "cache.l2_miss": {
+          "min": 98432.0,
+          "max": 98432.0,
+          "avg": 98432.0
+        },
+        "lds.instructions": {
+          "min": 0.0,
+          "max": 0.0,
+          "avg": 0.0
+        },
+        "TCP_TCC_WRITE_REQ_sum": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        },
+        "memory.write_requests": {
+          "min": 65536.0,
+          "max": 65536.0,
+          "avg": 65536.0
+        }
+      }
+    }
+  ]
+}

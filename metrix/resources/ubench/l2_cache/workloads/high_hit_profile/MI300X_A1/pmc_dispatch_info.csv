@@ -1,0 +1,2 @@
+Dispatch_ID,Kernel_Name,GPU_ID
+0,"cache_friendly_sum(float*, float*, int, int) [clone .kd]",1

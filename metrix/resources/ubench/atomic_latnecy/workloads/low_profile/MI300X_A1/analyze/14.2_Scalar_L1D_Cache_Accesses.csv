@@ -1,0 +1,13 @@
+Metric,Avg,Min,Max,Unit
+Req,2.0,2.0,2.0,Req per wave
+Hits,0.0,0.0,0.0,Req per wave
+Misses - Non Duplicated,0.25,0.25,0.25,Req per wave
+Misses- Duplicated,1.75,1.75,1.75,Req per wave
+Cache Hit Rate,0.0,0.0,0.0,Pct
+Read Req (Total),2.0,2.0,2.0,Req per wave
+Atomic Req,0.0,0.0,0.0,Req per wave
+Read Req (1 DWord),1.0,1.0,1.0,Req per wave
+Read Req (2 DWord),1.0,1.0,1.0,Req per wave
+Read Req (4 DWord),0.0,0.0,0.0,Req per wave
+Read Req (8 DWord),0.0,0.0,0.0,Req per wave
+Read Req (16 DWord),0.0,0.0,0.0,Req per wave

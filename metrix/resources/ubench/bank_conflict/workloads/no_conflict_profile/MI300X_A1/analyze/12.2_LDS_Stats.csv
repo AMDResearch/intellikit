@@ -1,0 +1,11 @@
+Metric,Avg,Min,Max,Unit
+LDS Instrs,2.0,2.0,2.0,Instr per wave
+Theoretical Bandwidth,512.0,512.0,512.0,Bytes per wave
+LDS Latency,43.3,43.3,43.3,Cycles
+Bank Conflicts/Access,0.0,0.0,0.0,Conflicts/access
+Index Accesses,4.0,4.0,4.0,Cycles per wave
+Atomic Return Cycles,0.0,0.0,0.0,Cycles per wave
+Bank Conflict,0.0,0.0,0.0,Cycles per wave
+Addr Conflict,0.0,0.0,0.0,Cycles per wave
+Unaligned Stall,0.0,0.0,0.0,Cycles per wave
+Mem Violations,0.0,0.0,0.0,Accesses per wave

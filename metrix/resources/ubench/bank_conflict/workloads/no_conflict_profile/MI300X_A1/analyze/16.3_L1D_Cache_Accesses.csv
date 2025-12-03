@@ -1,0 +1,17 @@
+Metric,Avg,Min,Max,Unit
+Total Req,32.0,32.0,32.0,Req per wave
+Read Req,16.0,16.0,16.0,Req per wave
+Write Req,16.0,16.0,16.0,Req per wave
+Atomic Req,0.0,0.0,0.0,Req per wave
+Cache BW,1024.0,1024.0,1024.0,Bytes per wave
+Cache Hit Rate,25.0,25.0,25.0,Pct
+Cache Accesses,8.0,8.0,8.0,Req per wave
+Cache Hits,2.0,2.0,2.0,Req per wave
+Invalidations,0.02,0.02,0.02,Req per wave
+L1-L2 BW,512.0,512.0,512.0,Bytes per wave
+L1-L2 Read,2.0,2.0,2.0,Req per wave
+L1-L2 Write,4.0,4.0,4.0,Req per wave
+L1-L2 Atomic,0.0,0.0,0.0,Req per wave
+L1 Access Latency,,,,Cycles
+L1-L2 Read Latency,,,,Cycles
+L1-L2 Write Latency,,,,Cycles

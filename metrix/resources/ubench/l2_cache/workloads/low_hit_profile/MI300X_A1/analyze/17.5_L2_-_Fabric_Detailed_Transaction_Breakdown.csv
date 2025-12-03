@@ -1,0 +1,13 @@
+Metric,Avg,Min,Max,Unit
+Read (32B),0.0,0.0,0.0,Req per wave
+Read (Uncached),0.05,0.05,0.05,Req per wave
+Read (64B),0.06,0.06,0.06,Req per wave
+Read (128B),8.0,8.0,8.0,Req per wave
+HBM Read,8.06,8.06,8.06,Req per wave
+Remote Read,0.0,0.0,0.0,Req per wave
+Write and Atomic (32B),0.0,0.0,0.0,Req per wave
+Write and Atomic (Uncached),0.0,0.0,0.0,Req per wave
+Write and Atomic (64B),4.0,4.0,4.0,Req per wave
+HBM Write and Atomic,4.0,4.0,4.0,Req per wave
+Remote Write and Atomic,0.0,0.0,0.0,Req per wave
+Atomic,0.0,0.0,0.0,Req per wave

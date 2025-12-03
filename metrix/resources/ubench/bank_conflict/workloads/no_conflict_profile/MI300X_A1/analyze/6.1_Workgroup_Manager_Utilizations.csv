@@ -1,0 +1,10 @@
+Metric,Avg,Min,Max,Unit
+Accelerator Utilization,100.0,100.0,100.0,Pct
+Scheduler-Pipe Utilization,10.05,10.05,10.05,Pct
+Workgroup Manager Utilization,43.06,43.06,43.06,Pct
+Shader Engine Utilization,33.72,33.72,33.72,Pct
+SIMD Utilization,26.38,26.38,26.38,Pct
+Dispatched Workgroups,1024.0,1024.0,1024.0,Workgroups
+Dispatched Wavefronts,16384.0,16384.0,16384.0,Wavefronts
+VGPR Writes,4.0,4.0,4.0,Cycles/wave
+SGPR Writes,2.0,2.0,2.0,Cycles/wave

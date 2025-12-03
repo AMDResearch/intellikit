@@ -1,0 +1,16 @@
+.wy-side-nav-search, .wy-nav-top {
+    background: #000000;
+}
+
+.wy-side-nav-search .wy-dropdown > a img.logo, .wy-side-nav-search > a img.logo {
+    width: 120px;
+}
+
+.wy-table-responsive table td, .wy-table-responsive table th {
+    white-space: inherit;
+}
+
+h1 { font-size: 150%; }
+h2 { font-size: 125%; }
+h3 { font-size: 115%; }
+h4 { font-size: 100%; }

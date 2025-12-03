@@ -1,0 +1,8 @@
+Metric,Avg,Min,Max,Unit
+VALU,4.0,4.0,4.0,Instr per wave
+VMEM,1.0,1.0,1.0,Instr per wave
+LDS,0.0,0.0,0.0,Instr per wave
+MFMA,0.0,0.0,0.0,Instr per wave
+SALU,2.0,2.0,2.0,Instr per wave
+SMEM,2.0,2.0,2.0,Instr per wave
+Branch,0.0,0.0,0.0,Instr per wave

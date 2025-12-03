@@ -1,0 +1,2 @@
+Dispatch_ID,Kernel_Name,GPU_ID,queue-id,queue-index,pid,tid,Grid_Size,Workgroup_Size,LDS_Per_Workgroup,Scratch_Per_Workitem,Arch_VGPR,Accum_VGPR,SGPR,wave_size,sig,obj,DispatchNs,Start_Timestamp,End_Timestamp,CompleteNs
+1,"transpose_no_conflict(float*, float const*, int, int) [clone .kd]",1,0,2,3269662,3269662,1048576,1024,4608,0,8,0,32,64,0x0,0x7f6a2f7d8640,2525907576610326,2525907576742172,2525907576747821,2525907576770664

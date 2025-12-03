@@ -1,0 +1,11 @@
+Metric,Avg,Min,Max,Unit
+Grid Size,1048576.0,1048576.0,1048576.0,Work items
+Workgroup Size,1024.0,1024.0,1024.0,Work items
+Total Wavefronts,16384.0,16384.0,16384.0,Wavefronts
+Saved Wavefronts,0.0,0.0,0.0,Wavefronts
+Restored Wavefronts,0.0,0.0,0.0,Wavefronts
+VGPRs,8.0,8.0,8.0,Registers
+AGPRs,0.0,0.0,0.0,Registers
+SGPRs,32.0,32.0,32.0,Registers
+LDS Allocation,4608.0,4608.0,4608.0,Bytes
+Scratch Allocation,0.0,0.0,0.0,Bytes/workitem

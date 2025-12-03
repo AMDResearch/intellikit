@@ -1,0 +1,6 @@
+Metric,Avg,Min,Max,Unit
+CPF Utilization,100.0,100.0,100.0,Pct
+CPF Stall,0.0,0.0,0.0,Pct
+CPF-L2 Utilization,29.01,29.01,29.01,Pct
+CPF-L2 Stall,0.0,0.0,0.0,Pct
+CPF-UTCL1 Stall,0.0,0.0,0.0,Pct

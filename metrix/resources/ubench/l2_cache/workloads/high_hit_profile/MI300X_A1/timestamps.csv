@@ -1,0 +1,2 @@
+Dispatch_ID,Kernel_Name,GPU_ID,queue-id,queue-index,pid,tid,Grid_Size,Workgroup_Size,LDS_Per_Workgroup,Scratch_Per_Workitem,Arch_VGPR,Accum_VGPR,SGPR,wave_size,sig,obj,DispatchNs,Start_Timestamp,End_Timestamp,CompleteNs
+0,"cache_friendly_sum(float*, float*, int, int) [clone .kd]",1,0,1,3300820,3300820,524288,256,0,0,8,0,16,64,0x0,0x7f6fc49d08c0,2526155313198940,2526155313359060,2526155313373681,2526155313402593

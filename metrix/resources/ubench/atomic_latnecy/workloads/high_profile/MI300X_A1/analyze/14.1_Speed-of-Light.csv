@@ -1,0 +1,4 @@
+Metric,Avg,Unit
+Bandwidth,0.01,Pct of peak
+Cache Hit Rate,0.0,Pct of peak
+sL1D-L2 BW,0.0,Pct of peak

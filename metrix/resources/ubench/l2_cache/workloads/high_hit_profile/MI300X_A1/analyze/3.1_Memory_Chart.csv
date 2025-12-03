@@ -1,0 +1,56 @@
+Metric,Value
+Wavefront Occupancy,23.0
+Wave Life,19931.0
+SALU,404.0
+SMEM,3.0
+VALU,111.0
+MFMA,0.0
+VMEM,101.0
+LDS,0.0
+GWS,0.0
+BR,303.0
+Active CUs,188.0
+Num CUs,304.0
+VGPR,8.0
+SGPR,16.0
+LDS Allocation,0.0
+Scratch Allocation,0.0
+Wavefronts,8192.0
+Workgroups,2048.0
+LDS Req,0.0
+LDS Util,0.0
+LDS Latency,
+VL1 Rd,1600.0
+VL1 Wr,16.0
+VL1 Atomic,0.0
+VL1 Hit,99.0
+VL1 Lat,
+VL1 Coalesce,100.0
+VL1 Stall,0.0
+VL1_L2 Rd,2.0
+VL1_L2 Wr,4.0
+VL1_L2 Atomic,0.0
+VL1D Rd,3.0
+VL1D Hit,80.0
+VL1D Lat,
+VL1D_L2 Rd,0.0
+VL1D_L2 Wr,0.0
+VL1D_L2 Atomic,0.0
+IL1 Fetch,206.0
+IL1 Hit,100.0
+IL1 Lat,1697.0
+IL1_L2 Rd,0.0
+L2 Rd,2.0
+L2 Wr,4.0
+L2 Atomic,0.0
+L2 Hit,37.0
+L2 Rd Lat,
+L2 Wr Lat,
+Fabric_L2 Rd,2.0
+Fabric_L2 Wr,4.0
+Fabric_L2 Atomic,0.0
+Fabric Rd Lat,1310.0
+Fabric Wr Lat,384.0
+Fabric Atomic Lat,0.0
+HBM Rd,2.0
+HBM Wr,4.0
