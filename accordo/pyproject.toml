@@ -2,8 +2,8 @@
 # Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 [build-system]
-requires = ["scikit-build-core>=0.3.3", "setuptools-scm>=8"]
-build-backend = "scikit_build_core.build"
+requires = ["setuptools>=61", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "accordo"
@@ -28,12 +28,10 @@ dev = [
     "ruff",
 ]
 
-[tool.scikit-build]
-cmake.build-type = "Release"
-wheel.packages = ["accordo"]
-
-[tool.scikit-build.cmake.define]
-CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
+# ---- setuptools configuration ----
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["accordo*"]
 
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
@@ -56,4 +54,3 @@ ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
 
 [tool.ruff.format]
 quote-style = "double"
-
