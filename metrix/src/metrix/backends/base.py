@@ -108,6 +108,29 @@ class CounterBackend(ABC):
         """Get list of all metrics supported by this backend"""
         return list(self._metrics.keys())
 
+    def get_metric_counters(self, metric: str) -> List[str]:
+        """
+        Get the actual hardware counter names required for a specific metric.
+
+        This returns the architecture-specific counter names as defined in this
+        backend's @metric decorated methods.
+
+        Args:
+            metric: Metric name (e.g., "memory.l2_hit_rate")
+
+        Returns:
+            List of hardware counter names required for this metric
+
+        Raises:
+            ValueError: If metric is unknown
+        """
+        if metric not in self._metrics:
+            available = ', '.join(self.get_available_metrics())
+            raise ValueError(
+                f"Unknown metric '{metric}'. Available metrics: {available}"
+            )
+        return list(self._metrics[metric]['counters'])
+
     def get_required_counters(self, metrics: List[str]) -> List[str]:
         """
         Get all hardware counters needed for requested metrics
@@ -131,30 +154,50 @@ class CounterBackend(ABC):
             counters.update(self._metrics[metric]['counters'])
         return list(counters)
 
-    def _get_counter_groups(self) -> Optional[List[List[str]]]:
+    def _get_counter_block(self, counter_name: str) -> str:
         """
-        Return hardware counter compatibility groups for this architecture.
-
-        Override this method in derived classes to define which counters can be
-        collected together in a single profiling pass. This is hardware-specific.
-
+        Extract hardware block name from counter name based on prefix.
+        
+        AMD counter names follow the pattern: BLOCK_COUNTER_NAME
+        Examples: SQ_INSTS_LDS -> SQ, TCC_HIT_sum -> TCC
+        
+        Args:
+            counter_name: Counter name (e.g., "SQ_INSTS_LDS", "TCC_HIT_sum")
+            
         Returns:
-            List of counter groups (list of lists), or None to use simple chunking
-
-        Example:
-            return [
-                ["COUNTER_A", "COUNTER_B", "COUNTER_C"],  # Group 1: compatible
-                ["COUNTER_D", "COUNTER_E"],                # Group 2: compatible
-            ]
+            Hardware block name (e.g., "SQ", "TCC")
         """
-        return None  # Default: no compatibility groups, use simple chunking
+        # Extract prefix before first underscore
+        if '_' in counter_name:
+            return counter_name.split('_')[0]
+        return "UNKNOWN"
+    
+    def _get_counter_block_limits(self) -> Dict[str, int]:
+        """
+        Return per-hardware-block counter limits for this architecture.
+        
+        Override this method in derived classes to specify how many counters
+        from each hardware block can be collected simultaneously.
+        
+        Returns:
+            Dict mapping block_name -> max_counters_per_pass
+            
+        Example:
+            return {
+                "SQ": 8,   # Shader Quad - 8 counters max
+                "TCC": 4,  # L2 Cache - 4 counters max
+                "TCP": 4,  # L1 Cache - 4 counters max
+            }
+        """
+        return {}  # Default: no block limits defined, fall back to simple chunking
 
     def _split_counters_into_passes(self, counters: List[str]) -> List[List[str]]:
         """
-        Split counters into multiple profiling passes based on hardware compatibility.
+        Split counters into multiple profiling passes based on per-block hardware limits.
 
-        This method uses architecture-specific counter groups (if defined) to ensure
-        compatible counters are collected together, avoiding hardware resource conflicts.
+        This method uses a bin-packing algorithm that respects hardware block limits
+        (e.g., max 8 SQ counters, max 4 TCC counters per pass). This allows mixing
+        counters from different blocks in the same pass, minimizing total passes needed.
 
         Args:
             counters: List of counter names to collect
@@ -162,58 +205,69 @@ class CounterBackend(ABC):
         Returns:
             List of counter lists, one per profiling pass
         """
+        from ..logger import logger
+
         # Handle empty counters (timing-only mode) - return single pass with no counters
         if not counters:
             return [[]]
-            
-        counter_groups = self._get_counter_groups()
-        max_per_pass = 14  # Conservative limit for most AMD GPUs
 
-        if counter_groups is None:
-            # No compatibility groups defined - use simple chunking
+        block_limits = self._get_counter_block_limits()
+        
+        # If no block limits defined, fall back to simple chunking
+        if not block_limits:
+            max_per_pass = 14  # Conservative limit for most AMD GPUs
             if len(counters) <= max_per_pass:
                 return [counters]
 
             passes = []
             for i in range(0, len(counters), max_per_pass):
                 passes.append(counters[i:i + max_per_pass])
+            logger.info(f"Splitting {len(counters)} counters into {len(passes)} simple passes")
             return passes
 
-        # Use hardware-specific compatibility groups
-        # Map each counter to its group
-        counter_to_group = {}
-        for group_idx, group in enumerate(counter_groups):
-            for counter in group:
-                counter_to_group[counter] = group_idx
-
-        # Organize requested counters by their compatibility group
-        passes = [[] for _ in range(len(counter_groups))]
-        unassigned = []
-
+        # Organize counters by hardware block
+        counters_by_block = defaultdict(list)
         for counter in counters:
-            if counter in counter_to_group:
-                group_idx = counter_to_group[counter]
-                passes[group_idx].append(counter)
-            else:
-                unassigned.append(counter)
-
-        # Add unassigned counters to the first non-full pass
-        if unassigned:
-            from ..logger import logger
-            logger.warning(f"Counters not in compatibility groups: {unassigned}")
-            for counter in unassigned:
-                # Find first pass with room
-                for pass_list in passes:
-                    if len(pass_list) < max_per_pass:
-                        pass_list.append(counter)
-                        break
-                else:
-                    # All passes full, create new one
-                    passes.append([counter])
-
-        # Remove empty passes
-        passes = [p for p in passes if p]
-
+            block = self._get_counter_block(counter)
+            counters_by_block[block].append(counter)
+        
+        logger.debug(f"Counters by block: {dict(counters_by_block)}")
+        
+        # Greedy bin-packing algorithm:
+        # For each pass, take as many counters from each block as the limit allows
+        passes = []
+        remaining = {block: list(cntrs) for block, cntrs in counters_by_block.items()}
+        
+        while any(remaining.values()):
+            current_pass = []
+            pass_block_count = defaultdict(int)
+            
+            # Try to add counters from each block to current pass
+            for block_name in sorted(remaining.keys()):  # Sort for deterministic ordering
+                block_counters = remaining[block_name]
+                if not block_counters:
+                    continue
+                    
+                # Get limit for this block (default to 4 if unknown)
+                limit = block_limits.get(block_name, 4)
+                available_slots = limit - pass_block_count[block_name]
+                
+                # Add as many counters from this block as possible
+                to_add = block_counters[:available_slots]
+                current_pass.extend(to_add)
+                pass_block_count[block_name] += len(to_add)
+                
+                # Update remaining counters for this block
+                remaining[block_name] = block_counters[available_slots:]
+            
+            if current_pass:
+                passes.append(current_pass)
+                logger.debug(f"Pass {len(passes)}: {len(current_pass)} counters, blocks: {dict(pass_block_count)}")
+            
+            # Remove blocks with no remaining counters
+            remaining = {k: v for k, v in remaining.items() if v}
+        
+        logger.info(f"Packed {len(counters)} counters into {len(passes)} block-aware passes")
         return passes
 
     def profile(self, command: str, metrics: List[str],

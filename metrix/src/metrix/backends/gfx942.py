@@ -8,7 +8,7 @@ Counter names appear EXACTLY ONCE - as function parameters.
 from .base import CounterBackend, DeviceSpecs, ProfileResult
 from .decorator import metric
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 class GFX942Backend(CounterBackend):
@@ -38,74 +38,40 @@ class GFX942Backend(CounterBackend):
             boost_clock_mhz=2100
         )
 
-    def _get_counter_groups(self) -> List[List[str]]:
+    def _get_counter_block_limits(self) -> Dict[str, int]:
         """
-        Return hardware counter compatibility groups for gfx942 (MI300X).
-
-        These groups are based on guided-tuning's tested configurations and ensure
-        counters in each group can be collected simultaneously without hardware conflicts.
-
-        Reference: external/guided-tuning/configs/MI3/input.json
-
-        Note: MI300/MI350 use TCC_EA0_* counters (not TCC_EA_* which are MI200-specific)
-
-        CRITICAL: TCC_EA0_RDREQ_sum and TCC_EA0_WRREQ_sum CANNOT be collected together
-        with TCC_EA0_ATOMIC_* counters due to hardware resource conflicts!
+        Return per-hardware-block counter limits for gfx942 (MI300X).
+        
+        These limits define how many performance counters can be simultaneously
+        collected from each hardware block in a single profiling pass.
+        
+        Hardware blocks on MI300X:
+        - SQ (Shader): Instruction counters (VALU, LDS, VMEM, etc.)
+        - TA (Texture Addresser): Texture address operations
+        - TD (Texture Data): Texture data fetch operations  
+        - TCP (Texture Cache per Pipe): L1 vector cache
+        - TCC (Texture Cache Channel): L2 cache and memory controller
+        - CPC (Command Processor - Compute): Compute command processing
+        - CPF (Command Processor - Fetch): Command fetch operations
+        - SPI (Shader Processor Input): Wavefront dispatch and scheduling
+        - GRBM (Graphics Register Bus Manager): Global GPU activity
+        - GDS (Global Data Share): Inter-workgroup communication
+        
+        Returns:
+            Dict mapping block_name -> max_counters_per_pass
         """
-        return [
-            # Group 1: Atomics and write requests (from pmc_perf_0)
-            # Note: RDREQ cannot be in this group!
-            [
-                "SQ_LDS_BANK_CONFLICT",
-                "TCC_EA0_WRREQ_sum",
-                "TCC_EA0_WRREQ_64B_sum",  
-                "TCC_EA0_ATOMIC_LEVEL_sum",
-                "TCC_EA0_ATOMIC_sum",
-                "GRBM_GUI_ACTIVE",
-            ],
-            # Group 2: LDS and L2 cache counters (from SQ_INSTS_LDS)
-            [
-                "SQ_INSTS_LDS",
-                "TCP_TOTAL_ACCESSES_sum",
-                "TCC_HIT_sum",
-                "TCC_MISS_sum",
-                "TCC_REQ_sum",  
-            ],
-            # Group 3: Memory instructions and read requests (from SQ_INSTS_VMEM)
-            # Note: RDREQ can only be collected here, not with atomics!
-            [
-                "TCP_TCC_READ_REQ_sum",
-                "TCP_TCC_WRITE_REQ_sum",
-                "TCP_TOTAL_CACHE_ACCESSES_sum",
-                "TCC_EA0_RDREQ_sum",
-                "TCC_EA0_RDREQ_32B_sum",
-                "TCC_BUBBLE_sum",
-                "SQ_INSTS_VMEM_RD",
-                "SQ_INSTS_VMEM_WR",
-            ],
-            # Group 4: FP16 and FP32 VALU instructions (for FLOPS calculations)
-            [
-                "SQ_INSTS_VALU_ADD_F16",
-                "SQ_INSTS_VALU_MUL_F16",
-                "SQ_INSTS_VALU_TRANS_F16",
-                "SQ_INSTS_VALU_FMA_F16",
-                "SQ_INSTS_VALU_ADD_F32",
-                "SQ_INSTS_VALU_MUL_F32",
-                "SQ_INSTS_VALU_TRANS_F32",
-                "SQ_INSTS_VALU_FMA_F32",
-            ],
-            # Group 5: FP64 VALU instructions and MFMA instructions
-            [
-                "SQ_INSTS_VALU_ADD_F64",
-                "SQ_INSTS_VALU_MUL_F64",
-                "SQ_INSTS_VALU_TRANS_F64",
-                "SQ_INSTS_VALU_FMA_F64",
-                "SQ_INSTS_VALU_MFMA_MOPS_F16",
-                "SQ_INSTS_VALU_MFMA_MOPS_BF16",
-                "SQ_INSTS_VALU_MFMA_MOPS_F32",
-                "SQ_INSTS_VALU_MFMA_MOPS_F64",
-            ],
-        ]
+        return {
+            "SQ": 8,      # Shader - instruction counters
+            "TA": 2,      # Texture Addresser
+            "TD": 2,      # Texture Data
+            "TCP": 4,     # L1 Cache (Texture Cache per Pipe)
+            "TCC": 4,     # L2 Cache / Memory Controller
+            "CPC": 2,     # Command Processor - Compute
+            "CPF": 2,     # Command Processor - Fetch
+            "SPI": 6,     # Shader Processor Input
+            "GRBM": 2,    # Graphics Register Bus Manager
+            "GDS": 4,     # Global Data Share
+        }
 
     def _run_rocprof(self, command: str, counters: List[str],
                      kernel_filter: Optional[str] = None, cwd: Optional[str] = None) -> List[ProfileResult]:
