@@ -29,9 +29,13 @@ dev = [
 ]
 
 # ---- setuptools configuration ----
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["accordo*"]
+[tool.setuptools]
+# The accordo source files are in the current directory
+# Map the package 'accordo' to the current directory '.'
+packages = ["accordo", "accordo.python", "accordo._internal"]
+
+[tool.setuptools.package-dir]
+accordo = "."
 
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
