@@ -37,6 +37,15 @@ packages = ["accordo", "accordo.python", "accordo._internal", "accordo._internal
 [tool.setuptools.package-dir]
 accordo = "."
 
+[tool.setuptools.package-data]
+# Include build files for runtime C++ compilation
+accordo = [
+    "CMakeLists.txt",
+    "cmake/**/*",
+    "src/**/*",
+    "include/**/*",
+]
+
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
 version_scheme = "post-release"
