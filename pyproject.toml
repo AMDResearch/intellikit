@@ -2,8 +2,8 @@
 # Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 [build-system]
-requires = ["setuptools>=61", "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.3.3", "setuptools-scm>=8"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "intellikit"
@@ -16,7 +16,7 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.8"
 
-# By default, install nothing (meta-package)
+# By default, install all three tools
 dependencies = []
 
 [project.urls]
@@ -25,28 +25,22 @@ Repository = "https://github.com/AMDResearch/nexus"
 Documentation = "https://github.com/AMDResearch/nexus/blob/main/README.md"
 
 [project.optional-dependencies]
-# Each extra installs the corresponding subpackage from GitHub
-# Subpackages handle their own builds (cmake for nexus, pure Python for others)
-accordo = ["accordo @ git+https://github.com/AMDResearch/nexus.git@muhaawad/fix-accordo#subdirectory=accordo"]
-metrix = ["metrix @ git+https://github.com/AMDResearch/nexus.git@muhaawad/fix-accordo#subdirectory=metrix"]
-nexus = ["nexus @ git+https://github.com/AMDResearch/nexus.git@muhaawad/fix-accordo#subdirectory=nexus"]
-
-# Install all tools
-all = [
-    "accordo @ git+https://github.com/AMDResearch/nexus.git@muhaawad/fix-accordo#subdirectory=accordo",
-    "metrix @ git+https://github.com/AMDResearch/nexus.git@muhaawad/fix-accordo#subdirectory=metrix",
-    "nexus @ git+https://github.com/AMDResearch/nexus.git@muhaawad/fix-accordo#subdirectory=nexus",
-]
-
 dev = [
     "pytest",
     "ruff",
 ]
 
-# ---- setuptools configuration ----
-[tool.setuptools]
-# Empty meta-package with no code
-packages = []
+[tool.scikit-build]
+cmake.build-type = "Release"
+# Install all three packages
+wheel.packages = ["nexus/nexus", "accordo", "metrix/src/metrix"]
+wheel.py-api = "cp38"
+
+[tool.scikit-build.cmake.define]
+CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
+LLVM_INSTALL_DIR = {env="LLVM_INSTALL_DIR", default="/opt/rocm/llvm"}
+# Build nexus by default when installing from root
+BUILD_NEXUS = {env="BUILD_NEXUS", default="ON"}
 
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
