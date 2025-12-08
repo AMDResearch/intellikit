@@ -6,6 +6,7 @@ Counter names appear EXACTLY ONCE - as function parameters.
 """
 
 from .base import CounterBackend, DeviceSpecs, ProfileResult
+from utils.common import split_counters_into_passes
 from .decorator import metric
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
 from typing import List, Optional, Dict
@@ -36,6 +37,24 @@ class GFX942Backend(CounterBackend):
             fp64_tflops=81.7,
             int8_tops=1307.4,
             boost_clock_mhz=2100
+        )
+
+    def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
+        """
+        Group counters into passes using MI300X-specific block limits.
+
+        This keeps the hardware-specific knowledge (block limits and naming)
+        in the gfx942 backend while reusing the generic helper from
+        `common.py` for the actual bin-packing.
+        """
+        from ..logger import logger
+
+        block_limits = self._get_counter_block_limits()
+        return split_counters_into_passes(
+            counters,
+            block_limits=block_limits,
+            get_counter_block=self._get_counter_block,
+            logger=logger,
         )
 
     def _get_counter_block_limits(self) -> Dict[str, int]:

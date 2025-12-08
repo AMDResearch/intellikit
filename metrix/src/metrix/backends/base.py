@@ -181,94 +181,48 @@ class CounterBackend(ABC):
         
         Returns:
             Dict mapping block_name -> max_counters_per_pass
-            
-        Example:
-            return {
-                "SQ": 8,   # Shader Quad - 8 counters max
-                "TCC": 4,  # L2 Cache - 4 counters max
-                "TCP": 4,  # L1 Cache - 4 counters max
-            }
         """
-        return {}  # Default: no block limits defined, fall back to simple chunking
+        # Default: no block limits defined. Backends that care about block-aware
+        # packing should override this in their gfxXXXX.py implementation.
+        return {}
 
-    def _split_counters_into_passes(self, counters: List[str]) -> List[List[str]]:
+    def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
         """
-        Split counters into multiple profiling passes based on per-block hardware limits.
+        Architecture-specific hook to group counters into passes.
 
-        This method uses a bin-packing algorithm that respects hardware block limits
-        (e.g., max 8 SQ counters, max 4 TCC counters per pass). This allows mixing
-        counters from different blocks in the same pass, minimizing total passes needed.
-
-        Args:
-            counters: List of counter names to collect
-
-        Returns:
-            List of counter lists, one per profiling pass
+        Default implementation uses a simple max-per-pass chunking strategy
+        without any knowledge of hardware blocks. Architectures that need
+        more control should override this in their gfxXXXX backend.
         """
         from ..logger import logger
 
-        # Handle empty counters (timing-only mode) - return single pass with no counters
         if not counters:
             return [[]]
 
-        block_limits = self._get_counter_block_limits()
-        
-        # If no block limits defined, fall back to simple chunking
-        if not block_limits:
-            max_per_pass = 14  # Conservative limit for most AMD GPUs
-            if len(counters) <= max_per_pass:
-                return [counters]
+        max_per_pass = 14  # Conservative default for generic backends
+        if len(counters) <= max_per_pass:
+            return [counters]
 
-            passes = []
-            for i in range(0, len(counters), max_per_pass):
-                passes.append(counters[i:i + max_per_pass])
-            logger.info(f"Splitting {len(counters)} counters into {len(passes)} simple passes")
-            return passes
+        passes: List[List[str]] = []
+        for i in range(0, len(counters), max_per_pass):
+            passes.append(counters[i : i + max_per_pass])
 
-        # Organize counters by hardware block
-        counters_by_block = defaultdict(list)
-        for counter in counters:
-            block = self._get_counter_block(counter)
-            counters_by_block[block].append(counter)
-        
-        logger.debug(f"Counters by block: {dict(counters_by_block)}")
-        
-        # Greedy bin-packing algorithm:
-        # For each pass, take as many counters from each block as the limit allows
-        passes = []
-        remaining = {block: list(cntrs) for block, cntrs in counters_by_block.items()}
-        
-        while any(remaining.values()):
-            current_pass = []
-            pass_block_count = defaultdict(int)
-            
-            # Try to add counters from each block to current pass
-            for block_name in sorted(remaining.keys()):  # Sort for deterministic ordering
-                block_counters = remaining[block_name]
-                if not block_counters:
-                    continue
-                    
-                # Get limit for this block (default to 4 if unknown)
-                limit = block_limits.get(block_name, 4)
-                available_slots = limit - pass_block_count[block_name]
-                
-                # Add as many counters from this block as possible
-                to_add = block_counters[:available_slots]
-                current_pass.extend(to_add)
-                pass_block_count[block_name] += len(to_add)
-                
-                # Update remaining counters for this block
-                remaining[block_name] = block_counters[available_slots:]
-            
-            if current_pass:
-                passes.append(current_pass)
-                logger.debug(f"Pass {len(passes)}: {len(current_pass)} counters, blocks: {dict(pass_block_count)}")
-            
-            # Remove blocks with no remaining counters
-            remaining = {k: v for k, v in remaining.items() if v}
-        
-        logger.info(f"Packed {len(counters)} counters into {len(passes)} block-aware passes")
+        logger.info(
+            f"Splitting {len(counters)} counters into {len(passes)} simple passes"
+        )
         return passes
+
+    def _split_counters_into_passes(self, counters: List[str]) -> List[List[str]]:
+        """
+        Split counters into multiple profiling passes.
+
+        This method is called by the base `profile` implementation before
+        invoking rocprofv3. The actual grouping strategy is delegated to
+        the per-backend `_get_counter_groups` hook so that any hardware-
+        specific logic lives in the gfxXXXX backends (optionally using
+        helpers from `common.py`).
+        """
+        return self._get_counter_groups(counters)
 
     def profile(self, command: str, metrics: List[str],
                 num_replays: int = 10, aggregate_by_kernel: bool = False,
@@ -540,4 +494,3 @@ class CounterBackend(ABC):
             accum_vgpr=first.accum_vgpr,
             sgpr=first.sgpr
         )
-
