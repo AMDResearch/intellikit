@@ -108,6 +108,29 @@ class CounterBackend(ABC):
         """Get list of all metrics supported by this backend"""
         return list(self._metrics.keys())
 
+    def get_metric_counters(self, metric: str) -> List[str]:
+        """
+        Get the actual hardware counter names required for a specific metric.
+
+        This returns the architecture-specific counter names as defined in this
+        backend's @metric decorated methods.
+
+        Args:
+            metric: Metric name (e.g., "memory.l2_hit_rate")
+
+        Returns:
+            List of hardware counter names required for this metric
+
+        Raises:
+            ValueError: If metric is unknown
+        """
+        if metric not in self._metrics:
+            available = ', '.join(self.get_available_metrics())
+            raise ValueError(
+                f"Unknown metric '{metric}'. Available metrics: {available}"
+            )
+        return list(self._metrics[metric]['counters'])
+
     def get_required_counters(self, metrics: List[str]) -> List[str]:
         """
         Get all hardware counters needed for requested metrics
@@ -131,90 +154,75 @@ class CounterBackend(ABC):
             counters.update(self._metrics[metric]['counters'])
         return list(counters)
 
-    def _get_counter_groups(self) -> Optional[List[List[str]]]:
+    def _get_counter_block(self, counter_name: str) -> str:
         """
-        Return hardware counter compatibility groups for this architecture.
-
-        Override this method in derived classes to define which counters can be
-        collected together in a single profiling pass. This is hardware-specific.
-
+        Extract hardware block name from counter name based on prefix.
+        
+        AMD counter names follow the pattern: BLOCK_COUNTER_NAME
+        Examples: SQ_INSTS_LDS -> SQ, TCC_HIT_sum -> TCC
+        
+        Args:
+            counter_name: Counter name (e.g., "SQ_INSTS_LDS", "TCC_HIT_sum")
+            
         Returns:
-            List of counter groups (list of lists), or None to use simple chunking
-
-        Example:
-            return [
-                ["COUNTER_A", "COUNTER_B", "COUNTER_C"],  # Group 1: compatible
-                ["COUNTER_D", "COUNTER_E"],                # Group 2: compatible
-            ]
+            Hardware block name (e.g., "SQ", "TCC")
         """
-        return None  # Default: no compatibility groups, use simple chunking
+        # Extract prefix before first underscore
+        if '_' in counter_name:
+            return counter_name.split('_')[0]
+        return "UNKNOWN"
+    
+    def _get_counter_block_limits(self) -> Dict[str, int]:
+        """
+        Return per-hardware-block counter limits for this architecture.
+        
+        Override this method in derived classes to specify how many counters
+        from each hardware block can be collected simultaneously.
+        
+        Returns:
+            Dict mapping block_name -> max_counters_per_pass
+        """
+        # Default: no block limits defined. Backends that care about block-aware
+        # packing should override this in their gfxXXXX.py implementation.
+        return {}
+
+    def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
+        """
+        Architecture-specific hook to group counters into passes.
+
+        Default implementation uses a simple max-per-pass chunking strategy
+        without any knowledge of hardware blocks. Architectures that need
+        more control should override this in their gfxXXXX backend.
+        """
+        from ..logger import logger
+
+        if not counters:
+            return [[]]
+
+        max_per_pass = 14  # Conservative default for generic backends
+        if len(counters) <= max_per_pass:
+            return [counters]
+
+        passes: List[List[str]] = []
+        for i in range(0, len(counters), max_per_pass):
+            passes.append(counters[i : i + max_per_pass])
+
+        logger.info(
+            f"Splitting {len(counters)} counters into {len(passes)} simple passes"
+        )
+        return passes
 
     def _split_counters_into_passes(self, counters: List[str]) -> List[List[str]]:
         """
-        Split counters into multiple profiling passes based on hardware compatibility.
+        Split counters into multiple profiling passes.
 
-        This method uses architecture-specific counter groups (if defined) to ensure
-        compatible counters are collected together, avoiding hardware resource conflicts.
-
-        Args:
-            counters: List of counter names to collect
-
-        Returns:
-            List of counter lists, one per profiling pass
+        This method is called by the base `profile` implementation before
+        invoking rocprofv3. The actual grouping strategy is delegated to
+        the per-backend `_get_counter_groups` hook so that any hardware-
+        specific logic lives in the gfxXXXX backends (optionally using
+        helpers from `common.py`).
         """
-        # Handle empty counters (timing-only mode) - return single pass with no counters
-        if not counters:
-            return [[]]
-            
-        counter_groups = self._get_counter_groups()
-        max_per_pass = 14  # Conservative limit for most AMD GPUs
-
-        if counter_groups is None:
-            # No compatibility groups defined - use simple chunking
-            if len(counters) <= max_per_pass:
-                return [counters]
-
-            passes = []
-            for i in range(0, len(counters), max_per_pass):
-                passes.append(counters[i:i + max_per_pass])
-            return passes
-
-        # Use hardware-specific compatibility groups
-        # Map each counter to its group
-        counter_to_group = {}
-        for group_idx, group in enumerate(counter_groups):
-            for counter in group:
-                counter_to_group[counter] = group_idx
-
-        # Organize requested counters by their compatibility group
-        passes = [[] for _ in range(len(counter_groups))]
-        unassigned = []
-
-        for counter in counters:
-            if counter in counter_to_group:
-                group_idx = counter_to_group[counter]
-                passes[group_idx].append(counter)
-            else:
-                unassigned.append(counter)
-
-        # Add unassigned counters to the first non-full pass
-        if unassigned:
-            from ..logger import logger
-            logger.warning(f"Counters not in compatibility groups: {unassigned}")
-            for counter in unassigned:
-                # Find first pass with room
-                for pass_list in passes:
-                    if len(pass_list) < max_per_pass:
-                        pass_list.append(counter)
-                        break
-                else:
-                    # All passes full, create new one
-                    passes.append([counter])
-
-        # Remove empty passes
-        passes = [p for p in passes if p]
-
-        return passes
+        return self._get_counter_groups(counters)
 
     def profile(self, command: str, metrics: List[str],
                 num_replays: int = 10, aggregate_by_kernel: bool = False,
@@ -486,4 +494,3 @@ class CounterBackend(ABC):
             accum_vgpr=first.accum_vgpr,
             sgpr=first.sgpr
         )
-
