@@ -6,7 +6,7 @@ Counter names appear EXACTLY ONCE - as function parameters.
 """
 
 from .base import CounterBackend, DeviceSpecs, ProfileResult
-from utils.common import split_counters_into_passes
+from ..utils.common import split_counters_into_passes
 from .decorator import metric
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
 from typing import List, Optional, Dict
