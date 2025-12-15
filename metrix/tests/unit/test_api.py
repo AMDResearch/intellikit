@@ -11,32 +11,36 @@ class TestMetrixInit:
     """Test Metrix initialization"""
 
     def test_init_default(self):
-        """Test default initialization"""
+        """Test default initialization (falls back to gfx942 if no hardware detected)"""
         profiler = Metrix()
-        assert profiler.arch == "gfx942"
+        # Default depends on hardware detection, but should succeed
+        assert profiler.arch in ["gfx942", "gfx90a", "gfx1201"]
         assert profiler.backend is not None
 
-    def test_init_custom_arch(self):
-        """Test custom architecture"""
-        profiler = Metrix(arch="gfx942")
-        assert profiler.arch == "gfx942"
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_init_custom_arch(self, arch):
+        """Test custom architecture initialization"""
+        profiler = Metrix(arch=arch)
+        assert profiler.arch == arch
         assert profiler.backend is not None
 
 
 class TestMetrixMetricListing:
     """Test metric and profile listing"""
 
-    def test_list_metrics(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_list_metrics(self, arch):
         """Test listing all metrics"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         metrics = profiler.list_metrics()
         assert len(metrics) > 0
         assert "memory.l2_hit_rate" in metrics
         assert "memory.hbm_bandwidth_utilization" in metrics
 
-    def test_list_metrics_includes_compute(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_list_metrics_includes_compute(self, arch):
         """Test that compute metrics are included in list"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         metrics = profiler.list_metrics()
         assert "compute.total_flops" in metrics
         assert "compute.hbm_gflops" in metrics
@@ -44,43 +48,49 @@ class TestMetrixMetricListing:
         assert "compute.l2_arithmetic_intensity" in metrics
         assert "compute.l1_arithmetic_intensity" in metrics
 
-    def test_list_profiles(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_list_profiles(self, arch):
         """Test listing profiles"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         profiles = profiler.list_profiles()
         assert "quick" in profiles
         assert "memory" in profiles
 
-    def test_list_profiles_includes_compute(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_list_profiles_includes_compute(self, arch):
         """Test that compute profile is included"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         profiles = profiler.list_profiles()
         assert "compute" in profiles
 
-    def test_get_metric_info(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_get_metric_info(self, arch):
         """Test getting metric information"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("memory.l2_hit_rate")
         assert info['name'] == "L2 Cache Hit Rate"
         assert info['unit'] == "percent"
 
-    def test_get_compute_metric_info(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_get_compute_metric_info(self, arch):
         """Test getting compute metric information"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("compute.total_flops")
         assert info['name'] == "Total FLOPS"
         assert info['unit'] == "FLOPS"
 
-    def test_get_arithmetic_intensity_info(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_get_arithmetic_intensity_info(self, arch):
         """Test getting arithmetic intensity metric information"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("compute.hbm_arithmetic_intensity")
         assert info['name'] == "HBM Arithmetic Intensity"
         assert info['unit'] == "FLOP/byte"
 
-    def test_get_unknown_metric_raises(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_get_unknown_metric_raises(self, arch):
         """Test getting info for unknown metric raises error"""
-        profiler = Metrix()
+        profiler = Metrix(arch=arch)
         with pytest.raises(ValueError, match="Unknown metric"):
             profiler.get_metric_info("nonexistent.metric")
 
