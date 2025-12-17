@@ -26,6 +26,7 @@ def profile_command(args):
     backend = get_backend(arch)
 
     # Determine what metrics to collect
+    explicitly_requested = False  # Track if metrics were explicitly requested
     if args.time_only:
         # Time-only mode: no metrics needed
         metrics_to_compute = []
@@ -34,6 +35,7 @@ def profile_command(args):
         # Specific metrics requested
         metrics_to_compute = [m.strip() for m in args.metrics.split(",")]
         mode = f"custom ({len(metrics_to_compute)} metrics)"
+        explicitly_requested = True  # User explicitly specified metrics via --metrics
     else:
         # Use profile or all metrics
         if args.profile is None:
@@ -49,6 +51,26 @@ def profile_command(args):
 
             metrics_to_compute = METRIC_PROFILES[profile_name]["metrics"]
             mode = f"profile '{profile_name}'"
+
+    # Check for unsupported metrics
+    unsupported = {m: backend._unsupported_metrics[m] 
+                  for m in metrics_to_compute 
+                  if m in backend._unsupported_metrics}
+    if unsupported:
+        if explicitly_requested:
+            # User explicitly requested unsupported metric via --metrics flag - fail with error
+            metric_name = list(unsupported.keys())[0]
+            reason = unsupported[metric_name]
+            logger.error(f"ERROR: Metric '{metric_name}' is not supported on {backend.device_specs.arch}")
+            logger.error(f"Reason: {reason}")
+            return 1
+        else:
+            # Metrics from profile/category - filter and warn
+            for metric_name, reason in unsupported.items():
+                logger.warning(
+                    f"Skipping '{metric_name}' (not supported on {backend.device_specs.arch}): {reason}"
+                )
+            metrics_to_compute = [m for m in metrics_to_compute if m not in unsupported]
 
     # Log configuration
     logger.info(f"{'='*80}")
