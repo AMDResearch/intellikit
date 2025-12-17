@@ -300,30 +300,18 @@ class GFX90aBackend(CounterBackend):
 
     # Atomic metrics
 
-    @metric("memory.atomic_latency")
+    @metric("memory.atomic_latency",
+            unsupported_reason="TCC_EA_ATOMIC_LEVEL_sum counter is broken on MI200 (gfx90a). "
+                              "This metric only works correctly on MI300X (gfx942) and newer GPUs.")
     def _atomic_latency(self, TCC_EA_ATOMIC_LEVEL_sum, TCC_EA_ATOMIC_sum):
         """
         Average atomic operation latency in cycles (L2 cache atomic latency)
 
         Formula: TCC_EA_ATOMIC_LEVEL_sum / TCC_EA_ATOMIC_sum (MI200 counters)
 
-        WARNING: The TCC_EA_ATOMIC_LEVEL_sum counter is known to be broken/unreliable
-        on MI200 (gfx90a). Values reported by this metric should not be trusted.
-        This metric works correctly on MI300X (gfx942) and newer architectures.
-
         Note: This measures atomic operations to/from L2 cache, not GDS operations.
         GDS (Global Data Share) is a special feature rarely used by most kernels.
         """
-        from ..logger import logger
-        
-        # Log warning once per backend instance
-        if not hasattr(self, '_atomic_latency_warning_shown'):
-            logger.warning(
-                "memory.atomic_latency: TCC_EA_ATOMIC_LEVEL_sum counter is broken on MI200 (gfx90a). "
-                "Values are unreliable. This metric only works correctly on MI300X and newer GPUs."
-            )
-            self._atomic_latency_warning_shown = True
-        
         if TCC_EA_ATOMIC_sum == 0:
             return 0.0
 
