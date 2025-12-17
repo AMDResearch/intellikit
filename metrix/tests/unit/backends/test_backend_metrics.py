@@ -340,7 +340,15 @@ class TestMetricDiscovery:
         assert "memory.coalescing_efficiency" in metrics
         assert "memory.lds_bank_conflicts" in metrics
         assert "memory.hbm_read_bandwidth" in metrics
-        assert "memory.atomic_latency" in metrics
+        
+        # atomic_latency is architecture-specific
+        if backend.device_specs.arch == "gfx90a":
+            # On MI200, atomic_latency is unsupported (broken counter)
+            assert "memory.atomic_latency" not in metrics
+            assert "memory.atomic_latency" in backend._unsupported_metrics
+        else:
+            # On other architectures (gfx942, etc), it's supported
+            assert "memory.atomic_latency" in metrics
 
     def test_get_required_counters(self, backend):
         """Backend should correctly report required counters for a metric"""

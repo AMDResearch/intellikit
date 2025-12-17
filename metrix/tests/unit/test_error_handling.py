@@ -107,6 +107,65 @@ class TestBackendValidation:
         assert "TCC_MISS_sum" in counters
 
 
+class TestUnsupportedMetrics:
+    """Test handling of unsupported metrics on different architectures"""
+
+    def test_gfx90a_has_unsupported_atomic_latency(self):
+        """MI200 (gfx90a) should mark atomic_latency as unsupported"""
+        from metrix.backends import get_backend
+
+        backend = get_backend("gfx90a")
+
+        assert "memory.atomic_latency" in backend._unsupported_metrics
+        assert "TCC_EA_ATOMIC_LEVEL_sum" in backend._unsupported_metrics["memory.atomic_latency"]
+        assert "broken" in backend._unsupported_metrics["memory.atomic_latency"].lower()
+
+    def test_gfx942_supports_atomic_latency(self):
+        """MI300X (gfx942) should support atomic_latency"""
+        from metrix.backends import get_backend
+
+        backend = get_backend("gfx942")
+
+        # Should not be in unsupported - metric is supported on gfx942
+        assert "memory.atomic_latency" not in backend._unsupported_metrics
+
+    def test_filter_supported_metrics_gfx90a(self):
+        """Filtering should remove unsupported metrics on gfx90a"""
+        from metrix.backends import get_backend
+
+        backend = get_backend("gfx90a")
+        metrics = [
+            "memory.l2_hit_rate",
+            "memory.atomic_latency",
+            "memory.hbm_bandwidth_utilization"
+        ]
+
+        filtered = [m for m in metrics if m not in backend._unsupported_metrics]
+
+        assert "memory.l2_hit_rate" in filtered
+        assert "memory.hbm_bandwidth_utilization" in filtered
+        assert "memory.atomic_latency" not in filtered
+
+    def test_check_multiple_metrics(self):
+        """Check multiple metrics at once"""
+        from metrix.backends import get_backend
+
+        backend = get_backend("gfx90a")
+        metrics = [
+            "memory.l2_hit_rate",
+            "memory.atomic_latency",
+            "compute.total_flops"
+        ]
+
+        unsupported = {m: backend._unsupported_metrics[m] 
+                      for m in metrics 
+                      if m in backend._unsupported_metrics}
+
+        # Only atomic_latency should be unsupported
+        assert len(unsupported) == 1
+        assert "memory.atomic_latency" in unsupported
+
+
 class TestMetricComputation:
     """Test metric computation edge cases"""
 

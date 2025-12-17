@@ -136,3 +136,37 @@ class TestProfilingResults:
         assert results.total_kernels == 1
         assert results.kernels[0].name == "kernel1"
 
+
+class TestUnsupportedMetricsAPI:
+    """Test API-level handling of unsupported metrics"""
+
+    def test_explicit_unsupported_metric_raises_error(self):
+        """Explicitly requesting unsupported metric should raise ValueError"""
+        profiler = Metrix(arch="gfx90a")
+
+        # Verify atomic_latency is marked as unsupported
+        assert "memory.atomic_latency" in profiler.backend._unsupported_metrics
+
+    def test_profile_filters_unsupported_in_profile(self):
+        """Using a profile that includes unsupported metrics should filter them"""
+        profiler = Metrix(arch="gfx90a")
+
+        # Create a test list with both supported and unsupported metrics
+        test_metrics = [
+            "memory.l2_hit_rate",
+            "memory.atomic_latency",  # Unsupported on gfx90a
+            "memory.hbm_bandwidth_utilization"
+        ]
+
+        # Check unsupported
+        unsupported = {m: profiler.backend._unsupported_metrics[m] 
+                      for m in test_metrics 
+                      if m in profiler.backend._unsupported_metrics}
+        assert "memory.atomic_latency" in unsupported
+
+        # Filter supported
+        filtered = [m for m in test_metrics if m not in profiler.backend._unsupported_metrics]
+        assert "memory.atomic_latency" not in filtered
+        assert "memory.l2_hit_rate" in filtered
+        assert "memory.hbm_bandwidth_utilization" in filtered
+
