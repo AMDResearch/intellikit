@@ -79,7 +79,9 @@ class CounterBackend(ABC):
     def __init__(self):
         """Initialize backend and discover metrics"""
         self.device_specs = self._get_device_specs()
-        self._metrics = self._discover_metrics()
+        self._metrics = {}
+        self._unsupported_metrics = {}
+        self._discover_metrics()
         self._raw_data = {}  # Current raw counter values (for metric computation)
         self._aggregated = {}  # Aggregated results: {dispatch_key: {counter: Statistics}}
 
@@ -88,21 +90,25 @@ class CounterBackend(ABC):
         """Return architecture specifications"""
         pass
 
-    def _discover_metrics(self) -> Dict:
+    def _discover_metrics(self) -> None:
         """
-        Auto-discover all @metric decorated methods
-
-        Returns dict mapping metric_name -> {counters: [...], compute: callable}
+        Auto-discover all @metric decorated methods and identify unsupported ones
+        
+        Populates both self._metrics (supported) and self._unsupported_metrics (unsupported)
         """
-        metrics = {}
         for attr_name in dir(self):
             method = getattr(self, attr_name)
             if hasattr(method, '_metric_name'):
-                metrics[method._metric_name] = {
-                    'counters': method._metric_counters,
-                    'compute': method
-                }
-        return metrics
+                name = method._metric_name
+                if hasattr(method, '_unsupported_reason') and method._unsupported_reason:
+                    # Mark as unsupported
+                    self._unsupported_metrics[name] = method._unsupported_reason
+                else:
+                    # Register as available
+                    self._metrics[name] = {
+                        'counters': method._metric_counters,
+                        'compute': method
+                    }
 
     def get_available_metrics(self) -> List[str]:
         """Get list of all metrics supported by this backend"""
