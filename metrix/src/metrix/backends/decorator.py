@@ -5,10 +5,10 @@ Counter names appear EXACTLY ONCE - as function parameter names
 """
 
 import inspect
-from typing import Callable
+from typing import Callable, Optional
 
 
-def metric(name: str):
+def metric(name: str, unsupported_reason: Optional[str] = None):
     """
     Decorator that auto-discovers counter requirements from function signature
 
@@ -18,6 +18,11 @@ def metric(name: str):
             total = TCC_HIT_sum + TCC_MISS_sum
             return (TCC_HIT_sum / total) * 100 if total else 0.0
 
+        # Mark as unsupported on specific architecture:
+        @metric("memory.atomic_latency", unsupported_reason="Counter broken on MI200")
+        def _atomic_latency(self, TCC_EA_ATOMIC_LEVEL_sum, TCC_EA_ATOMIC_sum):
+            ...
+
     The decorator:
     1. Inspects function signature to discover counter names
     2. Wraps function to extract counter values from backend._raw_data
@@ -25,6 +30,7 @@ def metric(name: str):
 
     Args:
         name: Metric name (e.g., "memory.l2_hit_rate")
+        unsupported_reason: If set, marks this metric as unsupported on this backend
 
     Returns:
         Decorated function that extracts counters and computes metric
@@ -53,6 +59,7 @@ def metric(name: str):
         # Attach metadata for discovery
         wrapper._metric_name = name
         wrapper._metric_counters = param_names
+        wrapper._unsupported_reason = unsupported_reason
         wrapper._original_func = func  # Keep for introspection/debugging
 
         return wrapper

@@ -1,5 +1,5 @@
 """
-GFX942 (MI300X) Backend
+GFX90a (MI200) Backend
 
 Each metric is defined with @metric decorator.
 Counter names appear EXACTLY ONCE - as function parameters.
@@ -12,39 +12,39 @@ from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
 from typing import List, Optional, Dict
 
 
-class GFX942Backend(CounterBackend):
+class GFX90aBackend(CounterBackend):
     """
-    AMD MI300X (gfx942) counter backend
+    AMD MI200 (gfx90a) counter backend
 
     All metrics are defined with @metric decorator.
     Hardware counter names appear ONLY as function parameter names.
     """
 
     def _get_device_specs(self) -> DeviceSpecs:
-        """MI300X specifications"""
+        """MI200 specifications"""
         return DeviceSpecs(
-            arch="gfx942",
-            name="AMD Instinct MI300X",
-            num_cu=304,
+            arch="gfx90a",
+            name="AMD Instinct MI200",
+            num_cu=104,
             max_waves_per_cu=32,
             wavefront_size=64,
-            base_clock_mhz=2100.0,
-            hbm_bandwidth_gbs=5300.0,
+            base_clock_mhz=1700.0,
+            hbm_bandwidth_gbs=3200.0,
             l2_bandwidth_gbs=11000.0,
-            l2_size_mb=256.0,
+            l2_size_mb=16.0,
             lds_size_per_cu_kb=64.0,
-            fp32_tflops=163.4,
-            fp64_tflops=81.7,
-            int8_tops=1307.4,
-            boost_clock_mhz=2100
+            fp32_tflops=47.9,
+            fp64_tflops=47.9,
+            int8_tops=383,
+            boost_clock_mhz=1600
         )
 
     def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
         """
-        Group counters into passes using MI300X-specific block limits.
+        Group counters into passes using MI200-specific block limits.
 
         This keeps the hardware-specific knowledge (block limits and naming)
-        in the gfx942 backend while reusing the generic helper from
+        in the gfx90a backend while reusing the generic helper from
         `common.py` for the actual bin-packing.
         """
         from ..logger import logger
@@ -59,12 +59,12 @@ class GFX942Backend(CounterBackend):
 
     def _get_counter_block_limits(self) -> Dict[str, int]:
         """
-        Return per-hardware-block counter limits for gfx942 (MI300X).
+        Return per-hardware-block counter limits for gfx90a (MI200).
         
         These limits define how many performance counters can be simultaneously
         collected from each hardware block in a single profiling pass.
         
-        Hardware blocks on MI300X:
+        Hardware blocks on MI200:
         - SQ (Shader): Instruction counters (VALU, LDS, VMEM, etc.)
         - TA (Texture Addresser): Texture address operations
         - TD (Texture Data): Texture data fetch operations  
@@ -101,20 +101,16 @@ class GFX942Backend(CounterBackend):
     # Memory bandwidth metrics
 
     @metric("memory.hbm_read_bandwidth")
-    def _hbm_read_bandwidth(self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum, GRBM_GUI_ACTIVE):
+    def _hbm_read_bandwidth(self, TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum, GRBM_GUI_ACTIVE):
         """
         HBM read bandwidth in GB/s
 
-        Formula: (128B_requests * 128 + 64B_requests * 64 + 32B_requests * 32) / (active_cycles / clock_freq)
-
-        Note: TCC_EA0_RDREQ_sum aggregates across all memory controllers on MI300
-              TCC_BUBBLE_sum counts 128B read requests
+        Formula: (64B_requests * 64 + 32B_requests * 32) / (active_cycles / clock_freq)
         """
-        # Calculate bytes with 32B/64B/128B distinction
-        bytes_read_128B = TCC_BUBBLE_sum * 128
-        bytes_read_64B = (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64
-        bytes_read_32B = TCC_EA0_RDREQ_32B_sum * 32
-        bytes_read = bytes_read_128B + bytes_read_64B + bytes_read_32B
+        # Calculate bytes with 32B/64B distinction
+        bytes_read_64B = (TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64
+        bytes_read_32B = TCC_EA_RDREQ_32B_sum * 32
+        bytes_read = bytes_read_64B + bytes_read_32B
 
         if GRBM_GUI_ACTIVE == 0:
             return 0.0
@@ -123,17 +119,15 @@ class GFX942Backend(CounterBackend):
         return (bytes_read / 1e9) / time_seconds if time_seconds > 0 else 0.0
 
     @metric("memory.hbm_write_bandwidth")
-    def _hbm_write_bandwidth(self, TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
+    def _hbm_write_bandwidth(self, TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
         """
         HBM write bandwidth in GB/s (with 32B/64B request granularity)
 
         Formula: (64B_requests * 64 + 32B_requests * 32) / (active_cycles / clock_freq)
-
-        Note: TCC_EA0_WRREQ_sum aggregates across all memory controllers on MI300
         """
         # Calculate bytes with 32B/64B distinction
-        bytes_written_64B = TCC_EA0_WRREQ_64B_sum * 64
-        bytes_written_32B = (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        bytes_written_64B = TCC_EA_WRREQ_64B_sum * 64
+        bytes_written_32B = (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
         bytes_written = bytes_written_64B + bytes_written_32B
 
         if GRBM_GUI_ACTIVE == 0:
@@ -143,21 +137,17 @@ class GFX942Backend(CounterBackend):
         return (bytes_written / 1e9) / time_seconds if time_seconds > 0 else 0.0
 
     @metric("memory.hbm_bandwidth_utilization")
-    def _hbm_bandwidth_utilization(self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum,
-                                   TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
+    def _hbm_bandwidth_utilization(self, TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum,
+                                   TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
         """
         HBM bandwidth utilization as percentage of peak
 
         Formula: (actual_bandwidth / peak_bandwidth) * 100
-
-        Note: TCC_EA0_* counters aggregate across all memory controllers on MI300
-              TCC_BUBBLE_sum counts 128B read requests
         """
-        # Calculate bytes with 32B/64B/128B distinction
-        bytes_read = (TCC_BUBBLE_sum * 128 + 
-                      (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64 +
-                      TCC_EA0_RDREQ_32B_sum * 32)
-        bytes_written = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        # Calculate bytes with 32B/64B distinction
+        bytes_read = ((TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64 +
+                      TCC_EA_RDREQ_32B_sum * 32)
+        bytes_written = TCC_EA_WRREQ_64B_sum * 64 + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
         total_bytes = bytes_read + bytes_written
 
         if GRBM_GUI_ACTIVE == 0:
@@ -169,21 +159,17 @@ class GFX942Backend(CounterBackend):
         return (actual_bw_gbs / self.device_specs.hbm_bandwidth_gbs) * 100
 
     @metric("memory.bytes_transferred_hbm")
-    def _bytes_transferred_hbm(self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum,
-                               TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum):
+    def _bytes_transferred_hbm(self, TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum,
+                               TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum):
         """
         Total bytes transferred through HBM
 
-        Formula: (128B_read_requests * 128 + 64B_read_requests * 64 + 32B_read_requests * 32 +
+        Formula: (64B_read_requests * 64 + 32B_read_requests * 32 +
                   64B_write_requests * 64 + 32B_write_requests * 32)
-
-        Note: TCC_EA0_* counters aggregate across all memory controllers on MI300
-              TCC_BUBBLE_sum counts 128B read requests
         """
-        bytes_read = (TCC_BUBBLE_sum * 128 + 
-                      (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64 +
-                      TCC_EA0_RDREQ_32B_sum * 32)
-        bytes_written = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        bytes_read = ((TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64 +
+                      TCC_EA_RDREQ_32B_sum * 32)
+        bytes_written = TCC_EA_WRREQ_64B_sum * 64 + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
         return bytes_read + bytes_written
 
     @metric("memory.bytes_transferred_l2")
@@ -200,9 +186,9 @@ class GFX942Backend(CounterBackend):
         """
         Total bytes transferred through L1 cache
 
-        Formula: TCP_TOTAL_CACHE_ACCESSES_sum * 128 (L1 cache line size is 128 bytes)
+        Formula: TCP_TOTAL_CACHE_ACCESSES_sum * 64 (L1 cache line size is 64 bytes)
         """
-        return TCP_TOTAL_CACHE_ACCESSES_sum * 128
+        return TCP_TOTAL_CACHE_ACCESSES_sum * 64
 
     # Cache metrics
 
@@ -314,20 +300,22 @@ class GFX942Backend(CounterBackend):
 
     # Atomic metrics
 
-    @metric("memory.atomic_latency")
-    def _atomic_latency(self, TCC_EA0_ATOMIC_LEVEL_sum, TCC_EA0_ATOMIC_sum):
+    @metric("memory.atomic_latency",
+            unsupported_reason="TCC_EA_ATOMIC_LEVEL_sum counter is broken on MI200 (gfx90a). "
+                              "This metric only works correctly on MI300X (gfx942) and newer GPUs.")
+    def _atomic_latency(self, TCC_EA_ATOMIC_LEVEL_sum, TCC_EA_ATOMIC_sum):
         """
         Average atomic operation latency in cycles (L2 cache atomic latency)
 
-        Formula: TCC_EA0_ATOMIC_LEVEL_sum / TCC_EA0_ATOMIC_sum (MI300/MI350 counters)
+        Formula: TCC_EA_ATOMIC_LEVEL_sum / TCC_EA_ATOMIC_sum (MI200 counters)
 
         Note: This measures atomic operations to/from L2 cache, not GDS operations.
         GDS (Global Data Share) is a special feature rarely used by most kernels.
         """
-        if TCC_EA0_ATOMIC_sum == 0:
+        if TCC_EA_ATOMIC_sum == 0:
             return 0.0
 
-        return TCC_EA0_ATOMIC_LEVEL_sum / TCC_EA0_ATOMIC_sum
+        return TCC_EA_ATOMIC_LEVEL_sum / TCC_EA_ATOMIC_sum
 
     # Compute metrics
 
@@ -429,8 +417,8 @@ class GFX942Backend(CounterBackend):
                                    SQ_INSTS_VALU_ADD_F64, SQ_INSTS_VALU_MUL_F64, SQ_INSTS_VALU_TRANS_F64, SQ_INSTS_VALU_FMA_F64,
                                    SQ_INSTS_VALU_MFMA_MOPS_F16, SQ_INSTS_VALU_MFMA_MOPS_BF16,
                                    SQ_INSTS_VALU_MFMA_MOPS_F32, SQ_INSTS_VALU_MFMA_MOPS_F64,
-                                   TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum,
-                                   TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum):
+                                   TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum,
+                                   TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum):
         """
         HBM Arithmetic Intensity: ratio of floating-point operations to HBM bytes transferred (FLOP/byte)
 
@@ -464,10 +452,9 @@ class GFX942Backend(CounterBackend):
         )
 
         # Calculate HBM bytes (with 32B/64B/128B distinction)
-        hbm_rd = (TCC_BUBBLE_sum * 128 + 
-                  (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64 +
-                  TCC_EA0_RDREQ_32B_sum * 32)
-        hbm_wr = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        hbm_rd = ((TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64 +
+                  TCC_EA_RDREQ_32B_sum * 32)
+        hbm_wr = TCC_EA_WRREQ_64B_sum * 64 + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
         hbm_bytes = hbm_rd + hbm_wr
 
         # Arithmetic intensity = FLOP / byte
@@ -563,8 +550,8 @@ class GFX942Backend(CounterBackend):
             SQ_INSTS_VALU_MFMA_MOPS_F64
         )
 
-        # Calculate L1 bytes (L1 cache line is 128 bytes on gfx942)
-        l1_bytes = TCP_TOTAL_CACHE_ACCESSES_sum * 128
+        # Calculate L1 bytes (L1 cache line is 64 bytes on gfx90a)
+        l1_bytes = TCP_TOTAL_CACHE_ACCESSES_sum * 64
 
         # Arithmetic intensity = FLOP / byte
         ai_l1 = fops / l1_bytes if l1_bytes > 0 else 0.0

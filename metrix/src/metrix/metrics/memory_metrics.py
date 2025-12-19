@@ -297,6 +297,36 @@ LDS_METRICS = {
 }
 
 # ═══════════════════════════════════════════════════════════════════
+# ATOMIC OPERATION METRICS
+# ═══════════════════════════════════════════════════════════════════
+
+ATOMIC_METRICS = {
+    "memory.atomic_latency": {
+        "name": "Atomic Operation Latency",
+        "description": "Average latency of atomic operations at L2 cache (cycles per atomic operation). NOTE: Not available on MI200 (gfx90a) due to broken counters.",
+        "unit": "cycles",
+        "category": MetricCategory.MEMORY_PATTERN,
+        "derived_from": ["TCC_EA_ATOMIC_LEVEL_sum", "TCC_EA_ATOMIC_sum"],
+        "formula": """
+            if TCC_EA_ATOMIC_sum == 0:
+                return 0.0
+            return TCC_EA_ATOMIC_LEVEL_sum / TCC_EA_ATOMIC_sum
+        """,
+        "architecture_support": {
+            "gfx942": True,   # MI300X - supported
+            "gfx90a": False,  # MI200 - counters broken
+            "gfx1201": False  # Navi3x - not supported
+        },
+        "interpretation": {
+            "excellent": (0, 50, "Very low latency - minimal atomic contention"),
+            "good": (50, 100, "Acceptable atomic operation latency"),
+            "fair": (100, 200, "Moderate atomic contention"),
+            "poor": (200, float('inf'), "High atomic contention - consider reducing atomic operations or using different synchronization")
+        }
+    }
+}
+
+# ═══════════════════════════════════════════════════════════════════
 # COMBINED MEMORY METRIC CATALOG
 # ═══════════════════════════════════════════════════════════════════
 
@@ -304,6 +334,7 @@ MEMORY_METRICS = {
     **MEMORY_BANDWIDTH_METRICS,
     **CACHE_METRICS,
     **MEMORY_PATTERN_METRICS,
-    **LDS_METRICS
+    **LDS_METRICS,
+    **ATOMIC_METRICS
 }
 

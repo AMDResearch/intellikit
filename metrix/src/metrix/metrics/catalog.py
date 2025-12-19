@@ -51,13 +51,17 @@ METRIC_PROFILES = {
             # LDS
             "memory.lds_bank_conflicts",
             # Note: memory.lds_utilization requires kernel metadata, not hardware counters
+
+            # Atomic operations
+            "memory.atomic_latency",
         ],
         "estimated_passes": 2,
         "focus": "memory_system",
         "typical_bottlenecks": [
             "uncoalesced_memory_access",
             "low_cache_hit_rate",
-            "lds_bank_conflicts"
+            "lds_bank_conflicts",
+            "atomic_contention"
         ]
     },
 

@@ -97,10 +97,12 @@ class Metrix:
         """
 
         # Determine what to collect
+        explicitly_requested = False  # Track if metrics were explicitly requested
         if time_only:
             metrics_to_compute = []
         elif metrics:
             metrics_to_compute = metrics
+            explicitly_requested = True  # User explicitly specified metrics
         elif profile:
             if profile not in METRIC_PROFILES:
                 raise ValueError(f"Unknown profile: {profile}. Available: {list(METRIC_PROFILES.keys())}")
@@ -108,6 +110,24 @@ class Metrix:
         else:
             # Default: all available metrics
             metrics_to_compute = self.backend.get_available_metrics()
+
+        # Check for unsupported metrics
+        unsupported = {m: self.backend._unsupported_metrics[m] 
+                      for m in metrics_to_compute 
+                      if m in self.backend._unsupported_metrics}
+        if unsupported:
+            if explicitly_requested:
+                # User explicitly requested unsupported metric - fail with error
+                metric_name = list(unsupported.keys())[0]
+                reason = unsupported[metric_name]
+                raise ValueError(f"Metric '{metric_name}' is not supported: {reason}")
+            else:
+                # Metrics from profile/category - filter and warn
+                for metric_name, reason in unsupported.items():
+                    logger.warning(
+                        f"Skipping '{metric_name}' (not supported on {self.backend.device_specs.arch}): {reason}"
+                    )
+                metrics_to_compute = [m for m in metrics_to_compute if m not in unsupported]
 
         # Use simple kernel filter (no regex)
         rocprof_filter = kernel_filter

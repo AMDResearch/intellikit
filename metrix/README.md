@@ -16,8 +16,8 @@ Existing GPU profilers are **trash**:
 - **Clean Python API** with modern design
 - **Human-readable metrics** instead of raw counters
 - **Unit tested** and reliable
-- **12 Memory Metrics**: Bandwidth, cache, coalescing, LDS, atomic latency
-- **7 Compute Metrics**: FLOPS, arithmetic intensity (HBM/L2/L1), compute throughput
+- **13 Memory Metrics**: Bandwidth, cache, coalescing, LDS, atomic latency
+- **5 Compute Metrics**: FLOPS, arithmetic intensity (HBM/L2/L1), compute throughput
 - **Multi-Run Profiling**: Automatic aggregation with min/max/avg statistics
 - **Kernel Filtering**: Efficient regex filtering at rocprofv3 level
 - **Multiple Output Formats**: Text, JSON, CSV

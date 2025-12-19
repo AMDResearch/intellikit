@@ -40,11 +40,12 @@ class TestMissingExecutable:
 class TestInvalidArguments:
     """Test handling of invalid CLI arguments"""
 
-    def test_invalid_metric_name(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_invalid_metric_name(self, arch):
         """Should handle invalid metric names gracefully"""
         from metrix.backends import get_backend
 
-        backend = get_backend("gfx942")
+        backend = get_backend(arch)
 
         with pytest.raises(ValueError) as exc_info:
             backend.get_required_counters(["invalid.metric.name"])
@@ -81,22 +82,24 @@ class TestTimeoutHandling:
 class TestBackendValidation:
     """Test backend metric validation"""
 
-    def test_get_available_metrics(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_get_available_metrics(self, arch):
         """Backend should list all available metrics"""
         from metrix.backends import get_backend
 
-        backend = get_backend("gfx942")
+        backend = get_backend(arch)
         metrics = backend.get_available_metrics()
 
         assert len(metrics) > 0
         assert "memory.l2_hit_rate" in metrics
         assert "memory.coalescing_efficiency" in metrics
 
-    def test_get_required_counters(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_get_required_counters(self, arch):
         """Backend should report required counters for metrics"""
         from metrix.backends import get_backend
 
-        backend = get_backend("gfx942")
+        backend = get_backend(arch)
         counters = backend.get_required_counters(["memory.l2_hit_rate"])
 
         assert len(counters) > 0
@@ -104,14 +107,74 @@ class TestBackendValidation:
         assert "TCC_MISS_sum" in counters
 
 
-class TestMetricComputation:
-    """Test metric computation edge cases"""
+class TestUnsupportedMetrics:
+    """Test handling of unsupported metrics on different architectures"""
 
-    def test_division_by_zero_handling(self):
-        """Metrics should handle zero denominators gracefully"""
+    def test_gfx90a_has_unsupported_atomic_latency(self):
+        """MI200 (gfx90a) should mark atomic_latency as unsupported"""
+        from metrix.backends import get_backend
+
+        backend = get_backend("gfx90a")
+
+        assert "memory.atomic_latency" in backend._unsupported_metrics
+        assert "TCC_EA_ATOMIC_LEVEL_sum" in backend._unsupported_metrics["memory.atomic_latency"]
+        assert "broken" in backend._unsupported_metrics["memory.atomic_latency"].lower()
+
+    def test_gfx942_supports_atomic_latency(self):
+        """MI300X (gfx942) should support atomic_latency"""
         from metrix.backends import get_backend
 
         backend = get_backend("gfx942")
+
+        # Should not be in unsupported - metric is supported on gfx942
+        assert "memory.atomic_latency" not in backend._unsupported_metrics
+
+    def test_filter_supported_metrics_gfx90a(self):
+        """Filtering should remove unsupported metrics on gfx90a"""
+        from metrix.backends import get_backend
+
+        backend = get_backend("gfx90a")
+        metrics = [
+            "memory.l2_hit_rate",
+            "memory.atomic_latency",
+            "memory.hbm_bandwidth_utilization"
+        ]
+
+        filtered = [m for m in metrics if m not in backend._unsupported_metrics]
+
+        assert "memory.l2_hit_rate" in filtered
+        assert "memory.hbm_bandwidth_utilization" in filtered
+        assert "memory.atomic_latency" not in filtered
+
+    def test_check_multiple_metrics(self):
+        """Check multiple metrics at once"""
+        from metrix.backends import get_backend
+
+        backend = get_backend("gfx90a")
+        metrics = [
+            "memory.l2_hit_rate",
+            "memory.atomic_latency",
+            "compute.total_flops"
+        ]
+
+        unsupported = {m: backend._unsupported_metrics[m] 
+                      for m in metrics 
+                      if m in backend._unsupported_metrics}
+
+        # Only atomic_latency should be unsupported
+        assert len(unsupported) == 1
+        assert "memory.atomic_latency" in unsupported
+
+
+class TestMetricComputation:
+    """Test metric computation edge cases"""
+
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_division_by_zero_handling(self, arch):
+        """Metrics should handle zero denominators gracefully"""
+        from metrix.backends import get_backend
+
+        backend = get_backend(arch)
         backend._raw_data = {
             'TCC_HIT_sum': 0,
             'TCC_MISS_sum': 0
@@ -121,11 +184,12 @@ class TestMetricComputation:
         result = backend._l2_hit_rate()
         assert result == 0.0
 
-    def test_negative_values_handling(self):
+    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
+    def test_negative_values_handling(self, arch):
         """Metrics should handle negative counter values (shouldn't happen, but...)"""
         from metrix.backends import get_backend
 
-        backend = get_backend("gfx942")
+        backend = get_backend(arch)
         backend._raw_data = {
             'TCC_HIT_sum': -100,  # Shouldn't happen in practice
             'TCC_MISS_sum': 100
