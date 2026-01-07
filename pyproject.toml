@@ -27,11 +27,18 @@ Documentation = "https://github.com/AMDResearch/nexus/blob/main/README.md"
 [project.optional-dependencies]
 # Install individual tools
 nexus = []
-accordo = []
+accordo = [
+    "numpy",
+    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@508f7fcf7fbd88c9eb6850e9fdac2e41d24c399a"
+]
 metrix = ["pandas>=1.5.0"]
 
 # Install all tools
-all = ["pandas>=1.5.0"]
+all = [
+    "pandas>=1.5.0",
+    "numpy",
+    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@508f7fcf7fbd88c9eb6850e9fdac2e41d24c399a"
+]
 
 dev = [
     "pytest",
