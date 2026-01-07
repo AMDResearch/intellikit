@@ -296,7 +296,7 @@ std::string accordo::packet_to_text(const hsa_ext_amd_aql_pm4_packet_t* packet) 
       const auto kernel_name = get_kernel_name(disp->kernel_object);
       static const char* kernel_to_trace = std::getenv("KERNEL_TO_TRACE");
 
-      if (kernel_name.starts_with(kernel_to_trace)) {
+      if (kernel_to_trace && kernel_name.starts_with(kernel_to_trace)) {
         buff << ("\nTracing the kernel\n");
       }
 
@@ -368,7 +368,7 @@ std::optional<void*> accordo::is_traceable_packet(
       const auto kernel_name = get_kernel_name(disp->kernel_object);
       static const char* kernel_to_trace = std::getenv("KERNEL_TO_TRACE");
 
-      if (kernel_name.contains(kernel_to_trace)) {
+      if (kernel_to_trace && kernel_name.contains(kernel_to_trace)) {
         LOG_INFO("Found the target kernel {}", kernel_name);
         return disp->kernarg_address;
       }
@@ -514,7 +514,7 @@ void accordo::write_packets(hsa_queue_t* queue,
         const auto kernel_name = get_kernel_name(disp->kernel_object);
         static const char* kernel_to_trace = std::getenv("KERNEL_TO_TRACE");
         static const char* metadata_file = std::getenv("ACCORDO_METADATA_FILE");
-        if (metadata_file && kernel_to_trace && kernel_name.contains(kernel_to_trace)) {
+        if (kernel_to_trace && metadata_file && kernel_name.contains(kernel_to_trace)) {
           std::ofstream ofs(metadata_file, std::ios::out | std::ios::trunc);
           if (ofs) {
             ofs << "{";

@@ -149,14 +149,14 @@ struct HsaAgent {
 
                 hsa_region_segment_t segment;
                 hsa_region_get_info(region, HSA_REGION_INFO_SEGMENT, &segment);
-                
+
                 size_t size;
                 hsa_region_get_info(region, HSA_REGION_INFO_SIZE, &size);
-                
+
                 bool is_global = (segment == HSA_REGION_SEGMENT_GLOBAL);
                 bool is_kernarg = (segment == HSA_REGION_SEGMENT_KERNARG);
                 bool is_local = (segment == HSA_REGION_SEGMENT_GROUP);
-                
+
                 hsa_agent.add_memory_region(region, size, is_global, is_kernarg, is_local);
                 return HSA_STATUS_SUCCESS;
             };
@@ -166,16 +166,16 @@ struct HsaAgent {
             // Iterate over memory pools
             auto pool_callback = [](hsa_amd_memory_pool_t pool, void* agent_ptr) -> hsa_status_t {
                 HsaAgent& hsa_agent = *static_cast<HsaAgent*>(agent_ptr);
-                
+
                 size_t size;
                 hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE, &size);
 
                 hsa_amd_segment_t segment;
                 hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &segment);
-                
+
                 bool is_fine = (segment == HSA_AMD_SEGMENT_GLOBAL);
                 bool is_coarse = (segment == HSA_AMD_SEGMENT_GROUP);
-                
+
                 hsa_agent.add_memory_pool(pool, size, is_fine, is_coarse);
                 return HSA_STATUS_SUCCESS;
             };

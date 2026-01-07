@@ -2,54 +2,47 @@
 # Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 """Accordo: Automated side-by-side correctness validation for GPU kernels.
 
-Public API:
-    - ValidationConfig: Configuration for kernel validation
-    - KernelArg: Structured kernel argument representation
-    - Snapshot: Captured kernel argument data from binary execution
-    - ValidationResult: Result of validation with detailed metrics
-    - ArrayMismatch: Information about array validation failures
-    - Accordo: Main validator class for kernel validation
-    - Exceptions: AccordoError, AccordoBuildError, AccordoTimeoutError, etc.
+Accordo uses kernelDB to automatically extract kernel arguments from compiled binaries,
+eliminating the need for manual specification. Each validator instance is tied to a
+specific kernel signature, with the library built once and reused for all captures.
 
-Quick Example (one-off validation):
+Quick Example:
     >>> from accordo import Accordo
-    >>> config = Accordo.Config(
-    ...     kernel_name="my_kernel",
-    ...     kernel_args=[
-    ...         Accordo.KernelArg(name="result", type="double*"),
-    ...         Accordo.KernelArg(name="input", type="const double*"),
-    ...     ],
-    ...     tolerance=1e-6
-    ... )
-    >>> validator = Accordo(config)
-    >>> result = validator.validate(
-    ...     reference_binary=["./app_ref"],
-    ...     optimized_binary=["./app_opt"],
-    ...     working_directory=".",
-    ...     baseline_time_ms=10.0
-    ... )
-
-Efficient Example (multiple optimizations vs same reference):
-    >>> # Capture reference once (returns Snapshot object)
-    >>> ref_snapshot = validator.capture_snapshot(
-    ...     binary=["./app_ref"],
-    ...     working_directory=".",
-    ...     timeout_seconds=30
-    ... )
-    >>> print(ref_snapshot)  # Snapshot(binary='./app_ref', arrays=3, execution_time_ms=12.50)
     >>>
-    >>> # Compare multiple optimizations
-    >>> for opt_binary in optimized_binaries:
-    ...     opt_snapshot = validator.capture_snapshot(
-    ...         binary=opt_binary,
-    ...         working_directory=".",
-    ...         timeout_seconds=60
-    ...     )
-    ...     result = validator.compare_snapshots(ref_snapshot, opt_snapshot)
+    >>> # Create validator for a specific kernel (builds library once)
+    >>> validator = Accordo(
+    ...     binary="./app_ref",
+    ...     kernel_name="reduce_sum"
+    ... )
+    >>>
+    >>> # Capture snapshots from different binaries
+    >>> ref = validator.capture_snapshot(binary="./app_ref")
+    >>> opt = validator.capture_snapshot(binary="./app_opt")
+    >>>
+    >>> # Compare with specified tolerance
+    >>> result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
+    >>> print(f"Valid: {result.is_valid}")
+
+Efficient Example (multiple comparisons):
+    >>> # Build once for this kernel signature
+    >>> validator = Accordo(binary="./ref", kernel_name="my_kernel")
+    >>>
+    >>> # Capture reference once
+    >>> ref = validator.capture_snapshot(binary="./ref")
+    >>>
+    >>> # Compare against multiple optimizations
+    >>> for opt_bin in ["./opt1", "./opt2", "./opt3"]:
+    ...     opt = validator.capture_snapshot(binary=opt_bin)
+    ...     result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
+    ...     print(f"{opt_bin}: {'PASS' if result.is_valid else 'FAIL'}")
+
+Multiple Kernels:
+    >>> # Each kernel gets its own validator instance
+    >>> reduce_val = Accordo(binary="./app", kernel_name="reduce_sum")
+    >>> matmul_val = Accordo(binary="./app", kernel_name="matmul")
 """
 
 # Public API exports
-from .config import KernelArg, ValidationConfig
 from .exceptions import (
 	AccordoBuildError,
 	AccordoError,
@@ -57,49 +50,25 @@ from .exceptions import (
 	AccordoTimeoutError,
 	AccordoValidationError,
 )
+from .kernel_args import extract_kernel_arguments, list_available_kernels
 from .result import ArrayMismatch, ValidationResult
 from .snapshot import Snapshot
-from .validator import Accordo as _Accordo
+from .validator import Accordo
 
 # Version
-__version__ = "0.2.0"
-
-
-# Nest all classes under Accordo namespace
-class Accordo(_Accordo):
-	"""Main Accordo validator with nested classes for clean API.
-
-	All Accordo components are accessible as Accordo.ClassName:
-	- Accordo.Config (ValidationConfig)
-	- Accordo.KernelArg
-	- Accordo.Snapshot
-	- Accordo.Result (ValidationResult)
-	- Accordo.ArrayMismatch
-	- Accordo.Error (AccordoError)
-	- Accordo.BuildError (AccordoBuildError)
-	- Accordo.TimeoutError (AccordoTimeoutError)
-	- Accordo.ProcessError (AccordoProcessError)
-	- Accordo.ValidationError (AccordoValidationError)
-	"""
-
-	# Configuration
-	Config = ValidationConfig
-	KernelArg = KernelArg
-
-	# Data structures
-	Snapshot = Snapshot
-	Result = ValidationResult
-	ArrayMismatch = ArrayMismatch
-
-	# Exceptions
-	Error = AccordoError
-	BuildError = AccordoBuildError
-	TimeoutError = AccordoTimeoutError
-	ProcessError = AccordoProcessError
-	ValidationError = AccordoValidationError
-
+__version__ = "0.4.0"
 
 # Public API
 __all__ = [
 	"Accordo",
+	"Snapshot",
+	"ValidationResult",
+	"ArrayMismatch",
+	"extract_kernel_arguments",
+	"list_available_kernels",
+	"AccordoError",
+	"AccordoBuildError",
+	"AccordoTimeoutError",
+	"AccordoProcessError",
+	"AccordoValidationError",
 ]

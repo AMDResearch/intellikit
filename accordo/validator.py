@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-"""AccordoValidator: Main validation class for Accordo."""
+"""Accordo: Main validation class for GPU kernel correctness."""
 
 import json
 import logging
@@ -10,21 +10,20 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 
 from ._internal.codegen import generate_kernel_header
 from ._internal.ipc.communication import get_kern_arg_data, send_response
-from .config import ValidationConfig
 from .exceptions import AccordoBuildError, AccordoProcessError, AccordoTimeoutError
+from .kernel_args import extract_kernel_arguments
 from .result import ArrayMismatch, ValidationResult
 from .snapshot import Snapshot
 
 
 class _TimeoutException(Exception):
 	"""Internal exception for timeout handling."""
-
 	pass
 
 
@@ -94,53 +93,106 @@ def _validate_arrays(arr1: np.ndarray, arr2: np.ndarray, tolerance: float) -> bo
 
 
 class Accordo:
-	"""Validator for GPU kernel correctness using Accordo.
+	"""Validator for a specific GPU kernel.
 
-	This class manages the entire validation pipeline:
-	- Building the Accordo C++ library
-	- Running instrumented processes
-	- Collecting kernel argument data via IPC
-	- Validating arrays match within tolerance
+	Each Accordo instance is tied to a specific kernel signature. The library
+	is built once in __init__, then reused for all capture_snapshot calls.
 
 	Example:
-		>>> from accordo import AccordoValidator, ValidationConfig, KernelArg
-		>>> config = ValidationConfig(
-		...     kernel_name="my_kernel",
-		...     kernel_args=[
-		...         KernelArg(name="result", type="double*", direction="out"),
-		...         KernelArg(name="input", type="const double*", direction="in"),
-		...     ],
-		...     tolerance=1e-6
+		>>> validator = Accordo(
+		...     binary="./app_ref",
+		...     kernel_name="reduce_sum"
 		... )
-		>>> validator = AccordoValidator(config)
-		>>> result = validator.validate(reference_app, optimized_app)
-		>>> if result.is_valid:
-		...     print("Validation passed!")
+		>>> ref = validator.capture_snapshot(binary=["./app_ref"])
+		>>> opt = validator.capture_snapshot(binary=["./app_opt"])
+		>>> result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
 	"""
 
 	def __init__(
 		self,
-		config: ValidationConfig,
+		binary: Union[str, List[str]],
+		kernel_name: str,
+		kernel_args: Optional[List[Tuple[str, str]]] = None,
+		additional_includes: Optional[List[str]] = None,
+		working_directory: str = ".",
 		accordo_path: Optional[Path] = None,
 		force_rebuild: bool = False,
 		parallel_jobs: int = 16,
+		log_level: str = "WARNING",
 	):
-		"""Initialize AccordoValidator.
+		"""Initialize Accordo validator for a specific kernel.
+
+		This extracts the kernel signature, generates the header, and builds
+		libaccordo.so. The built library is then reused for all captures.
 
 		Args:
-			config: Validation configuration
+			binary: Binary to extract kernel signature from (string or command list)
+			kernel_name: Name of the kernel to validate
+			kernel_args: Optional manual kernel args as [(name, type), ...].
+			             If None, auto-extracted from binary.
+			additional_includes: Optional C++ includes for custom types
+			working_directory: Working directory for binary execution
 			accordo_path: Path to Accordo directory (auto-detected if None)
 			force_rebuild: Force rebuild even if library exists
 			parallel_jobs: Number of parallel build jobs
+			log_level: Logging level ("DEBUG", "INFO", "WARNING", "ERROR")
+
+		Raises:
+			AccordoBuildError: If kernel signature extraction or build fails
+
+		Example:
+			>>> # Auto-extract kernel args (requires -g flag)
+			>>> validator = Accordo(
+			...     binary="./app_ref",
+			...     kernel_name="reduce_sum"
+			... )
+			>>>
+			>>> # Or specify manually
+			>>> validator = Accordo(
+			...     binary="./app_ref",
+			...     kernel_name="reduce_sum",
+			...     kernel_args=[("input", "const float*"), ("output", "float*")]
+			... )
 		"""
-		self.config = config
+		self.kernel_name = kernel_name
+		self.working_directory = working_directory
 		self.parallel_jobs = parallel_jobs
-		self._built = False
-		self._lib_path = None
+
+		# Set log level
+		logging.basicConfig(level=getattr(logging, log_level.upper()))
+
+		# Normalize binary to list
+		if isinstance(binary, str):
+			binary = [binary]
+
+		# Auto-extract kernel arguments if not provided
+		if kernel_args is None:
+			logging.info(f"Extracting kernel arguments for '{kernel_name}' from {binary[0]}...")
+			try:
+				kernel_args = extract_kernel_arguments(
+					binary_path=binary[0],
+					kernel_name=kernel_name,
+					working_directory=working_directory
+				)
+				logging.info(f"Successfully extracted {len(kernel_args)} kernel argument(s)")
+			except Exception as e:
+				raise AccordoBuildError(
+					f"Failed to auto-extract kernel arguments: {str(e)}\n"
+					"Please specify kernel_args manually or compile with -g flag."
+				)
+
+		self.kernel_args = kernel_args
+		self.additional_includes = additional_includes or []
+
+		# Extract type strings for header generation
+		arg_types = [arg[1] for arg in kernel_args]
+
+		# Generate kernel header
+		logging.info("Generating kernel header...")
+		generate_kernel_header(arg_types, self.additional_includes)
 
 		# Auto-detect accordo_path if not provided
 		if accordo_path is None:
-			# Find it relative to this file (accordo package directory)
 			accordo_dir = Path(__file__).parent
 			if (accordo_dir / "build").exists() or (accordo_dir / "CMakeLists.txt").exists():
 				accordo_path = accordo_dir
@@ -153,46 +205,44 @@ class Accordo:
 		self.accordo_path = Path(accordo_path)
 		logging.debug(f"Accordo path: {self.accordo_path}")
 
-		# Build if forced or library doesn't exist
+		# Build library
 		lib_path = self.accordo_path / "build" / "lib" / "libaccordo.so"
 		if force_rebuild or not lib_path.exists():
-			logging.info("Building Accordo C++ library...")
+			logging.info(f"Building Accordo library for kernel '{kernel_name}'...")
 			self._lib_path = _build_accordo(self.accordo_path, parallel_jobs)
-			self._built = True
+			logging.info(f"Build complete: {self._lib_path}")
 		else:
 			self._lib_path = lib_path
-			self._built = True
+			logging.info(f"Using existing library: {self._lib_path}")
 
 	def capture_snapshot(
 		self,
-		binary: list[str],
-		working_directory: str = ".",
+		binary: Union[str, List[str]],
 		timeout_seconds: int = 30,
+		dispatch_id: Optional[int] = None,
 	) -> Snapshot:
 		"""Capture a snapshot of kernel argument data from a binary execution.
 
 		Args:
-			binary: Command to run binary (e.g., ["./app", "arg1"])
-			working_directory: Directory to run binary from
+			binary: Command to run binary (string or list like ["./app", "arg1"])
 			timeout_seconds: Timeout for this capture
+			dispatch_id: Optional dispatch ID to capture (future feature)
 
 		Returns:
 			Snapshot object containing captured arrays and execution metadata
 
 		Raises:
-			AccordoBuildError: If Accordo library not built
 			AccordoProcessError: If instrumented process crashes
 			AccordoTimeoutError: If execution exceeds timeout
 
-		Note:
-			Binary must be pre-compiled. Accordo does not build applications.
+		Example:
+			>>> validator = Accordo(binary="./ref", kernel_name="reduce")
+			>>> ref = validator.capture_snapshot(binary="./ref")
+			>>> opt = validator.capture_snapshot(binary="./opt_v1")
 		"""
-		if not self._built:
-			raise AccordoBuildError("Accordo library not built")
-
-		# Generate kernel header with additional includes
-		arg_types = self.config.get_arg_types()
-		generate_kernel_header(arg_types, self.config.additional_includes)
+		# Normalize binary to list
+		if isinstance(binary, str):
+			binary = [binary]
 
 		# Wrap app run with timeout
 		old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
@@ -202,12 +252,15 @@ class Accordo:
 			start_time = time.time()
 			# Prepare a metadata file path for exporter to write dispatch dims
 			metadata_file = f"/tmp/accordo_metadata_{int(start_time * 1000)}.json"
+
+			extra_env = {"ACCORDO_METADATA_FILE": metadata_file}
+			if dispatch_id is not None:
+				extra_env["ACCORDO_DISPATCH_ID"] = str(dispatch_id)
+
 			result_arrays = self._run_instrumented_app(
-				binary,
-				working_directory,
+				binary_cmd=binary,
 				label="snapshot",
-				baseline_time_ms=None,
-				extra_env={"ACCORDO_METADATA_FILE": metadata_file},
+				extra_env=extra_env,
 			)
 			signal.alarm(0)  # Cancel alarm on success
 			execution_time_ms = (time.time() - start_time) * 1000
@@ -219,18 +272,17 @@ class Accordo:
 				if os.path.exists(metadata_file):
 					with open(metadata_file, "r") as f:
 						meta = json.load(f)
-					# Basic validation
 					if isinstance(meta, dict):
 						grid = meta.get("grid")
 						block = meta.get("block")
 			except Exception:
-				# TODO: WIP; current attempt doesn't catch parsing errors
 				pass
+
 			return Snapshot(
 				arrays=result_arrays,
 				execution_time_ms=execution_time_ms,
 				binary=binary,
-				working_directory=working_directory,
+				working_directory=self.working_directory,
 				grid_size=grid,
 				block_size=block,
 			)
@@ -255,15 +307,22 @@ class Accordo:
 		self,
 		reference_snapshot: Snapshot,
 		optimized_snapshot: Snapshot,
+		tolerance: float = 1e-6,
 	) -> ValidationResult:
 		"""Compare two snapshots and validate their arrays.
 
 		Args:
-			reference_snapshot: Snapshot from reference binary (from capture_snapshot)
-			optimized_snapshot: Snapshot from optimized binary (from capture_snapshot)
+			reference_snapshot: Snapshot from reference binary
+			optimized_snapshot: Snapshot from optimized binary
+			tolerance: Absolute tolerance for array comparison
 
 		Returns:
 			ValidationResult with validation status and details
+
+		Example:
+			>>> result = validator.compare_snapshots(ref, opt, tolerance=1e-4)
+			>>> if result.is_valid:
+			...     print(f"✓ PASS: {result.num_arrays_validated} arrays matched")
 		"""
 		results = {
 			"reference": reference_snapshot.arrays,
@@ -274,72 +333,29 @@ class Accordo:
 			"optimized": optimized_snapshot.execution_time_ms,
 		}
 
-		return self._validate_results(results, execution_times)
-
-	def validate(
-		self,
-		reference_binary: list[str],
-		optimized_binary: list[str],
-		working_directory: str = ".",
-		baseline_time_ms: Optional[float] = None,
-	) -> ValidationResult:
-		"""Validate optimized kernel against reference (convenience method).
-
-		This is a convenience wrapper that captures both snapshots and compares them.
-		For better performance when validating multiple optimizations against the same
-		reference, use capture_snapshot() and compare_snapshots() directly.
-
-		Args:
-			reference_binary: Command to run reference binary (e.g., ["./app", "arg1"])
-			optimized_binary: Command to run optimized binary (e.g., ["./app_opt", "arg1"])
-			working_directory: Directory to run binaries from
-			baseline_time_ms: Baseline execution time for dynamic timeout
-
-		Returns:
-			ValidationResult with validation status and details
-
-		Raises:
-			AccordoBuildError: If Accordo library not built
-			AccordoProcessError: If instrumented process crashes
-			AccordoTimeoutError: If execution exceeds timeout
-
-		Note:
-			Both binaries must be pre-compiled. Accordo does not build applications.
-		"""
-		# Calculate timeouts
-		ref_timeout = 30  # Default for reference
-		if baseline_time_ms:
-			opt_timeout = int((baseline_time_ms * self.config.timeout_multiplier / 1000.0) + 30.0)
-		else:
-			opt_timeout = 30
-
-		# Capture snapshots
-		reference_snapshot = self.capture_snapshot(reference_binary, working_directory, ref_timeout)
-		optimized_snapshot = self.capture_snapshot(optimized_binary, working_directory, opt_timeout)
-
-		# Compare
-		return self.compare_snapshots(reference_snapshot, optimized_snapshot)
+		return self._validate_results(
+			results=results,
+			execution_times=execution_times,
+			tolerance=tolerance,
+		)
 
 	def _run_instrumented_app(
 		self,
-		binary_cmd: list[str],
-		working_directory: str,
+		binary_cmd: List[str],
 		label: str,
-		baseline_time_ms: Optional[float] = None,
 		extra_env: Optional[dict] = None,
-	) -> list[np.ndarray]:
+	) -> List[np.ndarray]:
 		"""Run an instrumented application and collect kernel argument data.
 
 		Args:
-			binary_cmd: Binary command with arguments (e.g., ["./app", "arg1"])
-			working_directory: Directory to run the binary from
-			label: Label for this run ("reference" or "optimized")
-			baseline_time_ms: Baseline time for dynamic timeout
+			binary_cmd: Binary command with arguments
+			label: Label for this run
+			extra_env: Optional extra environment variables
 
 		Returns:
 			List of numpy arrays with kernel argument data
 		"""
-		timestamp = int(time.time() * 1000)  # Use milliseconds for uniqueness
+		timestamp = int(time.time() * 1000)
 		pipe_name = f"/tmp/kernel_pipe_{timestamp}_{label}"
 		ipc_file_name = f"/tmp/ipc_handle_{timestamp}_{label}.bin"
 
@@ -351,7 +367,7 @@ class Accordo:
 		# Set up environment
 		env = os.environ.copy()
 		env["HSA_TOOLS_LIB"] = str(self._lib_path)
-		env["KERNEL_TO_TRACE"] = self.config.kernel_name
+		env["KERNEL_TO_TRACE"] = self.kernel_name
 		if extra_env:
 			env.update(extra_env)
 
@@ -368,35 +384,35 @@ class Accordo:
 		env["ACCORDO_IPC_OUTPUT_FILE"] = ipc_file_name
 
 		# Launch process
-		logging.debug(f"Launching {label} process with PID for kernel {self.config.kernel_name}")
+		logging.debug(f"Launching {label} process for kernel {self.kernel_name}")
 		logging.debug(f"binary_cmd: {binary_cmd}")
-		logging.debug(f"working_directory: {working_directory}")
-		logging.debug(f"kernel_args: {self.config.get_arg_types()}")
+		logging.debug(f"working_directory: {self.working_directory}")
 		logging.debug(f"ipc_file_name: {ipc_file_name}")
 
 		original_dir = os.getcwd()
 		try:
-			os.chdir(working_directory)
+			os.chdir(self.working_directory)
 			process_pid = os.posix_spawn(binary_cmd[0], binary_cmd, env)
 			logging.debug(f"Launched {label} process with PID: {process_pid}")
 		finally:
 			os.chdir(original_dir)
 
 		# Get kernel argument data via IPC
+		arg_types = [arg[1] for arg in self.kernel_args]
 		try:
 			result_arrays = get_kern_arg_data(
 				pipe_name,
-				self.config.get_arg_types(),
+				arg_types,
 				ipc_file_name,
 				process_pid=process_pid,
-				baseline_time_ms=baseline_time_ms,
+				baseline_time_ms=None,
 			)
 		except TimeoutError:
 			# Kill the process if it timed out
 			try:
 				os.kill(process_pid, 9)
 			except (OSError, ProcessLookupError):
-				pass  # Process already dead
+				pass
 			raise
 
 		# Send completion response
@@ -405,13 +421,17 @@ class Accordo:
 		return result_arrays
 
 	def _validate_results(
-		self, results: dict[str, list[np.ndarray]], execution_times: dict[str, float]
+		self,
+		results: dict,
+		execution_times: dict,
+		tolerance: float,
 	) -> ValidationResult:
 		"""Validate results from reference and optimized runs.
 
 		Args:
 			results: Dictionary with "reference" and "optimized" array lists
 			execution_times: Execution times for each run
+			tolerance: Absolute tolerance for comparison
 
 		Returns:
 			ValidationResult with validation status
@@ -430,15 +450,15 @@ class Accordo:
 		matched_arrays = {}
 
 		for i, (ref_arr, opt_arr) in enumerate(zip(reference_arrays, optimized_arrays)):
-			arg = self.config.kernel_args[i]
+			arg_name, arg_type = self.kernel_args[i]
 
-			if not _validate_arrays(ref_arr, opt_arr, self.config.tolerance):
+			if not _validate_arrays(ref_arr, opt_arr, tolerance):
 				# Array mismatch
 				diff = np.abs(ref_arr - opt_arr)
 				mismatch = ArrayMismatch(
 					arg_index=i,
-					arg_name=arg.name,
-					arg_type=arg.type,
+					arg_name=arg_name,
+					arg_type=arg_type,
 					max_difference=float(np.max(diff)),
 					mean_difference=float(np.mean(diff)),
 					reference_sample=ref_arr[:10] if len(ref_arr) > 10 else ref_arr,
@@ -446,17 +466,17 @@ class Accordo:
 				)
 				mismatches.append(mismatch)
 
-				logging.debug(f"Arrays at index {i} for arg '{arg.name}' ({arg.type}) are NOT close.")
+				logging.debug(f"Arrays at index {i} for arg '{arg_name}' ({arg_type}) are NOT close.")
 				logging.debug(f"  Max difference: {mismatch.max_difference}")
 				logging.debug(f"  Mean difference: {mismatch.mean_difference}")
 			else:
 				# Array matched
-				matched_arrays[arg.name] = {
+				matched_arrays[arg_name] = {
 					"index": i,
-					"type": arg.type,
+					"type": arg_type,
 					"size": len(ref_arr),
 				}
-				logging.debug(f"Arrays at index {i} for arg '{arg.name}' ({arg.type}) are close.")
+				logging.debug(f"Arrays at index {i} for arg '{arg_name}' ({arg_type}) are close.")
 
 		# Determine overall success
 		is_valid = len(mismatches) == 0

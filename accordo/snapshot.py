@@ -21,6 +21,7 @@ class Snapshot:
 		grid_size: Optional grid dimensions dict with x,y,z (if available)
 		block_size: Optional workgroup dimensions dict with x,y,z (if available)
 
+
 	Example:
 		>>> snapshot = Snapshot(
 		...     arrays=[np.array([1, 2, 3]), np.array([4, 5, 6])],
