@@ -16,8 +16,10 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.8"
 
-# By default, install nothing (meta-package)
-dependencies = []
+dependencies = [
+    "numpy",
+    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@508f7fcf7fbd88c9eb6850e9fdac2e41d24c399a"
+]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/nexus"
@@ -25,20 +27,13 @@ Repository = "https://github.com/AMDResearch/nexus"
 Documentation = "https://github.com/AMDResearch/nexus/blob/main/README.md"
 
 [project.optional-dependencies]
-# Install individual tools
+# Install individual tools (base dependencies are always included)
 nexus = []
-accordo = [
-    "numpy",
-    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@508f7fcf7fbd88c9eb6850e9fdac2e41d24c399a"
-]
+accordo = []
 metrix = ["pandas>=1.5.0"]
 
 # Install all tools
-all = [
-    "pandas>=1.5.0",
-    "numpy",
-    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@508f7fcf7fbd88c9eb6850e9fdac2e41d24c399a"
-]
+all = ["pandas>=1.5.0"]
 
 dev = [
     "pytest",
