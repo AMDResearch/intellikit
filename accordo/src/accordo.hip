@@ -48,9 +48,76 @@ SOFTWARE.
 #include <fstream>
 
 #include <hip/hip_runtime.h>
-#include "KernelArguments.hpp"
+// JSON metadata support
+#include <nlohmann/json.hpp>
 
 namespace intelliperf {
+
+// Kernel argument metadata structure
+struct ArgInfo {
+  int index;
+  std::string name;
+  std::string type;
+  size_t size;
+  size_t offset;
+  bool is_pointer;
+  bool is_const;
+  bool is_output;
+};
+
+// Load kernel metadata from JSON file (no caching - always reload)
+static std::vector<ArgInfo> load_kernel_metadata() {
+  const char* metadata_path = std::getenv("ACCORDO_METADATA_FILE");
+  if (!metadata_path) {
+    LOG_ERROR("ACCORDO_METADATA_FILE environment variable not set");
+    std::terminate();
+  }
+
+  LOG_DETAIL("Loading kernel metadata from: {}", metadata_path);
+
+  std::vector<ArgInfo> metadata;
+
+  try {
+    std::ifstream f(metadata_path);
+    if (!f.is_open()) {
+      LOG_ERROR("Failed to open metadata file: {}", metadata_path);
+      std::terminate();
+    }
+
+    nlohmann::json j = nlohmann::json::parse(f);
+
+    int version = j.value("version", 0);
+    if (version != 1) {
+      LOG_ERROR("Unsupported metadata version: {}", version);
+      std::terminate();
+    }
+
+    for (const auto& arg_json : j["args"]) {
+      ArgInfo arg;
+      arg.index = arg_json["index"];
+      arg.name = arg_json["name"];
+      arg.type = arg_json["type"];
+      arg.size = arg_json["size"];
+      arg.offset = arg_json["offset"];
+      arg.is_pointer = arg_json["is_pointer"];
+      arg.is_const = arg_json["is_const"];
+      arg.is_output = arg_json["is_output"];
+
+      metadata.push_back(arg);
+
+      LOG_DETAIL("  Arg {}: {} {} (size={}, offset={}, output={})",
+                 arg.index, arg.type, arg.name, arg.size, arg.offset, arg.is_output);
+    }
+
+    LOG_INFO("Loaded metadata for {} kernel argument(s)", metadata.size());
+
+  } catch (const std::exception& e) {
+    LOG_ERROR("Failed to parse metadata file: {}", e.what());
+    std::terminate();
+  }
+
+  return metadata;
+}
 
 std::mutex accordo::mutex_{};
 std::shared_mutex accordo::stop_mutex_{};
@@ -126,16 +193,6 @@ static void* memcpy_d2h(const void* device_ptr,
   return nullptr;
 }
 
-template <typename T, typename Func, std::size_t... Is>
-inline void for_each_field_impl(const T& obj, Func func, std::index_sequence<Is...>) {
-  (func(std::get<Is>(obj->as_tuple())), ...);
-}
-template <typename T, typename Func>
-inline void for_each_field(const T& obj, Func func) {
-  constexpr std::size_t N = std::tuple_size_v<decltype(obj->as_tuple())>;
-  for_each_field_impl(obj, func, std::make_index_sequence<N>{});
-}
-
 void printHipIpcMemHandle(const hipIpcMemHandle_t& handle, const std::string& message) {
   const unsigned char* data = reinterpret_cast<const unsigned char*>(&handle);
   LOG_DETAIL("{} hipIpcMemHandle_t contents:", message);
@@ -173,62 +230,75 @@ void writeIpcHandleToFile(const hipIpcMemHandle_t& handle, size_t ptr_size) {
 
   LOG_DETAIL("Appended IPC handle and size ({} bytes) to file: {}", ptr_size, file_name);
 }
-void accordo::send_message_and_wait(void* args) {
-  const auto args_struct = reinterpret_cast<KernelArguments*>(args);
+void accordo::send_message_and_wait(void* kernarg_buffer) {
+  // Load metadata about kernel arguments
+  auto args = load_kernel_metadata();
 
-  for_each_field(args_struct, [](const auto& field) {
-    if constexpr (std::is_pointer_v<std::decay_t<decltype(field)>>) {
-      LOG_DETAIL("Field (pointer): {}", static_cast<const void*>(field));
+  LOG_DETAIL("Processing {} kernel arguments from buffer at {}", args.size(), kernarg_buffer);
+
+  // Log all arguments for debugging
+  char* buffer_ptr = static_cast<char*>(kernarg_buffer);
+  for (const auto& arg : args) {
+    void* field_ptr = buffer_ptr + arg.offset;
+
+    if (arg.is_pointer) {
+      void* ptr_value = *reinterpret_cast<void**>(field_ptr);
+      LOG_DETAIL("  Arg{} ({} {}): pointer = {}",
+                 arg.index, arg.type, arg.name, ptr_value);
     } else {
-      LOG_DETAIL("Field: {}", field);
+      LOG_DETAIL("  Arg{} ({} {}): scalar at offset {}",
+                 arg.index, arg.type, arg.name, arg.offset);
     }
-  });
+  }
 
-  // Export IPC handles
+  // Export IPC handles for output arguments (non-const pointers)
   static const char* pipe_name = std::getenv("ACCORDO_PIPE_NAME");
   int fd = open(pipe_name, O_WRONLY);
   if (fd < 0) {
     LOG_ERROR("Failed to open FIFO for writing");
     return;
   }
-  for_each_field(args_struct, [&](const auto& field) {
-    if constexpr (std::is_pointer_v<std::decay_t<decltype(field)>> &&
-                  !std::is_const_v<
-                      std::remove_pointer_t<std::decay_t<decltype(field)>>>) {
+
+  for (const auto& arg : args) {
+    if (arg.is_output) {  // Only process output arguments (non-const pointers)
+      // Extract pointer value from kernarg buffer
+      char* field_ptr = buffer_ptr + arg.offset;
+      void* device_ptr = *reinterpret_cast<void**>(field_ptr);
+
+      // Get pointer size from tracked allocations
       size_t ptr_size = 0;
       {
         auto instance = get_instance();
         std::lock_guard<std::mutex> lock(mutex_);
-        auto it = instance->pointer_sizes_.find(field);
+        auto it = instance->pointer_sizes_.find(device_ptr);
         if (it != instance->pointer_sizes_.end()) {
           ptr_size = it->second;
         } else {
-          LOG_ERROR("Pointer size not found for {}", static_cast<void*>(field));
+          LOG_ERROR("Pointer size not found for {} (arg{})", device_ptr, arg.index);
+          continue;
         }
       }
 
-      auto cpu_ptr = memcpy_d2h(field, ptr_size, agents_);
-      LOG_DETAIL("Sending the handle for the CPU pointer {} ({} bytes).",
-                 reinterpret_cast<void*>(cpu_ptr),
-                 ptr_size);
+      LOG_DETAIL("Creating IPC handle for {} ({} bytes, arg{} = {})",
+                 device_ptr, ptr_size, arg.index, arg.name);
 
+      // Create HIP IPC handle
       hipIpcMemHandle_t handle;
-      hipError_t ipc_result = hipIpcGetMemHandle(&handle, field);
+      hipError_t ipc_result = hipIpcGetMemHandle(&handle, device_ptr);
       if (ipc_result != hipSuccess) {
         LOG_ERROR("Failed to get IPC handle for pointer {} : {}",
-                  static_cast<void*>(field),
-                  ipc_result);
+                  device_ptr, ipc_result);
+        continue;
       }
-      printHipIpcMemHandle(handle, "handle");
 
-      const auto float_ptr = reinterpret_cast<const float*>(field);
-      LOG_DETAIL("Sending the handle for the pointer {} ({} bytes).",
-                 reinterpret_cast<void*>(field),
-                 ptr_size);
+      printHipIpcMemHandle(handle, fmt::format("IPC handle for arg{}", arg.index));
+
+      LOG_DETAIL("Sending IPC handle for pointer {} ({} bytes)", device_ptr, ptr_size);
       writeIpcHandleToFile(handle, ptr_size);
     }
-  });
+  }
 
+  // Wait for Python to finish processing
   fd = open(pipe_name, O_RDONLY);
   if (fd < 0) {
     LOG_ERROR("Failed to open FIFO for reading");
@@ -296,7 +366,7 @@ std::string accordo::packet_to_text(const hsa_ext_amd_aql_pm4_packet_t* packet) 
       const auto kernel_name = get_kernel_name(disp->kernel_object);
       static const char* kernel_to_trace = std::getenv("KERNEL_TO_TRACE");
 
-      if (kernel_name.starts_with(kernel_to_trace)) {
+      if (kernel_to_trace && kernel_name.starts_with(kernel_to_trace)) {
         buff << ("\nTracing the kernel\n");
       }
 
@@ -368,7 +438,7 @@ std::optional<void*> accordo::is_traceable_packet(
       const auto kernel_name = get_kernel_name(disp->kernel_object);
       static const char* kernel_to_trace = std::getenv("KERNEL_TO_TRACE");
 
-      if (kernel_name.contains(kernel_to_trace)) {
+      if (kernel_to_trace && kernel_name.contains(kernel_to_trace)) {
         LOG_INFO("Found the target kernel {}", kernel_name);
         return disp->kernarg_address;
       }
@@ -513,9 +583,9 @@ void accordo::write_packets(hsa_queue_t* queue,
             reinterpret_cast<const hsa_kernel_dispatch_packet_t*>(packet);
         const auto kernel_name = get_kernel_name(disp->kernel_object);
         static const char* kernel_to_trace = std::getenv("KERNEL_TO_TRACE");
-        static const char* metadata_file = std::getenv("ACCORDO_METADATA_FILE");
-        if (metadata_file && kernel_to_trace && kernel_name.contains(kernel_to_trace)) {
-          std::ofstream ofs(metadata_file, std::ios::out | std::ios::trunc);
+        static const char* dispatch_metadata_file = std::getenv("ACCORDO_DISPATCH_METADATA_FILE");
+        if (kernel_to_trace && dispatch_metadata_file && kernel_name.contains(kernel_to_trace)) {
+          std::ofstream ofs(dispatch_metadata_file, std::ios::out | std::ios::trunc);
           if (ofs) {
             ofs << "{";
             ofs << "\"kernel_name\":\"" << kernel_name << "\",";
@@ -530,9 +600,9 @@ void accordo::write_packets(hsa_queue_t* queue,
             ofs << "}";
             ofs.flush();
             wrote_metadata = true;
-            LOG_DETAIL("Wrote dispatch metadata to {}", metadata_file);
+            LOG_DETAIL("Wrote dispatch metadata to {}", dispatch_metadata_file);
           } else {
-            LOG_ERROR("Failed to open metadata file {}", metadata_file);
+            LOG_ERROR("Failed to open dispatch metadata file {}", dispatch_metadata_file);
           }
         }
       }

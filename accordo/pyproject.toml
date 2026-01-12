@@ -15,7 +15,10 @@ authors = [
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = []
+dependencies = [
+    "numpy",
+    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@508f7fcf7fbd88c9eb6850e9fdac2e41d24c399a"
+]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/nexus"

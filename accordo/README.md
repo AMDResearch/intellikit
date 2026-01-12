@@ -33,52 +33,37 @@ pip install -e .
 
 ## Quick Start
 
+### Simple Validation
+
 ```python
 from accordo import Accordo
 
-# Configure validation
-config = Accordo.Config(
-    kernel_name="my_kernel",
-    kernel_args=[
-        Accordo.KernelArg(name="result", type="double*"),
-        Accordo.KernelArg(name="input", type="const double*"),
-    ],
-    tolerance=1e-6
+# Create validator for a specific kernel
+# This extracts signature and builds the library once
+validator = Accordo(
+    binary="./app_ref",
+    kernel_name="reduce_sum"
 )
-
-# Create validator
-validator = Accordo(config)
 
 # Capture reference snapshot
-ref_snapshot = validator.capture_snapshot(
-    binary=["./app_ref"],
-    working_directory=".",
-    timeout_seconds=30
-)
+ref = validator.capture_snapshot(binary="./app_ref")
 
-# Compare against optimized version
-opt_snapshot = validator.capture_snapshot(
-    binary=["./app_opt"],
-    working_directory=".",
-    timeout_seconds=30
-)
+# Capture optimized snapshot
+opt = validator.capture_snapshot(binary="./app_opt")
 
-result = validator.compare_snapshots(ref_snapshot, opt_snapshot)
+# Compare with specified tolerance
+result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
 print(f"Validation: {'✓ PASS' if result.is_valid else '✗ FAIL'}")
-if result.is_valid:
-    print(f"✓ {result.num_arrays_validated} arrays matched within tolerance")
-else:
-    print(f"✗ {result.num_mismatches} mismatches found")
-    print(result.summary())
 ```
+
 
 ## Requirements
 
 - Python >= 3.8
 - ROCm toolchain
 - HIP compiler (hipcc)
+- kernelDB (automatically installed as dependency)
 
 ## License
 
 MIT License - Copyright (c) 2025 Advanced Micro Devices, Inc.
-

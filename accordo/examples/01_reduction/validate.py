@@ -64,7 +64,7 @@ OPTIMIZED_KERNEL = """
 #include <stdio.h>
 #include <stdlib.h>
 
-__global__ void reduce_sum_optimized(const float* input, float* output, int N) {
+__global__ void reduce_sum(const float* input, float* output, int N) {
     __shared__ float sdata[256];
 
     int tid = threadIdx.x;
@@ -100,7 +100,7 @@ int main() {
     hipMemcpy(d_output, &h_output, sizeof(float), hipMemcpyHostToDevice);
 
     int gridSize = (N + 255) / 256;
-    hipLaunchKernelGGL(reduce_sum_optimized, dim3(gridSize), dim3(256), 0, 0,
+    hipLaunchKernelGGL(reduce_sum, dim3(gridSize), dim3(256), 0, 0,
                        d_input, d_output, N);
     hipDeviceSynchronize();
 
@@ -123,7 +123,8 @@ def compile_kernel_from_string(kernel_code, name, tmp_dir):
     source_file.write_text(kernel_code)
     print(f"Compiling {name}...", end=" ")
 
-    cmd = ["hipcc", str(source_file), "-o", str(binary_file), "-O2"]
+    # Important: -g flag enables debug symbols for kernelDB auto-extraction
+    cmd = ["hipcc", str(source_file), "-o", str(binary_file), "-O2", "-g"]
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
@@ -153,25 +154,17 @@ def main():
         optimized_bin = compile_kernel_from_string(OPTIMIZED_KERNEL, "optimized", tmp_path)
         print()
 
-        # Configure Accordo
-        print("Step 2: Configuring Accordo...")
-        config = Accordo.Config(
-            kernel_name="reduce_sum",
-            kernel_args=[
-                Accordo.KernelArg(name="input", type="const float*"),
-                Accordo.KernelArg(name="output", type="float*"),
-                Accordo.KernelArg(name="N", type="int"),
-            ],
-            tolerance=1e-4,
-        )
-        print(f"  Kernel: {config.kernel_name}")
-        print(f"  Tolerance: {config.tolerance}")
-        print()
-
-        # Build validator
-        print("Step 3: Building validator...")
+        # Initialize Accordo validator for the reduce_sum kernel
+        print("Step 2: Initializing Accordo validator...")
+        print(f"  Binary: {baseline_bin}")
+        print(f"  Kernel: reduce_sum")
         try:
-            validator = Accordo(config)
+            validator = Accordo(
+                binary=str(baseline_bin),
+                kernel_name="reduce_sum",
+                working_directory=str(tmp_path)
+            )
+            print(f"  Kernel arguments: {[f'{name}:{type}' for name, type in validator.kernel_args]}")
             print("  Validator ready")
         except Exception as e:
             print(f"Failed: {e}")
@@ -179,11 +172,10 @@ def main():
         print()
 
         # Capture baseline
-        print("Step 4: Capturing baseline snapshot...")
+        print("Step 3: Capturing baseline snapshot...")
         try:
             baseline_snap = validator.capture_snapshot(
-                binary=[str(baseline_bin)],
-                working_directory=str(tmp_path),
+                binary=str(baseline_bin),
                 timeout_seconds=30
             )
             print(f"  Captured: {len(baseline_snap.arrays)} arrays in {baseline_snap.execution_time_ms:.2f}ms")
@@ -193,11 +185,10 @@ def main():
         print()
 
         # Capture optimized
-        print("Step 5: Capturing optimized snapshot...")
+        print("Step 4: Capturing optimized snapshot...")
         try:
             optimized_snap = validator.capture_snapshot(
-                binary=[str(optimized_bin)],
-                working_directory=str(tmp_path),
+                binary=str(optimized_bin),
                 timeout_seconds=30
             )
             print(f"  Captured: {len(optimized_snap.arrays)} arrays in {optimized_snap.execution_time_ms:.2f}ms")
@@ -207,8 +198,8 @@ def main():
         print()
 
         # Validate
-        print("Step 6: Validating correctness...")
-        result = validator.compare_snapshots(baseline_snap, optimized_snap)
+        print("Step 5: Validating correctness...")
+        result = validator.compare_snapshots(baseline_snap, optimized_snap, tolerance=1e-4)
 
         print("=" * 80)
         if result.is_valid:
@@ -240,4 +231,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted")
         sys.exit(1)
-
