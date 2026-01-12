@@ -38,7 +38,7 @@ FetchContent_MakeAvailable(spdlog)
 
 include(${PROJECT_SOURCE_DIR}/cmake/CPM.cmake)
 CPMAddPackage("gh:fmtlib/fmt#7.1.3")
-
+CPMAddPackage("gh:nlohmann/json@3.11.3")
 
 find_package(HSA REQUIRED)
 
@@ -74,5 +74,6 @@ target_link_libraries(accordo
         spdlog::spdlog
         fmt::fmt
         hsa::hsa
+        nlohmann_json::nlohmann_json
     PRIVATE
 )

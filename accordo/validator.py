@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 
-from ._internal.codegen import generate_kernel_header
+from ._internal.codegen import generate_kernel_metadata
 from ._internal.ipc.communication import get_kern_arg_data, send_response
 from .exceptions import AccordoBuildError, AccordoProcessError, AccordoTimeoutError
 from .kernel_args import extract_kernel_arguments
@@ -113,7 +113,6 @@ class Accordo:
 		binary: Union[str, List[str]],
 		kernel_name: str,
 		kernel_args: Optional[List[Tuple[str, str]]] = None,
-		additional_includes: Optional[List[str]] = None,
 		working_directory: str = ".",
 		accordo_path: Optional[Path] = None,
 		force_rebuild: bool = False,
@@ -130,7 +129,6 @@ class Accordo:
 			kernel_name: Name of the kernel to validate
 			kernel_args: Optional manual kernel args as [(name, type), ...].
 			             If None, auto-extracted from binary.
-			additional_includes: Optional C++ includes for custom types
 			working_directory: Working directory for binary execution
 			accordo_path: Path to Accordo directory (auto-detected if None)
 			force_rebuild: Force rebuild even if library exists
@@ -182,14 +180,13 @@ class Accordo:
 				)
 
 		self.kernel_args = kernel_args
-		self.additional_includes = additional_includes or []
 
-		# Extract type strings for header generation
+		# Extract type strings for metadata generation
 		arg_types = [arg[1] for arg in kernel_args]
 
-		# Generate kernel header
-		logging.info("Generating kernel header...")
-		generate_kernel_header(arg_types, self.additional_includes)
+		# Generate kernel metadata (JSON)
+		logging.info("Generating kernel metadata...")
+		self.metadata_path = generate_kernel_metadata(arg_types)
 
 		# Auto-detect accordo_path if not provided
 		if accordo_path is None:
@@ -251,9 +248,9 @@ class Accordo:
 		try:
 			start_time = time.time()
 			# Prepare a metadata file path for exporter to write dispatch dims
-			metadata_file = f"/tmp/accordo_metadata_{int(start_time * 1000)}.json"
+			dispatch_metadata_file = f"/tmp/accordo_dispatch_{int(start_time * 1000)}.json"
 
-			extra_env = {"ACCORDO_METADATA_FILE": metadata_file}
+			extra_env = {"ACCORDO_DISPATCH_METADATA_FILE": dispatch_metadata_file}
 			if dispatch_id is not None:
 				extra_env["ACCORDO_DISPATCH_ID"] = str(dispatch_id)
 
@@ -269,8 +266,8 @@ class Accordo:
 			grid = None
 			block = None
 			try:
-				if os.path.exists(metadata_file):
-					with open(metadata_file, "r") as f:
+				if os.path.exists(dispatch_metadata_file):
+					with open(dispatch_metadata_file, "r") as f:
 						meta = json.load(f)
 					if isinstance(meta, dict):
 						grid = meta.get("grid")
@@ -368,6 +365,7 @@ class Accordo:
 		env = os.environ.copy()
 		env["HSA_TOOLS_LIB"] = str(self._lib_path)
 		env["KERNEL_TO_TRACE"] = self.kernel_name
+		env["ACCORDO_METADATA_FILE"] = self.metadata_path  # Pass metadata to C++
 		if extra_env:
 			env.update(extra_env)
 
