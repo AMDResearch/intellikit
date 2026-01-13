@@ -78,6 +78,40 @@ def send_response(pipe_name):
 	with open(pipe_name, "w") as fifo:
 		fifo.write("done\n")
 
+def _resolve_type_alias(arg_type):
+	"""Resolve common GPU type aliases to their canonical forms.
+	
+	This handles user-defined type aliases (e.g., bf16 -> __hip_bfloat16)
+	without requiring them to be explicitly added to the main type map.
+	
+	Args:
+		arg_type: Type string (e.g., "bf16*")
+	
+	Returns:
+		Resolved type string if alias found, otherwise original type
+	"""
+	# Common GPU type aliases
+	# Maps: alias -> canonical type
+	TYPE_ALIASES = {
+		# BF16 aliases
+		"bf16": "__hip_bfloat16",
+		"bfloat16": "__hip_bfloat16",
+		"BF16": "__hip_bfloat16",
+	}
+	
+	# Check if this is a pointer type
+	if "*" in arg_type:
+		# Extract base type (everything before the first *)
+		base_type = arg_type.split("*")[0].strip()
+		suffix = arg_type[len(base_type):]  # Keep the pointer and any other suffixes
+		
+		# Check if base type is an alias
+		if base_type in TYPE_ALIASES:
+			resolved = TYPE_ALIASES[base_type] + suffix
+			logging.debug(f"Resolved type alias: {arg_type} -> {resolved}")
+			return resolved
+	
+	return arg_type
 
 def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, process_pid=None, baseline_time_ms=None):
 	"""Get kernel argument data via IPC.
@@ -142,6 +176,7 @@ def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, pr
 					raise TimeoutError(timeout_msg)
 				time.sleep(0.1)
 
+	# Canonical type mappings
 	type_map = {
 		"double*": ctypes.c_double,
 		"float*": ctypes.c_float,
@@ -163,6 +198,12 @@ def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, pr
 		arg_type = " ".join(word for word in arg.split() if word not in ("restrict", "const", "volatile"))
 		arg_type = arg_type.split()[0] if arg_type.split() else arg
 		logging.debug(f"arg_type (after stripping qualifiers): {arg_type}")
+
+		# Try to resolve type alias if not found in type_map
+		if arg_type not in type_map:
+			resolved_type = _resolve_type_alias(arg_type)
+			if resolved_type != arg_type and resolved_type in type_map:
+				arg_type = resolved_type
 
 		if arg_type in type_map:
 			dtype = type_map[arg_type]
