@@ -158,8 +158,11 @@ def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, pr
 	for handle, arg, array_size in zip(ipc_handles, pointer_args, ptr_sizes):
 		ptr = open_ipc_handle(handle)
 		logging.debug(f"Opened IPC Ptr: {ptr} (0x{ptr:x})")
-		arg_type = arg.split()[0]
-		logging.debug(f"arg_type: {arg_type}")
+		
+		# Strip type qualifiers (restrict, const, volatile) to get the base type
+		arg_type = " ".join(word for word in arg.split() if word not in ("restrict", "const", "volatile"))
+		arg_type = arg_type.split()[0] if arg_type.split() else arg
+		logging.debug(f"arg_type (after stripping qualifiers): {arg_type}")
 
 		if arg_type in type_map:
 			dtype = type_map[arg_type]
