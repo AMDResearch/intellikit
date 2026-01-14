@@ -1,8 +1,12 @@
+<div align="center">
+  <img src="docs/intellikit.svg" alt="IntelliKit" width="400"/>
+</div>
+
+<div align="center">
+
 # IntelliKit
 
-> [!IMPORTANT]
-> This project is intended for research purposes only and is provided by AMD Research and Advanced Development team.
-This is not a product. Use it at your own risk and discretion.
+</div>
 
 **LLM-Ready GPU Profiling and Analysis Toolkit for AMD ROCm**
 
@@ -13,7 +17,6 @@ IntelliKit is a collection of intelligent tools designed to make GPU kernel deve
 Traditional GPU profiling and analysis tools expose raw hardware counters and assembly. IntelliKit tools are designed to:
 - **Decode complexity**: Turn hardware metrics into human-readable insights
 - **Enable LLM integration**: Provide clean APIs suitable for LLM-driven workflows (MCP-ready)
-- **Focus on research**: Experimental tools for pushing GPU development forward
 
 ## Tools
 
@@ -141,24 +144,6 @@ Each tool has its own detailed documentation:
 - [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
 - [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
 
-## Use Cases
-
-### For LLM-Driven GPU Development
-IntelliKit tools provide clean APIs that LLMs can call to:
-- Profile kernels and get human-readable feedback (Metrix)
-- Extract actual GPU code for analysis (Nexus)
-- Validate optimizations automatically (Accordo)
-
-### For Research & Development
-- Experiment with kernel optimizations
-- Debug GPU compilation pipelines
-- Analyze performance characteristics
-- Validate correctness of transformations
-
-### For Performance Engineering
-- Identify bottlenecks in GPU applications
-- Compare optimization strategies
-- Track performance regressions
 
 ## Example Workflow
 
