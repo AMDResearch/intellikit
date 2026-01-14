@@ -36,11 +36,12 @@ def list_metrics(category=None):
 
     # Group by category
     from collections import defaultdict
+
     by_category = defaultdict(list)
 
     for metric_name in metrics:
         metric_def = METRIC_CATALOG[metric_name]
-        cat = metric_def['category'].value
+        cat = metric_def["category"].value
         by_category[cat].append((metric_name, metric_def))
 
     # Print grouped
@@ -68,7 +69,7 @@ def list_profiles():
         print(f"│  Estimated passes: {profile_def['estimated_passes']}")
         print(f"└{'─' * 68}\n")
 
-    print(f"Usage: metrix profile --profile <name> ./app")
+    print("Usage: metrix profile --profile <name> ./app")
 
 
 def list_devices():
@@ -86,5 +87,4 @@ def list_devices():
     for arch, name, generation in devices:
         print(f"  • {arch:10s}  {name:30s}  ({generation})")
 
-    print(f"\nUse --device <arch> to specify target architecture")
-
+    print("\nUse --device <arch> to specify target architecture")

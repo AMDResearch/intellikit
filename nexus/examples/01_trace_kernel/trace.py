@@ -110,7 +110,7 @@ def main():
 
                 print(f"HIP Source ({len(kernel.hip)} lines):")
                 for i, hip_line in enumerate(kernel.hip[:10], 1):
-                    line_no = kernel.lines[i-1] if kernel.lines and i <= len(kernel.lines) else i
+                    line_no = kernel.lines[i - 1] if kernel.lines and i <= len(kernel.lines) else i
                     print(f"  {line_no:3d}. {hip_line}")
                 if len(kernel.hip) > 10:
                     print(f"  ... ({len(kernel.hip) - 10} more lines)")
@@ -133,4 +133,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted")
         sys.exit(1)
-
