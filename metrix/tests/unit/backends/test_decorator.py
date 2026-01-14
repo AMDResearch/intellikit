@@ -14,11 +14,11 @@ def test_metric_decorator_extracts_counters():
         return counter_a + counter_b + counter_c
 
     # Decorator should attach metadata
-    assert hasattr(_test_func, '_metric_name')
-    assert hasattr(_test_func, '_metric_counters')
+    assert hasattr(_test_func, "_metric_name")
+    assert hasattr(_test_func, "_metric_counters")
 
     assert _test_func._metric_name == "test.metric"
-    assert _test_func._metric_counters == ['counter_a', 'counter_b', 'counter_c']
+    assert _test_func._metric_counters == ["counter_a", "counter_b", "counter_c"]
 
 
 def test_metric_decorator_skips_self():
@@ -28,8 +28,8 @@ def test_metric_decorator_skips_self():
     def _test_func(self, hw_counter_1, hw_counter_2):
         return hw_counter_1 / hw_counter_2
 
-    assert 'self' not in _test_func._metric_counters
-    assert _test_func._metric_counters == ['hw_counter_1', 'hw_counter_2']
+    assert "self" not in _test_func._metric_counters
+    assert _test_func._metric_counters == ["hw_counter_1", "hw_counter_2"]
 
 
 def test_metric_decorator_wrapper_extracts_from_raw_data():
@@ -37,10 +37,7 @@ def test_metric_decorator_wrapper_extracts_from_raw_data():
 
     class MockBackend:
         def __init__(self):
-            self._raw_data = {
-                'TCC_HIT_sum': 75,
-                'TCC_MISS_sum': 25
-            }
+            self._raw_data = {"TCC_HIT_sum": 75, "TCC_MISS_sum": 25}
 
         @metric("cache.hit_rate")
         def _hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
@@ -59,7 +56,7 @@ def test_metric_decorator_handles_missing_counters():
     class MockBackend:
         def __init__(self):
             self._raw_data = {
-                'counter_a': 100
+                "counter_a": 100
                 # counter_b is missing
             }
 
@@ -80,6 +77,9 @@ def test_metric_decorator_preserves_original_function():
     def _original(self, x, y):
         return x * y
 
-    assert hasattr(_original, '_original_func')
-    assert _original._original_func == _original.__wrapped__ if hasattr(_original, '__wrapped__') else _original._original_func
-
+    assert hasattr(_original, "_original_func")
+    assert (
+        _original._original_func == _original.__wrapped__
+        if hasattr(_original, "__wrapped__")
+        else _original._original_func
+    )

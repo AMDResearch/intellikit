@@ -14,6 +14,7 @@ from collections import defaultdict
 @dataclass(frozen=True)
 class DeviceSpecs:
     """Device-specific hardware specifications"""
+
     arch: str
     name: str
 
@@ -25,9 +26,9 @@ class DeviceSpecs:
 
     # Memory specs
     hbm_bandwidth_gbs: float  # GB/s
-    l2_bandwidth_gbs: float   # GB/s
-    l2_size_mb: float         # MB
-    lds_size_per_cu_kb: float # KB
+    l2_bandwidth_gbs: float  # GB/s
+    l2_size_mb: float  # MB
+    lds_size_per_cu_kb: float  # KB
 
     # Compute capabilities
     fp32_tflops: float
@@ -41,6 +42,7 @@ class DeviceSpecs:
 @dataclass
 class Statistics:
     """Min/max/avg statistics for a value"""
+
     min: float
     max: float
     avg: float
@@ -50,6 +52,7 @@ class Statistics:
 @dataclass
 class ProfileResult:
     """Single kernel dispatch profiling result"""
+
     dispatch_id: int
     kernel_name: str
     gpu_id: int
@@ -93,22 +96,19 @@ class CounterBackend(ABC):
     def _discover_metrics(self) -> None:
         """
         Auto-discover all @metric decorated methods and identify unsupported ones
-        
+
         Populates both self._metrics (supported) and self._unsupported_metrics (unsupported)
         """
         for attr_name in dir(self):
             method = getattr(self, attr_name)
-            if hasattr(method, '_metric_name'):
+            if hasattr(method, "_metric_name"):
                 name = method._metric_name
-                if hasattr(method, '_unsupported_reason') and method._unsupported_reason:
+                if hasattr(method, "_unsupported_reason") and method._unsupported_reason:
                     # Mark as unsupported
                     self._unsupported_metrics[name] = method._unsupported_reason
                 else:
                     # Register as available
-                    self._metrics[name] = {
-                        'counters': method._metric_counters,
-                        'compute': method
-                    }
+                    self._metrics[name] = {"counters": method._metric_counters, "compute": method}
 
     def get_available_metrics(self) -> List[str]:
         """Get list of all metrics supported by this backend"""
@@ -131,11 +131,9 @@ class CounterBackend(ABC):
             ValueError: If metric is unknown
         """
         if metric not in self._metrics:
-            available = ', '.join(self.get_available_metrics())
-            raise ValueError(
-                f"Unknown metric '{metric}'. Available metrics: {available}"
-            )
-        return list(self._metrics[metric]['counters'])
+            available = ", ".join(self.get_available_metrics())
+            raise ValueError(f"Unknown metric '{metric}'. Available metrics: {available}")
+        return list(self._metrics[metric]["counters"])
 
     def get_required_counters(self, metrics: List[str]) -> List[str]:
         """
@@ -153,38 +151,36 @@ class CounterBackend(ABC):
         counters = set()
         for metric in metrics:
             if metric not in self._metrics:
-                available = ', '.join(self.get_available_metrics())
-                raise ValueError(
-                    f"Unknown metric '{metric}'. Available metrics: {available}"
-                )
-            counters.update(self._metrics[metric]['counters'])
+                available = ", ".join(self.get_available_metrics())
+                raise ValueError(f"Unknown metric '{metric}'. Available metrics: {available}")
+            counters.update(self._metrics[metric]["counters"])
         return list(counters)
 
     def _get_counter_block(self, counter_name: str) -> str:
         """
         Extract hardware block name from counter name based on prefix.
-        
+
         AMD counter names follow the pattern: BLOCK_COUNTER_NAME
         Examples: SQ_INSTS_LDS -> SQ, TCC_HIT_sum -> TCC
-        
+
         Args:
             counter_name: Counter name (e.g., "SQ_INSTS_LDS", "TCC_HIT_sum")
-            
+
         Returns:
             Hardware block name (e.g., "SQ", "TCC")
         """
         # Extract prefix before first underscore
-        if '_' in counter_name:
-            return counter_name.split('_')[0]
+        if "_" in counter_name:
+            return counter_name.split("_")[0]
         return "UNKNOWN"
-    
+
     def _get_counter_block_limits(self) -> Dict[str, int]:
         """
         Return per-hardware-block counter limits for this architecture.
-        
+
         Override this method in derived classes to specify how many counters
         from each hardware block can be collected simultaneously.
-        
+
         Returns:
             Dict mapping block_name -> max_counters_per_pass
         """
@@ -213,9 +209,7 @@ class CounterBackend(ABC):
         for i in range(0, len(counters), max_per_pass):
             passes.append(counters[i : i + max_per_pass])
 
-        logger.info(
-            f"Splitting {len(counters)} counters into {len(passes)} simple passes"
-        )
+        logger.info(f"Splitting {len(counters)} counters into {len(passes)} simple passes")
         return passes
 
     def _split_counters_into_passes(self, counters: List[str]) -> List[List[str]]:
@@ -230,9 +224,15 @@ class CounterBackend(ABC):
         """
         return self._get_counter_groups(counters)
 
-    def profile(self, command: str, metrics: List[str],
-                num_replays: int = 10, aggregate_by_kernel: bool = False,
-                kernel_filter: Optional[str] = None, cwd: Optional[str] = None):
+    def profile(
+        self,
+        command: str,
+        metrics: List[str],
+        num_replays: int = 10,
+        aggregate_by_kernel: bool = False,
+        kernel_filter: Optional[str] = None,
+        cwd: Optional[str] = None,
+    ):
         """
         Profile command with two-level aggregation and multi-pass support
 
@@ -278,7 +278,7 @@ class CounterBackend(ABC):
             # Merge counter data from this pass with previous passes
             for result in pass_results:
                 # Use (kernel_name, dispatch_id, replay_id) as key
-                key = (result.kernel_name, result.dispatch_id, getattr(result, 'run_id', 0))
+                key = (result.kernel_name, result.dispatch_id, getattr(result, "run_id", 0))
 
                 if key not in all_results_by_kernel:
                     all_results_by_kernel[key] = result
@@ -321,20 +321,15 @@ class CounterBackend(ABC):
         counter_stats = self._aggregated[dispatch_key]
 
         # Compute metric using min/max/avg of each counter
-        metric_min = self._compute_with_stat_type(metric, counter_stats, 'min')
-        metric_max = self._compute_with_stat_type(metric, counter_stats, 'max')
-        metric_avg = self._compute_with_stat_type(metric, counter_stats, 'avg')
+        metric_min = self._compute_with_stat_type(metric, counter_stats, "min")
+        metric_max = self._compute_with_stat_type(metric, counter_stats, "max")
+        metric_avg = self._compute_with_stat_type(metric, counter_stats, "avg")
 
         # Get count from any counter (all should have same count)
         first_counter = list(counter_stats.keys())[0]
         count = counter_stats[first_counter].count
 
-        return Statistics(
-            min=metric_min,
-            max=metric_max,
-            avg=metric_avg,
-            count=count
-        )
+        return Statistics(min=metric_min, max=metric_max, avg=metric_avg, count=count)
 
     def _compute_with_stat_type(self, metric: str, counter_stats: Dict[str, Statistics], stat_type: str) -> float:
         """
@@ -351,16 +346,17 @@ class CounterBackend(ABC):
         # Extract the requested statistic for each counter
         self._raw_data = {
             counter: getattr(counter_stats[counter], stat_type)
-            for counter in self._metrics[metric]['counters']
+            for counter in self._metrics[metric]["counters"]
             if counter in counter_stats
         }
 
         # Call the metric's compute function (decorated method)
-        return self._metrics[metric]['compute']()
+        return self._metrics[metric]["compute"]()
 
     @abstractmethod
-    def _run_rocprof(self, command: str, counters: List[str],
-                     kernel_filter: Optional[str] = None) -> List[ProfileResult]:
+    def _run_rocprof(
+        self, command: str, counters: List[str], kernel_filter: Optional[str] = None
+    ) -> List[ProfileResult]:
         """
         Run rocprofv3 and return results
 
@@ -393,7 +389,9 @@ class CounterBackend(ABC):
 
         return aggregated
 
-    def _aggregate_by_kernel_then_runs(self, results: List[ProfileResult], num_replays: int) -> Dict[str, Dict[str, Statistics]]:
+    def _aggregate_by_kernel_then_runs(
+        self, results: List[ProfileResult], num_replays: int
+    ) -> Dict[str, Dict[str, Statistics]]:
         """
         Merge same kernels within each replay, then aggregate across replays
 
@@ -402,7 +400,7 @@ class CounterBackend(ABC):
         # Group by replay, then by kernel
         replays = defaultdict(lambda: defaultdict(list))
         for result in results:
-            replay_id = getattr(result, 'run_id', 0)  # Keep field name for compatibility
+            replay_id = getattr(result, "run_id", 0)  # Keep field name for compatibility
             replays[replay_id][result.kernel_name].append(result)
 
         # Merge within each replay (sum counters)
@@ -446,19 +444,16 @@ class CounterBackend(ABC):
         # Counter statistics
         for counter, values in counter_values.items():
             stats[counter] = Statistics(
-                min=min(values),
-                max=max(values),
-                avg=sum(values) / len(values),
-                count=len(values)
+                min=min(values), max=max(values), avg=sum(values) / len(values), count=len(values)
             )
 
         # Duration statistics
         if duration_values:
-            stats['duration_us'] = Statistics(
+            stats["duration_us"] = Statistics(
                 min=min(duration_values),
                 max=max(duration_values),
                 avg=sum(duration_values) / len(duration_values),
-                count=len(duration_values)
+                count=len(duration_values),
             )
 
         return stats
@@ -498,5 +493,5 @@ class CounterBackend(ABC):
             lds_per_workgroup=first.lds_per_workgroup,
             arch_vgpr=first.arch_vgpr,
             accum_vgpr=first.accum_vgpr,
-            sgpr=first.sgpr
+            sgpr=first.sgpr,
         )

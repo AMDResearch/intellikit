@@ -9,6 +9,7 @@ from typing import Dict, Tuple, Optional
 @dataclass
 class KernelDispatch:
     """Single kernel dispatch result"""
+
     dispatch_id: int
     kernel_name: str
     device_id: int
@@ -23,6 +24,7 @@ class KernelDispatch:
 
 class CollectionResult:
     """Result of a profiling session"""
+
     def __init__(self):
         self.dispatches = []
 
@@ -37,4 +39,3 @@ class CollectionResult:
     def to_dataframe(self):
         """Export to DataFrame - to be implemented"""
         pass
-

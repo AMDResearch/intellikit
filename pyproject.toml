@@ -59,7 +59,7 @@ local_scheme = "node-and-date"
 fallback_version = "0.1.0"
 
 [tool.ruff]
-line-length = 120
+line-length = 100
 exclude = [
     "**/*.ipynb",
     "build/**",
@@ -68,8 +68,31 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "F", "W"]
-ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
+select = ["ALL"]
+ignore = [
+    "ANN002",  # no type annotation for *args
+    "ANN003",  # no type annotation for **kwargs
+    "BLE001",  # catch blind exception
+    "C901",    # McCabe complexity
+    "COM812",  # interferes with formatter
+    "D100",    # missing docstring in public module
+    "D104",    # missing docstring in public package
+    "INP001",  # implicit namespace package
+    "LOG015",  # logging on root logger
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments in function
+    "S101",    # allow assert
+    "S603",    # subprocess without shell
+    "T201",    # using print
+    "TRY401",  # allow exception message
+]
+extend-select = ["I"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+ignore-var-parameters = true # ignore missing documentation for *args and **kwargs
 
 [tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 100
 quote-style = "double"
