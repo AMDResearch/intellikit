@@ -196,7 +196,6 @@ See [LICENSE](LICENSE) for full details.
 Need help? Here's how to reach us:
 
 - **Issues**: Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/AMDResearch/nexus/issues)
-- **Contact**: Reach out to the development team at [muhaawad@amd.com](mailto:muhaawad@amd.com)
 
 ---
 
