@@ -23,6 +23,7 @@ class KernelResults:
     """
     Clean result object for a single kernel
     """
+
     name: str
     duration_us: Statistics
     metrics: Dict[str, Statistics]
@@ -33,6 +34,7 @@ class ProfilingResults:
     """
     Results from a profiling run
     """
+
     command: str
     kernels: List[KernelResults]
     total_kernels: int
@@ -50,10 +52,7 @@ class Metrix:
             print(f"{kernel.name}: {kernel.metrics['memory.l2_hit_rate'].avg:.2f}%")
     """
 
-    def __init__(
-        self,
-        arch: Optional[str] = None
-    ):
+    def __init__(self, arch: Optional[str] = None):
         """
         Initialize Metrix
 
@@ -78,7 +77,7 @@ class Metrix:
         time_only: bool = False,
         num_replays: int = 1,
         aggregate_by_kernel: bool = True,
-        cwd: Optional[str] = None
+        cwd: Optional[str] = None,
     ) -> ProfilingResults:
         """
         Profile a command
@@ -106,15 +105,17 @@ class Metrix:
         elif profile:
             if profile not in METRIC_PROFILES:
                 raise ValueError(f"Unknown profile: {profile}. Available: {list(METRIC_PROFILES.keys())}")
-            metrics_to_compute = METRIC_PROFILES[profile]['metrics']
+            metrics_to_compute = METRIC_PROFILES[profile]["metrics"]
         else:
             # Default: all available metrics
             metrics_to_compute = self.backend.get_available_metrics()
 
         # Check for unsupported metrics
-        unsupported = {m: self.backend._unsupported_metrics[m] 
-                      for m in metrics_to_compute 
-                      if m in self.backend._unsupported_metrics}
+        unsupported = {
+            m: self.backend._unsupported_metrics[m]
+            for m in metrics_to_compute
+            if m in self.backend._unsupported_metrics
+        }
         if unsupported:
             if explicitly_requested:
                 # User explicitly requested unsupported metric - fail with error
@@ -145,7 +146,7 @@ class Metrix:
             num_replays=num_replays,
             aggregate_by_kernel=aggregate_by_kernel,
             kernel_filter=rocprof_filter,
-            cwd=cwd
+            cwd=cwd,
         )
         logger.debug("Backend.profile completed")
 
@@ -160,31 +161,21 @@ class Metrix:
         kernel_results = []
         for dispatch_key in dispatch_keys:
             # Get duration
-            duration = self.backend._aggregated[dispatch_key].get('duration_us')
+            duration = self.backend._aggregated[dispatch_key].get("duration_us")
 
             # Compute metrics
             computed_metrics = {}
             for metric in metrics_to_compute:
                 try:
-                    computed_metrics[metric] = self.backend.compute_metric_stats(
-                        dispatch_key, metric
-                    )
+                    computed_metrics[metric] = self.backend.compute_metric_stats(dispatch_key, metric)
                 except Exception as e:
                     logger.warning(f"Failed to compute {metric} for {dispatch_key}: {e}")
 
             # Create clean result object
-            kernel_result = KernelResults(
-                name=dispatch_key,
-                duration_us=duration,
-                metrics=computed_metrics
-            )
+            kernel_result = KernelResults(name=dispatch_key, duration_us=duration, metrics=computed_metrics)
             kernel_results.append(kernel_result)
 
-        return ProfilingResults(
-            command=command,
-            kernels=kernel_results,
-            total_kernels=len(kernel_results)
-        )
+        return ProfilingResults(command=command, kernels=kernel_results, total_kernels=len(kernel_results))
 
     def list_metrics(self, category: Optional[str] = None) -> List[str]:
         """
@@ -197,10 +188,7 @@ class Metrix:
             List of metric names
         """
         if category:
-            return [
-                name for name, defn in METRIC_CATALOG.items()
-                if defn['category'].value == category
-            ]
+            return [name for name, defn in METRIC_CATALOG.items() if defn["category"].value == category]
         return self.backend.get_available_metrics()
 
     def list_profiles(self) -> List[str]:

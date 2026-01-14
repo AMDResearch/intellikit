@@ -36,7 +36,7 @@ class GFX942Backend(CounterBackend):
             fp32_tflops=163.4,
             fp64_tflops=81.7,
             int8_tops=1307.4,
-            boost_clock_mhz=2100
+            boost_clock_mhz=2100,
         )
 
     def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
@@ -60,14 +60,14 @@ class GFX942Backend(CounterBackend):
     def _get_counter_block_limits(self) -> Dict[str, int]:
         """
         Return per-hardware-block counter limits for gfx942 (MI300X).
-        
+
         These limits define how many performance counters can be simultaneously
         collected from each hardware block in a single profiling pass.
-        
+
         Hardware blocks on MI300X:
         - SQ (Shader): Instruction counters (VALU, LDS, VMEM, etc.)
         - TA (Texture Addresser): Texture address operations
-        - TD (Texture Data): Texture data fetch operations  
+        - TD (Texture Data): Texture data fetch operations
         - TCP (Texture Cache per Pipe): L1 vector cache
         - TCC (Texture Cache Channel): L2 cache and memory controller
         - CPC (Command Processor - Compute): Compute command processing
@@ -75,25 +75,26 @@ class GFX942Backend(CounterBackend):
         - SPI (Shader Processor Input): Wavefront dispatch and scheduling
         - GRBM (Graphics Register Bus Manager): Global GPU activity
         - GDS (Global Data Share): Inter-workgroup communication
-        
+
         Returns:
             Dict mapping block_name -> max_counters_per_pass
         """
         return {
-            "SQ": 8,      # Shader - instruction counters
-            "TA": 2,      # Texture Addresser
-            "TD": 2,      # Texture Data
-            "TCP": 4,     # L1 Cache (Texture Cache per Pipe)
-            "TCC": 4,     # L2 Cache / Memory Controller
-            "CPC": 2,     # Command Processor - Compute
-            "CPF": 2,     # Command Processor - Fetch
-            "SPI": 6,     # Shader Processor Input
-            "GRBM": 2,    # Graphics Register Bus Manager
-            "GDS": 4,     # Global Data Share
+            "SQ": 8,  # Shader - instruction counters
+            "TA": 2,  # Texture Addresser
+            "TD": 2,  # Texture Data
+            "TCP": 4,  # L1 Cache (Texture Cache per Pipe)
+            "TCC": 4,  # L2 Cache / Memory Controller
+            "CPC": 2,  # Command Processor - Compute
+            "CPF": 2,  # Command Processor - Fetch
+            "SPI": 6,  # Shader Processor Input
+            "GRBM": 2,  # Graphics Register Bus Manager
+            "GDS": 4,  # Global Data Share
         }
 
-    def _run_rocprof(self, command: str, counters: List[str],
-                     kernel_filter: Optional[str] = None, cwd: Optional[str] = None) -> List[ProfileResult]:
+    def _run_rocprof(
+        self, command: str, counters: List[str], kernel_filter: Optional[str] = None, cwd: Optional[str] = None
+    ) -> List[ProfileResult]:
         """Run rocprofv3 and return results (single pass only - base class handles multi-pass)"""
         wrapper = ROCProfV3Wrapper(timeout=None)  # No timeout - profiling can take as long as it needs
         return wrapper.profile(command, counters, kernel_filter=kernel_filter, cwd=cwd)
@@ -143,8 +144,15 @@ class GFX942Backend(CounterBackend):
         return (bytes_written / 1e9) / time_seconds if time_seconds > 0 else 0.0
 
     @metric("memory.hbm_bandwidth_utilization")
-    def _hbm_bandwidth_utilization(self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum,
-                                   TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
+    def _hbm_bandwidth_utilization(
+        self,
+        TCC_EA0_RDREQ_sum,
+        TCC_EA0_RDREQ_32B_sum,
+        TCC_BUBBLE_sum,
+        TCC_EA0_WRREQ_sum,
+        TCC_EA0_WRREQ_64B_sum,
+        GRBM_GUI_ACTIVE,
+    ):
         """
         HBM bandwidth utilization as percentage of peak
 
@@ -154,9 +162,11 @@ class GFX942Backend(CounterBackend):
               TCC_BUBBLE_sum counts 128B read requests
         """
         # Calculate bytes with 32B/64B/128B distinction
-        bytes_read = (TCC_BUBBLE_sum * 128 + 
-                      (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64 +
-                      TCC_EA0_RDREQ_32B_sum * 32)
+        bytes_read = (
+            TCC_BUBBLE_sum * 128
+            + (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64
+            + TCC_EA0_RDREQ_32B_sum * 32
+        )
         bytes_written = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
         total_bytes = bytes_read + bytes_written
 
@@ -169,8 +179,9 @@ class GFX942Backend(CounterBackend):
         return (actual_bw_gbs / self.device_specs.hbm_bandwidth_gbs) * 100
 
     @metric("memory.bytes_transferred_hbm")
-    def _bytes_transferred_hbm(self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum,
-                               TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum):
+    def _bytes_transferred_hbm(
+        self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum, TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum
+    ):
         """
         Total bytes transferred through HBM
 
@@ -180,9 +191,11 @@ class GFX942Backend(CounterBackend):
         Note: TCC_EA0_* counters aggregate across all memory controllers on MI300
               TCC_BUBBLE_sum counts 128B read requests
         """
-        bytes_read = (TCC_BUBBLE_sum * 128 + 
-                      (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64 +
-                      TCC_EA0_RDREQ_32B_sum * 32)
+        bytes_read = (
+            TCC_BUBBLE_sum * 128
+            + (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64
+            + TCC_EA0_RDREQ_32B_sum * 32
+        )
         bytes_written = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
         return bytes_read + bytes_written
 
@@ -332,12 +345,25 @@ class GFX942Backend(CounterBackend):
     # Compute metrics
 
     @metric("compute.total_flops")
-    def _total_flops(self,
-                     SQ_INSTS_VALU_ADD_F16, SQ_INSTS_VALU_MUL_F16, SQ_INSTS_VALU_TRANS_F16, SQ_INSTS_VALU_FMA_F16,
-                     SQ_INSTS_VALU_ADD_F32, SQ_INSTS_VALU_MUL_F32, SQ_INSTS_VALU_TRANS_F32, SQ_INSTS_VALU_FMA_F32,
-                     SQ_INSTS_VALU_ADD_F64, SQ_INSTS_VALU_MUL_F64, SQ_INSTS_VALU_TRANS_F64, SQ_INSTS_VALU_FMA_F64,
-                     SQ_INSTS_VALU_MFMA_MOPS_F16, SQ_INSTS_VALU_MFMA_MOPS_BF16,
-                     SQ_INSTS_VALU_MFMA_MOPS_F32, SQ_INSTS_VALU_MFMA_MOPS_F64):
+    def _total_flops(
+        self,
+        SQ_INSTS_VALU_ADD_F16,
+        SQ_INSTS_VALU_MUL_F16,
+        SQ_INSTS_VALU_TRANS_F16,
+        SQ_INSTS_VALU_FMA_F16,
+        SQ_INSTS_VALU_ADD_F32,
+        SQ_INSTS_VALU_MUL_F32,
+        SQ_INSTS_VALU_TRANS_F32,
+        SQ_INSTS_VALU_FMA_F32,
+        SQ_INSTS_VALU_ADD_F64,
+        SQ_INSTS_VALU_MUL_F64,
+        SQ_INSTS_VALU_TRANS_F64,
+        SQ_INSTS_VALU_FMA_F64,
+        SQ_INSTS_VALU_MFMA_MOPS_F16,
+        SQ_INSTS_VALU_MFMA_MOPS_BF16,
+        SQ_INSTS_VALU_MFMA_MOPS_F32,
+        SQ_INSTS_VALU_MFMA_MOPS_F64,
+    ):
         """
         Total floating-point operations performed by the kernel
 
@@ -347,41 +373,39 @@ class GFX942Backend(CounterBackend):
         - MFMA instructions produce 512 operations per instruction
         """
         fops = 64 * (
-            (
-                SQ_INSTS_VALU_ADD_F16 +
-                SQ_INSTS_VALU_MUL_F16 +
-                SQ_INSTS_VALU_TRANS_F16 +
-                SQ_INSTS_VALU_FMA_F16 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F32 +
-                SQ_INSTS_VALU_MUL_F32 +
-                SQ_INSTS_VALU_TRANS_F32 +
-                SQ_INSTS_VALU_FMA_F32 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F64 +
-                SQ_INSTS_VALU_MUL_F64 +
-                SQ_INSTS_VALU_TRANS_F64 +
-                SQ_INSTS_VALU_FMA_F64 * 2
-            )
+            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
+            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
+            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
         ) + 512 * (
-            SQ_INSTS_VALU_MFMA_MOPS_F16 +
-            SQ_INSTS_VALU_MFMA_MOPS_BF16 +
-            SQ_INSTS_VALU_MFMA_MOPS_F32 +
-            SQ_INSTS_VALU_MFMA_MOPS_F64
+            SQ_INSTS_VALU_MFMA_MOPS_F16
+            + SQ_INSTS_VALU_MFMA_MOPS_BF16
+            + SQ_INSTS_VALU_MFMA_MOPS_F32
+            + SQ_INSTS_VALU_MFMA_MOPS_F64
         )
 
         return fops
 
     @metric("compute.hbm_gflops")
-    def _hbm_gflops(self,
-                    SQ_INSTS_VALU_ADD_F16, SQ_INSTS_VALU_MUL_F16, SQ_INSTS_VALU_TRANS_F16, SQ_INSTS_VALU_FMA_F16,
-                    SQ_INSTS_VALU_ADD_F32, SQ_INSTS_VALU_MUL_F32, SQ_INSTS_VALU_TRANS_F32, SQ_INSTS_VALU_FMA_F32,
-                    SQ_INSTS_VALU_ADD_F64, SQ_INSTS_VALU_MUL_F64, SQ_INSTS_VALU_TRANS_F64, SQ_INSTS_VALU_FMA_F64,
-                    SQ_INSTS_VALU_MFMA_MOPS_F16, SQ_INSTS_VALU_MFMA_MOPS_BF16,
-                    SQ_INSTS_VALU_MFMA_MOPS_F32, SQ_INSTS_VALU_MFMA_MOPS_F64,
-                    GRBM_GUI_ACTIVE):
+    def _hbm_gflops(
+        self,
+        SQ_INSTS_VALU_ADD_F16,
+        SQ_INSTS_VALU_MUL_F16,
+        SQ_INSTS_VALU_TRANS_F16,
+        SQ_INSTS_VALU_FMA_F16,
+        SQ_INSTS_VALU_ADD_F32,
+        SQ_INSTS_VALU_MUL_F32,
+        SQ_INSTS_VALU_TRANS_F32,
+        SQ_INSTS_VALU_FMA_F32,
+        SQ_INSTS_VALU_ADD_F64,
+        SQ_INSTS_VALU_MUL_F64,
+        SQ_INSTS_VALU_TRANS_F64,
+        SQ_INSTS_VALU_FMA_F64,
+        SQ_INSTS_VALU_MFMA_MOPS_F16,
+        SQ_INSTS_VALU_MFMA_MOPS_BF16,
+        SQ_INSTS_VALU_MFMA_MOPS_F32,
+        SQ_INSTS_VALU_MFMA_MOPS_F64,
+        GRBM_GUI_ACTIVE,
+    ):
         """
         Compute throughput (GFLOPS) normalized by kernel execution time
 
@@ -389,29 +413,14 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS (same as compute.total_flops)
         fops = 64 * (
-            (
-                SQ_INSTS_VALU_ADD_F16 +
-                SQ_INSTS_VALU_MUL_F16 +
-                SQ_INSTS_VALU_TRANS_F16 +
-                SQ_INSTS_VALU_FMA_F16 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F32 +
-                SQ_INSTS_VALU_MUL_F32 +
-                SQ_INSTS_VALU_TRANS_F32 +
-                SQ_INSTS_VALU_FMA_F32 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F64 +
-                SQ_INSTS_VALU_MUL_F64 +
-                SQ_INSTS_VALU_TRANS_F64 +
-                SQ_INSTS_VALU_FMA_F64 * 2
-            )
+            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
+            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
+            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
         ) + 512 * (
-            SQ_INSTS_VALU_MFMA_MOPS_F16 +
-            SQ_INSTS_VALU_MFMA_MOPS_BF16 +
-            SQ_INSTS_VALU_MFMA_MOPS_F32 +
-            SQ_INSTS_VALU_MFMA_MOPS_F64
+            SQ_INSTS_VALU_MFMA_MOPS_F16
+            + SQ_INSTS_VALU_MFMA_MOPS_BF16
+            + SQ_INSTS_VALU_MFMA_MOPS_F32
+            + SQ_INSTS_VALU_MFMA_MOPS_F64
         )
 
         if GRBM_GUI_ACTIVE == 0:
@@ -423,14 +432,30 @@ class GFX942Backend(CounterBackend):
         return gflops
 
     @metric("compute.hbm_arithmetic_intensity")
-    def _hbm_arithmetic_intensity(self,
-                                   SQ_INSTS_VALU_ADD_F16, SQ_INSTS_VALU_MUL_F16, SQ_INSTS_VALU_TRANS_F16, SQ_INSTS_VALU_FMA_F16,
-                                   SQ_INSTS_VALU_ADD_F32, SQ_INSTS_VALU_MUL_F32, SQ_INSTS_VALU_TRANS_F32, SQ_INSTS_VALU_FMA_F32,
-                                   SQ_INSTS_VALU_ADD_F64, SQ_INSTS_VALU_MUL_F64, SQ_INSTS_VALU_TRANS_F64, SQ_INSTS_VALU_FMA_F64,
-                                   SQ_INSTS_VALU_MFMA_MOPS_F16, SQ_INSTS_VALU_MFMA_MOPS_BF16,
-                                   SQ_INSTS_VALU_MFMA_MOPS_F32, SQ_INSTS_VALU_MFMA_MOPS_F64,
-                                   TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum,
-                                   TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum):
+    def _hbm_arithmetic_intensity(
+        self,
+        SQ_INSTS_VALU_ADD_F16,
+        SQ_INSTS_VALU_MUL_F16,
+        SQ_INSTS_VALU_TRANS_F16,
+        SQ_INSTS_VALU_FMA_F16,
+        SQ_INSTS_VALU_ADD_F32,
+        SQ_INSTS_VALU_MUL_F32,
+        SQ_INSTS_VALU_TRANS_F32,
+        SQ_INSTS_VALU_FMA_F32,
+        SQ_INSTS_VALU_ADD_F64,
+        SQ_INSTS_VALU_MUL_F64,
+        SQ_INSTS_VALU_TRANS_F64,
+        SQ_INSTS_VALU_FMA_F64,
+        SQ_INSTS_VALU_MFMA_MOPS_F16,
+        SQ_INSTS_VALU_MFMA_MOPS_BF16,
+        SQ_INSTS_VALU_MFMA_MOPS_F32,
+        SQ_INSTS_VALU_MFMA_MOPS_F64,
+        TCC_EA0_RDREQ_sum,
+        TCC_EA0_RDREQ_32B_sum,
+        TCC_BUBBLE_sum,
+        TCC_EA0_WRREQ_sum,
+        TCC_EA0_WRREQ_64B_sum,
+    ):
         """
         HBM Arithmetic Intensity: ratio of floating-point operations to HBM bytes transferred (FLOP/byte)
 
@@ -438,35 +463,22 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (
-                SQ_INSTS_VALU_ADD_F16 +
-                SQ_INSTS_VALU_MUL_F16 +
-                SQ_INSTS_VALU_TRANS_F16 +
-                SQ_INSTS_VALU_FMA_F16 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F32 +
-                SQ_INSTS_VALU_MUL_F32 +
-                SQ_INSTS_VALU_TRANS_F32 +
-                SQ_INSTS_VALU_FMA_F32 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F64 +
-                SQ_INSTS_VALU_MUL_F64 +
-                SQ_INSTS_VALU_TRANS_F64 +
-                SQ_INSTS_VALU_FMA_F64 * 2
-            )
+            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
+            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
+            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
         ) + 512 * (
-            SQ_INSTS_VALU_MFMA_MOPS_F16 +
-            SQ_INSTS_VALU_MFMA_MOPS_BF16 +
-            SQ_INSTS_VALU_MFMA_MOPS_F32 +
-            SQ_INSTS_VALU_MFMA_MOPS_F64
+            SQ_INSTS_VALU_MFMA_MOPS_F16
+            + SQ_INSTS_VALU_MFMA_MOPS_BF16
+            + SQ_INSTS_VALU_MFMA_MOPS_F32
+            + SQ_INSTS_VALU_MFMA_MOPS_F64
         )
 
         # Calculate HBM bytes (with 32B/64B/128B distinction)
-        hbm_rd = (TCC_BUBBLE_sum * 128 + 
-                  (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64 +
-                  TCC_EA0_RDREQ_32B_sum * 32)
+        hbm_rd = (
+            TCC_BUBBLE_sum * 128
+            + (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64
+            + TCC_EA0_RDREQ_32B_sum * 32
+        )
         hbm_wr = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
         hbm_bytes = hbm_rd + hbm_wr
 
@@ -476,13 +488,26 @@ class GFX942Backend(CounterBackend):
         return ai_hbm
 
     @metric("compute.l2_arithmetic_intensity")
-    def _l2_arithmetic_intensity(self,
-                                  SQ_INSTS_VALU_ADD_F16, SQ_INSTS_VALU_MUL_F16, SQ_INSTS_VALU_TRANS_F16, SQ_INSTS_VALU_FMA_F16,
-                                  SQ_INSTS_VALU_ADD_F32, SQ_INSTS_VALU_MUL_F32, SQ_INSTS_VALU_TRANS_F32, SQ_INSTS_VALU_FMA_F32,
-                                  SQ_INSTS_VALU_ADD_F64, SQ_INSTS_VALU_MUL_F64, SQ_INSTS_VALU_TRANS_F64, SQ_INSTS_VALU_FMA_F64,
-                                  SQ_INSTS_VALU_MFMA_MOPS_F16, SQ_INSTS_VALU_MFMA_MOPS_BF16,
-                                  SQ_INSTS_VALU_MFMA_MOPS_F32, SQ_INSTS_VALU_MFMA_MOPS_F64,
-                                  TCC_REQ_sum):
+    def _l2_arithmetic_intensity(
+        self,
+        SQ_INSTS_VALU_ADD_F16,
+        SQ_INSTS_VALU_MUL_F16,
+        SQ_INSTS_VALU_TRANS_F16,
+        SQ_INSTS_VALU_FMA_F16,
+        SQ_INSTS_VALU_ADD_F32,
+        SQ_INSTS_VALU_MUL_F32,
+        SQ_INSTS_VALU_TRANS_F32,
+        SQ_INSTS_VALU_FMA_F32,
+        SQ_INSTS_VALU_ADD_F64,
+        SQ_INSTS_VALU_MUL_F64,
+        SQ_INSTS_VALU_TRANS_F64,
+        SQ_INSTS_VALU_FMA_F64,
+        SQ_INSTS_VALU_MFMA_MOPS_F16,
+        SQ_INSTS_VALU_MFMA_MOPS_BF16,
+        SQ_INSTS_VALU_MFMA_MOPS_F32,
+        SQ_INSTS_VALU_MFMA_MOPS_F64,
+        TCC_REQ_sum,
+    ):
         """
         L2 Arithmetic Intensity: ratio of floating-point operations to L2 cache bytes accessed (FLOP/byte)
 
@@ -490,29 +515,14 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (
-                SQ_INSTS_VALU_ADD_F16 +
-                SQ_INSTS_VALU_MUL_F16 +
-                SQ_INSTS_VALU_TRANS_F16 +
-                SQ_INSTS_VALU_FMA_F16 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F32 +
-                SQ_INSTS_VALU_MUL_F32 +
-                SQ_INSTS_VALU_TRANS_F32 +
-                SQ_INSTS_VALU_FMA_F32 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F64 +
-                SQ_INSTS_VALU_MUL_F64 +
-                SQ_INSTS_VALU_TRANS_F64 +
-                SQ_INSTS_VALU_FMA_F64 * 2
-            )
+            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
+            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
+            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
         ) + 512 * (
-            SQ_INSTS_VALU_MFMA_MOPS_F16 +
-            SQ_INSTS_VALU_MFMA_MOPS_BF16 +
-            SQ_INSTS_VALU_MFMA_MOPS_F32 +
-            SQ_INSTS_VALU_MFMA_MOPS_F64
+            SQ_INSTS_VALU_MFMA_MOPS_F16
+            + SQ_INSTS_VALU_MFMA_MOPS_BF16
+            + SQ_INSTS_VALU_MFMA_MOPS_F32
+            + SQ_INSTS_VALU_MFMA_MOPS_F64
         )
 
         # Calculate L2 bytes (L2 cache line is 128 bytes)
@@ -524,13 +534,26 @@ class GFX942Backend(CounterBackend):
         return ai_l2
 
     @metric("compute.l1_arithmetic_intensity")
-    def _l1_arithmetic_intensity(self,
-                                  SQ_INSTS_VALU_ADD_F16, SQ_INSTS_VALU_MUL_F16, SQ_INSTS_VALU_TRANS_F16, SQ_INSTS_VALU_FMA_F16,
-                                  SQ_INSTS_VALU_ADD_F32, SQ_INSTS_VALU_MUL_F32, SQ_INSTS_VALU_TRANS_F32, SQ_INSTS_VALU_FMA_F32,
-                                  SQ_INSTS_VALU_ADD_F64, SQ_INSTS_VALU_MUL_F64, SQ_INSTS_VALU_TRANS_F64, SQ_INSTS_VALU_FMA_F64,
-                                  SQ_INSTS_VALU_MFMA_MOPS_F16, SQ_INSTS_VALU_MFMA_MOPS_BF16,
-                                  SQ_INSTS_VALU_MFMA_MOPS_F32, SQ_INSTS_VALU_MFMA_MOPS_F64,
-                                  TCP_TOTAL_CACHE_ACCESSES_sum):
+    def _l1_arithmetic_intensity(
+        self,
+        SQ_INSTS_VALU_ADD_F16,
+        SQ_INSTS_VALU_MUL_F16,
+        SQ_INSTS_VALU_TRANS_F16,
+        SQ_INSTS_VALU_FMA_F16,
+        SQ_INSTS_VALU_ADD_F32,
+        SQ_INSTS_VALU_MUL_F32,
+        SQ_INSTS_VALU_TRANS_F32,
+        SQ_INSTS_VALU_FMA_F32,
+        SQ_INSTS_VALU_ADD_F64,
+        SQ_INSTS_VALU_MUL_F64,
+        SQ_INSTS_VALU_TRANS_F64,
+        SQ_INSTS_VALU_FMA_F64,
+        SQ_INSTS_VALU_MFMA_MOPS_F16,
+        SQ_INSTS_VALU_MFMA_MOPS_BF16,
+        SQ_INSTS_VALU_MFMA_MOPS_F32,
+        SQ_INSTS_VALU_MFMA_MOPS_F64,
+        TCP_TOTAL_CACHE_ACCESSES_sum,
+    ):
         """
         L1 Arithmetic Intensity: ratio of floating-point operations to L1 cache bytes accessed (FLOP/byte)
 
@@ -538,29 +561,14 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (
-                SQ_INSTS_VALU_ADD_F16 +
-                SQ_INSTS_VALU_MUL_F16 +
-                SQ_INSTS_VALU_TRANS_F16 +
-                SQ_INSTS_VALU_FMA_F16 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F32 +
-                SQ_INSTS_VALU_MUL_F32 +
-                SQ_INSTS_VALU_TRANS_F32 +
-                SQ_INSTS_VALU_FMA_F32 * 2
-            ) +
-            (
-                SQ_INSTS_VALU_ADD_F64 +
-                SQ_INSTS_VALU_MUL_F64 +
-                SQ_INSTS_VALU_TRANS_F64 +
-                SQ_INSTS_VALU_FMA_F64 * 2
-            )
+            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
+            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
+            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
         ) + 512 * (
-            SQ_INSTS_VALU_MFMA_MOPS_F16 +
-            SQ_INSTS_VALU_MFMA_MOPS_BF16 +
-            SQ_INSTS_VALU_MFMA_MOPS_F32 +
-            SQ_INSTS_VALU_MFMA_MOPS_F64
+            SQ_INSTS_VALU_MFMA_MOPS_F16
+            + SQ_INSTS_VALU_MFMA_MOPS_BF16
+            + SQ_INSTS_VALU_MFMA_MOPS_F32
+            + SQ_INSTS_VALU_MFMA_MOPS_F64
         )
 
         # Calculate L1 bytes (L1 cache line is 128 bytes on gfx942)

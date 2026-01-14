@@ -53,9 +53,7 @@ def profile_command(args):
             mode = f"profile '{profile_name}'"
 
     # Check for unsupported metrics
-    unsupported = {m: backend._unsupported_metrics[m] 
-                  for m in metrics_to_compute 
-                  if m in backend._unsupported_metrics}
+    unsupported = {m: backend._unsupported_metrics[m] for m in metrics_to_compute if m in backend._unsupported_metrics}
     if unsupported:
         if explicitly_requested:
             # User explicitly requested unsupported metric via --metrics flag - fail with error
@@ -67,20 +65,18 @@ def profile_command(args):
         else:
             # Metrics from profile/category - filter and warn
             for metric_name, reason in unsupported.items():
-                logger.warning(
-                    f"Skipping '{metric_name}' (not supported on {backend.device_specs.arch}): {reason}"
-                )
+                logger.warning(f"Skipping '{metric_name}' (not supported on {backend.device_specs.arch}): {reason}")
             metrics_to_compute = [m for m in metrics_to_compute if m not in unsupported]
 
     # Log configuration
-    logger.info(f"{'='*80}")
+    logger.info(f"{'=' * 80}")
     logger.info(f"Metrix: {mode}")
     logger.info(f"Target: {args.target}")
     if args.num_replays > 1:
         logger.info(f"Replays: {args.num_replays}")
     if args.kernel:
         logger.info(f"Filter: {args.kernel}")
-    logger.info(f"{'='*80}")
+    logger.info(f"{'=' * 80}")
 
     # Build kernel filter (simple substring)
     kernel_filter = args.kernel if args.kernel else None
@@ -95,11 +91,12 @@ def profile_command(args):
             metrics=metrics_to_compute,
             num_replays=args.num_replays,
             aggregate_by_kernel=args.aggregate,
-            kernel_filter=kernel_filter
+            kernel_filter=kernel_filter,
         )
     except Exception as e:
         logger.error(f"Profiling failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -117,26 +114,21 @@ def profile_command(args):
         # Sort by average duration and take top K
         dispatch_durations = []
         for key in dispatch_keys:
-            duration_stats = backend._aggregated[key].get('duration_us')
+            duration_stats = backend._aggregated[key].get("duration_us")
             if duration_stats:
                 dispatch_durations.append((key, duration_stats.avg))
 
         dispatch_durations.sort(key=lambda x: x[1], reverse=True)
-        dispatch_keys = [key for key, _ in dispatch_durations[:args.top]]
+        dispatch_keys = [key for key, _ in dispatch_durations[: args.top]]
 
     # Compute metrics for each dispatch
     results = {}
     for dispatch_key in dispatch_keys:
-        results[dispatch_key] = {
-            'duration_us': backend._aggregated[dispatch_key].get('duration_us'),
-            'metrics': {}
-        }
+        results[dispatch_key] = {"duration_us": backend._aggregated[dispatch_key].get("duration_us"), "metrics": {}}
 
         for metric in metrics_to_compute:
             try:
-                results[dispatch_key]['metrics'][metric] = backend.compute_metric_stats(
-                    dispatch_key, metric
-                )
+                results[dispatch_key]["metrics"][metric] = backend.compute_metric_stats(dispatch_key, metric)
             except Exception as e:
                 logger.warning(f"Failed to compute {metric} for {dispatch_key}: {e}")
 
@@ -146,9 +138,9 @@ def profile_command(args):
         output_path = Path(args.output)
         ext = output_path.suffix.lower()
 
-        if ext == '.json':
+        if ext == ".json":
             _write_json_output(output_path, results, metrics_to_compute)
-        elif ext == '.csv':
+        elif ext == ".csv":
             _write_csv_output(output_path, results, metrics_to_compute, args.aggregate)
         else:
             # Default to text
@@ -166,42 +158,41 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
     """Print results to stdout in human-readable format"""
 
     # Group metrics by category
-    from ..metrics import METRIC_CATALOG
 
     categories = {}
     for metric in metrics:
         if metric in METRIC_CATALOG:
-            cat = METRIC_CATALOG[metric].get('category', 'other')
+            cat = METRIC_CATALOG[metric].get("category", "other")
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append(metric)
 
     # Category display names
     cat_names = {
-        'memory_bandwidth': 'MEMORY BANDWIDTH',
-        'memory_cache': 'CACHE PERFORMANCE',
-        'memory_coalescing': 'MEMORY COALESCING',
-        'memory_lds': 'LOCAL DATA SHARE (LDS)',
-        'memory_atomic': 'ATOMIC OPERATIONS',
+        "memory_bandwidth": "MEMORY BANDWIDTH",
+        "memory_cache": "CACHE PERFORMANCE",
+        "memory_coalescing": "MEMORY COALESCING",
+        "memory_lds": "LOCAL DATA SHARE (LDS)",
+        "memory_atomic": "ATOMIC OPERATIONS",
     }
 
     for dispatch_key, data in results.items():
-        print(f"\n{'─'*80}")
+        print(f"\n{'─' * 80}")
         if aggregated:
             print(f"Kernel: {dispatch_key}")
         else:
             # dispatch_key is like "dispatch_1:kernel_name"
-            parts = dispatch_key.split(':', 1)
+            parts = dispatch_key.split(":", 1)
             if len(parts) == 2:
-                dispatch_id = parts[0].replace('dispatch_', '')
+                dispatch_id = parts[0].replace("dispatch_", "")
                 kernel_name = parts[1]
                 print(f"Dispatch #{dispatch_id}: {kernel_name}")
             else:
                 print(f"Kernel: {dispatch_key}")
-        print(f"{'─'*80}")
+        print(f"{'─' * 80}")
 
         # Duration
-        duration = data.get('duration_us')
+        duration = data.get("duration_us")
         if duration:
             print(f"Duration: {duration.min:.2f} - {duration.max:.2f} μs (avg={duration.avg:.2f})")
 
@@ -209,11 +200,11 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
         for cat, cat_metrics in categories.items():
             print(f"\n{cat_names.get(cat, cat.upper())}:")
             for metric in cat_metrics:
-                if metric in data['metrics']:
-                    stats = data['metrics'][metric]
+                if metric in data["metrics"]:
+                    stats = data["metrics"][metric]
                     metric_def = METRIC_CATALOG[metric]
-                    name = metric_def['name']
-                    unit = metric_def.get('unit', '')
+                    name = metric_def["name"]
+                    unit = metric_def.get("unit", "")
 
                     # Log detailed stats at DEBUG level
                     logger.debug(f"  {name}: min={stats.min:.2f}, max={stats.max:.2f}, avg={stats.avg:.2f}")
@@ -228,23 +219,25 @@ def _write_json_output(output_path: Path, results: Dict, metrics: List[str]):
 
     for dispatch_key, data in results.items():
         json_data[dispatch_key] = {
-            'duration_us': {
-                'min': data['duration_us'].min,
-                'max': data['duration_us'].max,
-                'avg': data['duration_us'].avg,
-            } if data.get('duration_us') else None,
-            'metrics': {}
+            "duration_us": {
+                "min": data["duration_us"].min,
+                "max": data["duration_us"].max,
+                "avg": data["duration_us"].avg,
+            }
+            if data.get("duration_us")
+            else None,
+            "metrics": {},
         }
 
-        for metric, stats in data['metrics'].items():
-            json_data[dispatch_key]['metrics'][metric] = {
-                'min': stats.min,
-                'max': stats.max,
-                'avg': stats.avg,
-                'count': stats.count
+        for metric, stats in data["metrics"].items():
+            json_data[dispatch_key]["metrics"][metric] = {
+                "min": stats.min,
+                "max": stats.max,
+                "avg": stats.avg,
+                "count": stats.count,
             }
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(json_data, f, indent=2)
 
     logger.info(f"Results written to {output_path}")
@@ -252,32 +245,34 @@ def _write_json_output(output_path: Path, results: Dict, metrics: List[str]):
 
 def _write_csv_output(output_path: Path, results: Dict, metrics: List[str], aggregated: bool):
     """Write results to CSV file"""
-    with open(output_path, 'w', newline='') as f:
+    with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
 
         # Header
-        header = ['dispatch_key', 'duration_min_us', 'duration_max_us', 'duration_avg_us']
+        header = ["dispatch_key", "duration_min_us", "duration_max_us", "duration_avg_us"]
         for metric in metrics:
-            header.extend([
-                f'{metric}_min',
-                f'{metric}_max',
-                f'{metric}_avg',
-            ])
+            header.extend(
+                [
+                    f"{metric}_min",
+                    f"{metric}_max",
+                    f"{metric}_avg",
+                ]
+            )
         writer.writerow(header)
 
         # Data rows
         for dispatch_key, data in results.items():
             row = [dispatch_key]
 
-            duration = data.get('duration_us')
+            duration = data.get("duration_us")
             if duration:
                 row.extend([duration.min, duration.max, duration.avg])
             else:
                 row.extend([0, 0, 0])
 
             for metric in metrics:
-                if metric in data['metrics']:
-                    stats = data['metrics'][metric]
+                if metric in data["metrics"]:
+                    stats = data["metrics"][metric]
                     row.extend([stats.min, stats.max, stats.avg])
                 else:
                     row.extend([0, 0, 0])
@@ -292,7 +287,6 @@ def _write_text_output(output_path: Path, results: Dict, metrics: List[str], agg
     buffer = StringIO()
 
     # Redirect print to buffer
-    import sys
     old_stdout = sys.stdout
     sys.stdout = buffer
 
@@ -300,7 +294,7 @@ def _write_text_output(output_path: Path, results: Dict, metrics: List[str], agg
 
     sys.stdout = old_stdout
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(buffer.getvalue())
 
     logger.info(f"Results written to {output_path}")

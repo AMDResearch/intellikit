@@ -14,6 +14,7 @@ import subprocess
 import os
 from pathlib import Path
 
+
 def main():
     print("Tracing a simple HIP kernel...")
 
@@ -83,10 +84,10 @@ int main() {
     print(f"\nCaptured {len(trace)} kernel(s):")
 
     for kernel in trace:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Kernel: {kernel.name}")
         print(f"Signature: {kernel.signature}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         print(f"\nAssembly ({len(kernel.assembly)} instructions):")
         for i, asm_line in enumerate(kernel.assembly, 1):
@@ -104,15 +105,16 @@ int main() {
         else:
             print("  (No HIP source captured)")
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("Example completed!")
 
     # Also save to JSON for reference
     trace_file = output_dir / "hip_trace.json"
     trace.save(str(trace_file))
     print(f"Trace saved to {trace_file}")
-    
+
     return 0
+
 
 if __name__ == "__main__":
     exit(main())

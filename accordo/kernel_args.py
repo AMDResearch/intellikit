@@ -11,16 +11,13 @@ from .exceptions import AccordoError
 
 try:
     from kerneldb import KernelDB
+
     KERNELDB_AVAILABLE = True
 except ImportError:
     KERNELDB_AVAILABLE = False
 
 
-def extract_kernel_arguments(
-    binary_path: str,
-    kernel_name: str,
-    working_directory: str = "."
-) -> List[Tuple[str, str]]:
+def extract_kernel_arguments(binary_path: str, kernel_name: str, working_directory: str = ".") -> List[Tuple[str, str]]:
     """Extract kernel arguments from a compiled binary using kernelDB.
 
     Args:
@@ -40,8 +37,7 @@ def extract_kernel_arguments(
     """
     if not KERNELDB_AVAILABLE:
         raise AccordoError(
-            "kernelDB not available. Install it with: "
-            "pip install git+https://github.com/AMDResearch/kerneldb.git"
+            "kernelDB not available. Install it with: pip install git+https://github.com/AMDResearch/kerneldb.git"
         )
 
     # Resolve binary path
@@ -64,14 +60,12 @@ def extract_kernel_arguments(
 
         if not matching_kernels:
             raise AccordoError(
-                f"Kernel '{kernel_name}' not found in binary. "
-                f"Available kernels: {', '.join(available_kernels)}"
+                f"Kernel '{kernel_name}' not found in binary. Available kernels: {', '.join(available_kernels)}"
             )
 
         if len(matching_kernels) > 1:
             logging.warning(
-                f"Multiple kernels match '{kernel_name}': {matching_kernels}. "
-                f"Using first match: {matching_kernels[0]}"
+                f"Multiple kernels match '{kernel_name}': {matching_kernels}. Using first match: {matching_kernels[0]}"
             )
 
         matched_kernel = matching_kernels[0]
@@ -113,8 +107,7 @@ def list_available_kernels(binary_path: str, working_directory: str = ".") -> Li
     """
     if not KERNELDB_AVAILABLE:
         raise AccordoError(
-            "kernelDB not available. Install it with: "
-            "pip install git+https://github.com/AMDResearch/kerneldb.git"
+            "kernelDB not available. Install it with: pip install git+https://github.com/AMDResearch/kerneldb.git"
         )
 
     # Resolve binary path
