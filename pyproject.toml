@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 
 [build-system]
 requires = ["scikit-build-core>=0.3.3", "setuptools-scm>=8"]
@@ -22,9 +22,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/nexus"
-Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/blob/main/README.md"
+Homepage = "https://github.com/AMDResearch/intellikit"
+Repository = "https://github.com/AMDResearch/intellikit"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/README.md"
 
 [project.optional-dependencies]
 # Install individual tools (base dependencies are always included)
