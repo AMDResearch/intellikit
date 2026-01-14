@@ -18,7 +18,7 @@ requires-python = ">=3.8"
 
 dependencies = [
     "numpy",
-    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@508f7fcf7fbd88c9eb6850e9fdac2e41d24c399a"
+    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@c67ceefb548125c6ef9bc4042207f11fcb624c62"
 ]
 
 [project.urls]
