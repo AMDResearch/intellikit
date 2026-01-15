@@ -78,7 +78,7 @@ class Metrix:
         num_replays: int = 1,
         aggregate_by_kernel: bool = True,
         cwd: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: Optional[int] = 0,
     ) -> ProfilingResults:
         """
         Profile a command
@@ -92,7 +92,7 @@ class Metrix:
             num_replays: Number of times to replay/run the command (default: 1)
             aggregate_by_kernel: Aggregate dispatches by kernel name (default: True)
             cwd: Working directory for command execution (default: None)
-            timeout_seconds: Timeout in seconds for profiling (default: None, None or zero for no timeout)
+            timeout_seconds: Timeout in seconds for profiling (default: 0, zero or None for no timeout)
 
         Returns:
             ProfilingResults object with all collected data

@@ -367,6 +367,8 @@ class CounterBackend(ABC):
             command: Command to profile
             counters: List of hardware counter names to collect
             kernel_filter: Optional regex pattern to filter kernels
+            cwd: Optional working directory for command execution
+            timeout_seconds: Timeout in seconds for profiling (default: 0, zero or None for no timeout)
 
         Returns:
             List of ProfileResult objects

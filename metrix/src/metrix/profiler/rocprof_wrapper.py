@@ -39,13 +39,14 @@ class ROCProfV3Wrapper:
     def _check_rocprofv3(self):
         """Verify rocprofv3 is available"""
         try:
-            result = subprocess.run(["rocprofv3", "--help"], capture_output=True, timeout=self.timeout, text=True)
+            # Always use a fixed 5s timeout for the --help check, regardless of profiling timeout
+            result = subprocess.run(["rocprofv3", "--help"], capture_output=True, timeout=5, text=True)
             if result.returncode != 0:
                 raise RuntimeError("rocprofv3 not working correctly")
         except FileNotFoundError:
             raise RuntimeError("rocprofv3 not found. Is ROCm installed?")
         except subprocess.TimeoutExpired:
-            raise RuntimeError(f"rocprofv3 --help timed out after {self.timeout} seconds")
+            raise RuntimeError("rocprofv3 --help timed out after 5 seconds")
 
     def profile(
         self,
@@ -151,9 +152,9 @@ class ROCProfV3Wrapper:
             return results
 
         except subprocess.TimeoutExpired:
-            timeout_msg = f"{self.timeout} seconds" if self.timeout else "no timeout set"
-            logger.error(f"Profiling timed out after {timeout_msg}")
-            raise subprocess.TimeoutExpired(cmd=command, timeout=self.timeout if self.timeout else 0)
+            # This exception can only occur if self.timeout was set (not None)
+            logger.error(f"Profiling timed out after {self.timeout} seconds")
+            raise subprocess.TimeoutExpired(cmd=command, timeout=self.timeout)
 
         finally:
             # Cleanup temp directory if we created it

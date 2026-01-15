@@ -37,7 +37,7 @@ class TestROCProfV3Wrapper:
 
     @pytest.fixture
     def wrapper(self):
-        return ROCProfV3Wrapper(timeout=60)
+        return ROCProfV3Wrapper(timeout_seconds=60)
 
     def test_wrapper_creation(self, wrapper):
         """Wrapper can be created"""
