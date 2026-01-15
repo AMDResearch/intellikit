@@ -13,7 +13,12 @@ from pathlib import Path
 @pytest.fixture
 def vector_add_binary(tmp_path):
     """Compile vector_add kernel"""
-    source = Path(__file__).parent.parent.parent / "examples" / "01_vector_add" / "kernel.hip"
+    source = (
+        Path(__file__).parent.parent.parent
+        / "examples"
+        / "01_vector_add"
+        / "kernel.hip"
+    )
     binary = tmp_path / "vector_add"
 
     result = subprocess.run(
@@ -66,7 +71,9 @@ def test_all_memory_metrics_are_displayed(vector_add_binary):
         if metric not in output:
             missing_metrics.append(metric)
 
-    assert len(missing_metrics) == 0, f"Missing memory metrics: {missing_metrics}\n\nOutput:\n{output}"
+    assert (
+        len(missing_metrics) == 0
+    ), f"Missing memory metrics: {missing_metrics}\n\nOutput:\n{output}"
 
     print(f"✓ All {len(expected_memory_metrics)} memory metrics displayed successfully")
 
@@ -130,7 +137,9 @@ def test_all_compute_metrics_are_displayed(vector_add_binary):
         if metric not in output:
             missing_metrics.append(metric)
 
-    assert len(missing_metrics) == 0, f"Missing compute metrics: {missing_metrics}\n\nOutput:\n{output}"
+    assert (
+        len(missing_metrics) == 0
+    ), f"Missing compute metrics: {missing_metrics}\n\nOutput:\n{output}"
 
     print(f"✓ All {len(expected_compute_metrics)} compute metrics displayed successfully")
 

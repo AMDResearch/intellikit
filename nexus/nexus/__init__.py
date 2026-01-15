@@ -101,7 +101,10 @@ class Trace:
 
     def __init__(self, data: Dict[str, Any]):
         self._data = data
-        self._kernels = {name: Kernel(name, info) for name, info in data.get("kernels", {}).items()}
+        self._kernels = {
+            name: Kernel(name, info)
+            for name, info in data.get("kernels", {}).items()
+        }
 
     def __iter__(self) -> Iterator[Kernel]:
         """Iterate over all kernels."""
@@ -138,7 +141,7 @@ class Trace:
         Args:
             filepath: Path to save the JSON file
         """
-        with open(filepath, "w") as f:
+        with open(filepath, 'w') as f:
             json.dump(self._data, f, indent=2)
 
     def __repr__(self) -> str:
@@ -159,7 +162,9 @@ class Nexus:
         >>> print(vector_add.hip)
     """
 
-    def __init__(self, log_level: int = 1, extra_search_prefix: Optional[str] = None):
+    def __init__(self,
+                 log_level: int = 1,
+                 extra_search_prefix: Optional[str] = None):
         """
         Initialize Nexus tracer.
 
@@ -180,13 +185,11 @@ class Nexus:
 
         self._lib_path = lib_path
 
-    def run(
-        self,
-        command: List[str],
-        output: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        cwd: Optional[str] = None,
-    ) -> Trace:
+    def run(self,
+            command: List[str],
+            output: Optional[str] = None,
+            env: Optional[Dict[str, str]] = None,
+            cwd: Optional[str] = None) -> Trace:
         """
         Run a command with Nexus tracing and return kernel trace.
 
@@ -210,7 +213,6 @@ class Nexus:
         # Generate output filename if not provided
         if output is None:
             import tempfile
-
             fd, output = tempfile.mkstemp(suffix=".json", prefix="nexus_trace_")
             os.close(fd)
 
@@ -230,7 +232,13 @@ class Nexus:
             run_env.update(env)
 
         # Run the command
-        result = subprocess.run(command, env=run_env, cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(
+            command,
+            env=run_env,
+            cwd=cwd,
+            capture_output=True,
+            text=True
+        )
 
         # Check if command succeeded
         if result.returncode != 0:
@@ -238,7 +246,7 @@ class Nexus:
 
         # Load and return the trace data
         try:
-            with open(output, "r") as f:
+            with open(output, 'r') as f:
                 content = f.read().strip()
                 if not content:
                     # Empty file - no kernels were executed
@@ -267,7 +275,7 @@ class Nexus:
             >>> for kernel in trace:
             ...     print(kernel.name)
         """
-        with open(trace_file, "r") as f:
+        with open(trace_file, 'r') as f:
             data = json.load(f)
         return Trace(data)
 

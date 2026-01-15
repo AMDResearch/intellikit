@@ -11,7 +11,7 @@ def info_command(args):
 
     if args.info_type == "metric":
         # Get architecture from args if available, otherwise auto-detect
-        arch = getattr(args, "arch", None) or detect_or_default()
+        arch = getattr(args, 'arch', None) or detect_or_default()
         show_metric_info(args.name, arch)
     elif args.info_type == "profile":
         show_profile_info(args.name)
@@ -26,7 +26,7 @@ def show_metric_info(metric_name, arch="gfx942"):
 
     if metric_name not in METRIC_CATALOG:
         print(f"❌ Unknown metric: {metric_name}")
-        print("\nRun 'metrix list metrics' to see available metrics")
+        print(f"\nRun 'metrix list metrics' to see available metrics")
         return 1
 
     metric_def = METRIC_CATALOG[metric_name]
@@ -51,14 +51,14 @@ def show_metric_info(metric_name, arch="gfx942"):
         # Metric not implemented in this backend
         print(f"  ⚠️  Metric not implemented for {arch}")
         # Fall back to catalog's derived_from as documentation
-        if "derived_from" in metric_def:
-            print("\n  Conceptual counters (from catalog):")
-            for counter in metric_def["derived_from"]:
+        if 'derived_from' in metric_def:
+            print(f"\n  Conceptual counters (from catalog):")
+            for counter in metric_def['derived_from']:
                 print(f"    • {counter}")
 
-    if "interpretation" in metric_def:
-        print("\nInterpretation Guide:")
-        for level, interpretation_data in metric_def["interpretation"].items():
+    if 'interpretation' in metric_def:
+        print(f"\nInterpretation Guide:")
+        for level, interpretation_data in metric_def['interpretation'].items():
             if isinstance(interpretation_data, tuple) and len(interpretation_data) == 3:
                 low, high, desc = interpretation_data
                 print(f"  • {level.upper():10s}: {low}-{high}% - {desc}")
@@ -71,11 +71,11 @@ def show_metric_info(metric_name, arch="gfx942"):
             else:
                 print(f"  • {level.upper():10s}: {interpretation_data}")
 
-    if metric_def.get("device_specific"):
-        print("\n⚠️  Note: This metric requires device-specific constants")
+    if metric_def.get('device_specific'):
+        print(f"\n⚠️  Note: This metric requires device-specific constants")
 
-    if metric_def.get("requires_kernel_info"):
-        print("\n⚠️  Note: This metric requires kernel metadata")
+    if metric_def.get('requires_kernel_info'):
+        print(f"\n⚠️  Note: This metric requires kernel metadata")
 
 
 def show_profile_info(profile_name):
@@ -83,7 +83,7 @@ def show_profile_info(profile_name):
 
     if profile_name not in METRIC_PROFILES:
         print(f"❌ Unknown profile: {profile_name}")
-        print("\nRun 'metrix list profiles' to see available profiles")
+        print(f"\nRun 'metrix list profiles' to see available profiles")
         return 1
 
     profile_def = METRIC_PROFILES[profile_name]
@@ -95,19 +95,20 @@ def show_profile_info(profile_name):
     print(f"Description: {profile_def['description']}")
     print(f"Estimated collection passes: {profile_def['estimated_passes']}")
 
-    if "focus" in profile_def:
+    if 'focus' in profile_def:
         print(f"Focus area: {profile_def['focus']}")
 
     print(f"\nIncluded Metrics ({len(profile_def['metrics'])}):")
-    for i, metric in enumerate(profile_def["metrics"], 1):
+    for i, metric in enumerate(profile_def['metrics'], 1):
         metric_def = METRIC_CATALOG[metric]
         print(f"  {i:2d}. {metric}")
         print(f"      {metric_def['description']}")
 
-    if "typical_bottlenecks" in profile_def:
-        print("\nTypical Bottlenecks Detected:")
-        for bottleneck in profile_def["typical_bottlenecks"]:
+    if 'typical_bottlenecks' in profile_def:
+        print(f"\nTypical Bottlenecks Detected:")
+        for bottleneck in profile_def['typical_bottlenecks']:
             print(f"  • {bottleneck.replace('_', ' ').title()}")
 
-    print("\n💡 Usage:")
+    print(f"\n💡 Usage:")
     print(f"   metrix profile --profile {profile_name} ./my_app")
+

@@ -60,11 +60,15 @@ def split_counters_into_passes(
             passes.append(counters[i : i + max_per_pass])
 
         if logger is not None:
-            logger.info(f"Splitting {len(counters)} counters into {len(passes)} simple passes")
+            logger.info(
+                f"Splitting {len(counters)} counters into {len(passes)} simple passes"
+            )
         return passes
 
     if get_counter_block is None:
-        raise ValueError("get_counter_block must be provided when block_limits are specified")
+        raise ValueError(
+            "get_counter_block must be provided when block_limits are specified"
+        )
 
     # Organize counters by hardware block
     counters_by_block: Dict[str, List[str]] = defaultdict(list)
@@ -78,7 +82,9 @@ def split_counters_into_passes(
     # Greedy bin-packing algorithm:
     # For each pass, take as many counters from each block as the limit allows
     passes: List[List[str]] = []
-    remaining: Dict[str, List[str]] = {block: list(cntrs) for block, cntrs in counters_by_block.items()}
+    remaining: Dict[str, List[str]] = {
+        block: list(cntrs) for block, cntrs in counters_by_block.items()
+    }
 
     while any(remaining.values()):
         current_pass: List[str] = []
@@ -107,12 +113,18 @@ def split_counters_into_passes(
         if current_pass:
             passes.append(current_pass)
             if logger is not None:
-                logger.debug(f"Pass {len(passes)}: {len(current_pass)} counters, blocks: {dict(pass_block_count)}")
+                logger.debug(
+                    f"Pass {len(passes)}: {len(current_pass)} counters, "
+                    f"blocks: {dict(pass_block_count)}"
+                )
 
         # Remove blocks with no remaining counters
         remaining = {k: v for k, v in remaining.items() if v}
 
     if logger is not None:
-        logger.info(f"Packed {len(counters)} counters into {len(passes)} block-aware passes")
+        logger.info(
+            f"Packed {len(counters)} counters into {len(passes)} block-aware passes"
+        )
 
     return passes
+

@@ -157,9 +157,13 @@ def main():
         # Initialize Accordo validator for the reduce_sum kernel
         print("Step 2: Initializing Accordo validator...")
         print(f"  Binary: {baseline_bin}")
-        print("  Kernel: reduce_sum")
+        print(f"  Kernel: reduce_sum")
         try:
-            validator = Accordo(binary=str(baseline_bin), kernel_name="reduce_sum", working_directory=str(tmp_path))
+            validator = Accordo(
+                binary=str(baseline_bin),
+                kernel_name="reduce_sum",
+                working_directory=str(tmp_path)
+            )
             print(f"  Kernel arguments: {[f'{name}:{type}' for name, type in validator.kernel_args]}")
             print("  Validator ready")
         except Exception as e:
@@ -170,7 +174,10 @@ def main():
         # Capture baseline
         print("Step 3: Capturing baseline snapshot...")
         try:
-            baseline_snap = validator.capture_snapshot(binary=str(baseline_bin), timeout_seconds=30)
+            baseline_snap = validator.capture_snapshot(
+                binary=str(baseline_bin),
+                timeout_seconds=30
+            )
             print(f"  Captured: {len(baseline_snap.arrays)} arrays in {baseline_snap.execution_time_ms:.2f}ms")
         except Exception as e:
             print(f"Failed: {e}")
@@ -180,7 +187,10 @@ def main():
         # Capture optimized
         print("Step 4: Capturing optimized snapshot...")
         try:
-            optimized_snap = validator.capture_snapshot(binary=str(optimized_bin), timeout_seconds=30)
+            optimized_snap = validator.capture_snapshot(
+                binary=str(optimized_bin),
+                timeout_seconds=30
+            )
             print(f"  Captured: {len(optimized_snap.arrays)} arrays in {optimized_snap.execution_time_ms:.2f}ms")
         except Exception as e:
             print(f"Failed: {e}")

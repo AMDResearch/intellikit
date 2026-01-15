@@ -35,12 +35,11 @@ class GFX1201Backend(CounterBackend):
             fp32_tflops=1,
             fp64_tflops=1,
             int8_tops=1,
-            boost_clock_mhz=1,
+            boost_clock_mhz=1
         )
 
-    def _run_rocprof(
-        self, command: str, counters: List[str], kernel_filter: Optional[str] = None, cwd: Optional[str] = None
-    ) -> List[ProfileResult]:
+    def _run_rocprof(self, command: str, counters: List[str],
+                     kernel_filter: Optional[str] = None, cwd: Optional[str] = None) -> List[ProfileResult]:
         """Run rocprofv3 and return results"""
         wrapper = ROCProfV3Wrapper(timeout=None)  # No timeout - profiling can take as long as it needs
         return wrapper.profile(command, counters, kernel_filter=kernel_filter, cwd=cwd)
@@ -55,6 +54,7 @@ class GFX1201Backend(CounterBackend):
         Formula: (read_requests * 64 bytes) / (active_cycles / clock_freq)
         """
         return 0.0
+
 
     @metric("memory.hbm_write_bandwidth")
     def _hbm_write_bandwidth(self, GRBM_GUI_ACTIVE):

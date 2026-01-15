@@ -134,7 +134,11 @@ class TestUnsupportedMetrics:
         from metrix.backends import get_backend
 
         backend = get_backend("gfx90a")
-        metrics = ["memory.l2_hit_rate", "memory.atomic_latency", "memory.hbm_bandwidth_utilization"]
+        metrics = [
+            "memory.l2_hit_rate",
+            "memory.atomic_latency",
+            "memory.hbm_bandwidth_utilization"
+        ]
 
         filtered = [m for m in metrics if m not in backend._unsupported_metrics]
 
@@ -147,9 +151,15 @@ class TestUnsupportedMetrics:
         from metrix.backends import get_backend
 
         backend = get_backend("gfx90a")
-        metrics = ["memory.l2_hit_rate", "memory.atomic_latency", "compute.total_flops"]
+        metrics = [
+            "memory.l2_hit_rate",
+            "memory.atomic_latency",
+            "compute.total_flops"
+        ]
 
-        unsupported = {m: backend._unsupported_metrics[m] for m in metrics if m in backend._unsupported_metrics}
+        unsupported = {m: backend._unsupported_metrics[m] 
+                      for m in metrics 
+                      if m in backend._unsupported_metrics}
 
         # Only atomic_latency should be unsupported
         assert len(unsupported) == 1
@@ -165,7 +175,10 @@ class TestMetricComputation:
         from metrix.backends import get_backend
 
         backend = get_backend(arch)
-        backend._raw_data = {"TCC_HIT_sum": 0, "TCC_MISS_sum": 0}
+        backend._raw_data = {
+            'TCC_HIT_sum': 0,
+            'TCC_MISS_sum': 0
+        }
 
         # Should return 0.0, not raise ZeroDivisionError
         result = backend._l2_hit_rate()
@@ -178,8 +191,8 @@ class TestMetricComputation:
 
         backend = get_backend(arch)
         backend._raw_data = {
-            "TCC_HIT_sum": -100,  # Shouldn't happen in practice
-            "TCC_MISS_sum": 100,
+            'TCC_HIT_sum': -100,  # Shouldn't happen in practice
+            'TCC_MISS_sum': 100
         }
 
         # Should not crash
