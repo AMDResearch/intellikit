@@ -142,7 +142,11 @@ def main():
 
             # Create validator
             try:
-                validator = Accordo(binary=str(binary), kernel_name=kernel_base, working_directory=str(tmp_path))
+                validator = Accordo(
+                    binary=str(binary),
+                    kernel_name=kernel_base,
+                    working_directory=str(tmp_path)
+                )
                 print(f"  Arguments: {[f'{name}:{type}' for name, type in validator.kernel_args]}")
             except Exception as e:
                 print(f"  Failed to create validator: {e}")
@@ -164,7 +168,7 @@ def main():
             results[type_name] = result
 
             if result.is_valid:
-                print("  ✓ PASS - Arrays matched within tolerance")
+                print(f"  ✓ PASS - Arrays matched within tolerance")
             else:
                 print(f"  ✗ FAIL - {len(result.mismatches)} mismatch(es)")
             print()
@@ -203,3 +207,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted")
         sys.exit(1)
+

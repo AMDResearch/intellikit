@@ -16,3 +16,4 @@ class MetricCategory(str, Enum):
     COMPUTE = "compute"
     INSTRUCTION = "instruction"
     BOTTLENECK = "bottleneck"
+

@@ -35,14 +35,12 @@ def metric(name: str, unsupported_reason: Optional[str] = None):
     Returns:
         Decorated function that extracts counters and computes metric
     """
-
     def decorator(func: Callable) -> Callable:
         # Introspect function signature to find parameter names
         sig = inspect.signature(func)
         param_names = [
-            p.name
-            for p in sig.parameters.values()
-            if p.name != "self"  # Skip 'self' parameter
+            p.name for p in sig.parameters.values()
+            if p.name != 'self'  # Skip 'self' parameter
         ]
 
         # Parameter names ARE the hardware counter names!
@@ -52,7 +50,10 @@ def metric(name: str, unsupported_reason: Optional[str] = None):
             and passes them as kwargs to the original function
             """
             # Extract values for each counter parameter
-            kwargs = {counter: self._raw_data.get(counter, 0) for counter in param_names}
+            kwargs = {
+                counter: self._raw_data.get(counter, 0)
+                for counter in param_names
+            }
             return func(self, **kwargs)
 
         # Attach metadata for discovery
@@ -64,3 +65,4 @@ def metric(name: str, unsupported_reason: Optional[str] = None):
         return wrapper
 
     return decorator
+

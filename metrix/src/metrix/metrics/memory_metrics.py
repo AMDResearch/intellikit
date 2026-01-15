@@ -24,9 +24,9 @@ MEMORY_BANDWIDTH_METRICS = {
         # - MI300 (gfx942): TCC_EA0_RDREQ_sum, TCC_EA0_WRREQ_sum
         # - MI200 (gfx90a): TCC_EA_RDREQ_sum, TCC_EA_WRREQ_sum
         "derived_from": [
-            "TCC_EA_RDREQ_sum",  # Read requests to memory controller
-            "TCC_EA_WRREQ_sum",  # Write requests to memory controller
-            "GRBM_GUI_ACTIVE",  # GPU active cycles
+            "TCC_EA_RDREQ_sum",      # Read requests to memory controller
+            "TCC_EA_WRREQ_sum",      # Write requests to memory controller
+            "GRBM_GUI_ACTIVE"         # GPU active cycles
         ],
         "formula": """
             # Each request is 64 bytes
@@ -51,9 +51,10 @@ MEMORY_BANDWIDTH_METRICS = {
             "excellent": (80, 100, "Memory bandwidth is well utilized"),
             "good": (60, 80, "Good bandwidth utilization"),
             "fair": (40, 60, "Moderate bandwidth usage"),
-            "poor": (0, 40, "Low bandwidth utilization - may be compute bound or low occupancy"),
-        },
+            "poor": (0, 40, "Low bandwidth utilization - may be compute bound or low occupancy")
+        }
     },
+
     "memory.hbm_read_bandwidth": {
         "name": "HBM Read Bandwidth",
         "description": "Achieved read bandwidth from HBM in GB/s",
@@ -65,8 +66,9 @@ MEMORY_BANDWIDTH_METRICS = {
             time_ns = (GRBM_GUI_ACTIVE * 1000) / gpu_freq_mhz
             return bytes_read / time_ns
         """,
-        "device_specific": True,
+        "device_specific": True
     },
+
     "memory.hbm_write_bandwidth": {
         "name": "HBM Write Bandwidth",
         "description": "Achieved write bandwidth to HBM in GB/s",
@@ -78,8 +80,9 @@ MEMORY_BANDWIDTH_METRICS = {
             time_ns = (GRBM_GUI_ACTIVE * 1000) / gpu_freq_mhz
             return bytes_write / time_ns
         """,
-        "device_specific": True,
+        "device_specific": True
     },
+
     "memory.bytes_transferred_hbm": {
         "name": "Total HBM Bytes Transferred",
         "description": "Total bytes transferred through HBM (read + write)",
@@ -88,8 +91,9 @@ MEMORY_BANDWIDTH_METRICS = {
         "derived_from": ["TCC_EA_RDREQ_sum", "TCC_EA_WRREQ_sum"],
         "formula": """
             return (TCC_EA_RDREQ_sum + TCC_EA_WRREQ_sum) * 64
-        """,
+        """
     },
+
     "memory.bytes_transferred_l2": {
         "name": "Total L2 Bytes Transferred",
         "description": "Total bytes accessed through L2 cache",
@@ -99,8 +103,9 @@ MEMORY_BANDWIDTH_METRICS = {
         "formula": """
             # L2 cache line is 128 bytes
             return TCC_REQ_sum * 128
-        """,
+        """
     },
+
     "memory.bytes_transferred_l1": {
         "name": "Total L1 Bytes Transferred",
         "description": "Total bytes accessed through L1 cache",
@@ -110,8 +115,8 @@ MEMORY_BANDWIDTH_METRICS = {
         "formula": """
             # L1 cache line is 128 bytes on gfx942
             return TCP_TOTAL_CACHE_ACCESSES_sum * 128
-        """,
-    },
+        """
+    }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -135,9 +140,10 @@ CACHE_METRICS = {
             "excellent": (80, 100, "Excellent cache reuse"),
             "good": (60, 80, "Good cache efficiency"),
             "fair": (40, 60, "Moderate cache efficiency"),
-            "poor": (0, 40, "Poor cache reuse - data access patterns may need optimization"),
-        },
+            "poor": (0, 40, "Poor cache reuse - data access patterns may need optimization")
+        }
     },
+
     "memory.l1_hit_rate": {
         "name": "L1 Cache Hit Rate",
         "description": "Percentage of L1 (TCP) cache accesses that hit",
@@ -159,9 +165,10 @@ CACHE_METRICS = {
             "excellent": (70, 100, "Excellent L1 cache locality"),
             "good": (50, 70, "Good L1 cache usage"),
             "fair": (30, 50, "Moderate L1 cache efficiency"),
-            "poor": (0, 30, "Poor L1 cache utilization - check data locality"),
-        },
+            "poor": (0, 30, "Poor L1 cache utilization - check data locality")
+        }
     },
+
     "memory.l2_bandwidth": {
         "name": "L2 Cache Bandwidth Utilization",
         "description": "Percentage of peak L2 bandwidth utilized",
@@ -175,8 +182,8 @@ CACHE_METRICS = {
             peak_bw = device_specs['l2_bandwidth_gbs']
             return (achieved_bw / peak_bw) * 100
         """,
-        "device_specific": True,
-    },
+        "device_specific": True
+    }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -207,9 +214,10 @@ MEMORY_PATTERN_METRICS = {
             "excellent": (80, 100, "Excellent memory coalescing - threads access contiguous memory"),
             "good": (60, 80, "Good coalescing"),
             "fair": (40, 60, "Moderate coalescing - some optimization possible"),
-            "poor": (0, 40, "Poor coalescing - threads access scattered memory, causing many transactions"),
-        },
+            "poor": (0, 40, "Poor coalescing - threads access scattered memory, causing many transactions")
+        }
     },
+
     "memory.global_load_efficiency": {
         "name": "Global Load Efficiency",
         "description": "Ratio of requested global load bytes to actual bytes transferred",
@@ -226,8 +234,9 @@ MEMORY_PATTERN_METRICS = {
             # Each cache line is 64 bytes
             efficiency = (requested_cache_lines / actual_memory_transactions) * 100
             return min(100.0, efficiency)
-        """,
+        """
     },
+
     "memory.global_store_efficiency": {
         "name": "Global Store Efficiency",
         "description": "Ratio of requested global store bytes to actual bytes transferred",
@@ -243,8 +252,8 @@ MEMORY_PATTERN_METRICS = {
 
             efficiency = (requested_writes / actual_memory_writes) * 100
             return min(100.0, efficiency)
-        """,
-    },
+        """
+    }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -264,8 +273,9 @@ LDS_METRICS = {
             return (lds_used / lds_available) * 100
         """,
         "requires_kernel_info": True,
-        "device_specific": True,
+        "device_specific": True
     },
+
     "memory.lds_bank_conflicts": {
         "name": "LDS Bank Conflicts",
         "description": "Number of LDS bank conflicts per instruction",
@@ -281,9 +291,9 @@ LDS_METRICS = {
             "excellent": (0, 0.1, "No significant bank conflicts"),
             "good": (0.1, 0.3, "Low bank conflicts"),
             "fair": (0.3, 0.5, "Moderate bank conflicts"),
-            "poor": (0.5, float("inf"), "High bank conflicts - check LDS access patterns"),
-        },
-    },
+            "poor": (0.5, float('inf'), "High bank conflicts - check LDS access patterns")
+        }
+    }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -303,20 +313,16 @@ ATOMIC_METRICS = {
             return TCC_EA_ATOMIC_LEVEL_sum / TCC_EA_ATOMIC_sum
         """,
         "architecture_support": {
-            "gfx942": True,  # MI300X - supported
+            "gfx942": True,   # MI300X - supported
             "gfx90a": False,  # MI200 - counters broken
-            "gfx1201": False,  # Navi3x - not supported
+            "gfx1201": False  # Navi3x - not supported
         },
         "interpretation": {
             "excellent": (0, 50, "Very low latency - minimal atomic contention"),
             "good": (50, 100, "Acceptable atomic operation latency"),
             "fair": (100, 200, "Moderate atomic contention"),
-            "poor": (
-                200,
-                float("inf"),
-                "High atomic contention - consider reducing atomic operations or using different synchronization",
-            ),
-        },
+            "poor": (200, float('inf'), "High atomic contention - consider reducing atomic operations or using different synchronization")
+        }
     }
 }
 
@@ -329,5 +335,6 @@ MEMORY_METRICS = {
     **CACHE_METRICS,
     **MEMORY_PATTERN_METRICS,
     **LDS_METRICS,
-    **ATOMIC_METRICS,
+    **ATOMIC_METRICS
 }
+

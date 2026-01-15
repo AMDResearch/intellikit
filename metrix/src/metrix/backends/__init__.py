@@ -15,16 +15,9 @@ from .decorator import metric
 from .detect import detect_gpu_arch, detect_or_default
 
 __all__ = [
-    "CounterBackend",
-    "DeviceSpecs",
-    "ProfileResult",
-    "Statistics",
-    "GFX942Backend",
-    "GFX1201Backend",
-    "GFX90aBackend",
-    "metric",
-    "detect_gpu_arch",
-    "detect_or_default",
+    "CounterBackend", "DeviceSpecs", "ProfileResult", "Statistics",
+    "GFX942Backend", "GFX1201Backend", "GFX90aBackend", "metric", 
+    "detect_gpu_arch", "detect_or_default"
 ]
 
 
@@ -41,6 +34,9 @@ def get_backend(arch: str) -> CounterBackend:
 
     backend_class = backends.get(arch.lower())
     if backend_class is None:
-        raise ValueError(f"Unsupported architecture: {arch}. Supported: {', '.join(backends.keys())}")
+        raise ValueError(
+            f"Unsupported architecture: {arch}. "
+            f"Supported: {', '.join(backends.keys())}"
+        )
 
     return backend_class()

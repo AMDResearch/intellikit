@@ -64,7 +64,7 @@ if __name__ == "__main__":
 """
 
     # Write the script to a temporary file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
         f.write(triton_script)
         triton_file = Path(f.name)
 
@@ -85,11 +85,11 @@ if __name__ == "__main__":
 
         for idx, kernel in enumerate(trace, 1):
             # Filter out PyTorch internal kernels to focus on our Triton kernels
-            if "add_kernel" in kernel.name or "mul_kernel" in kernel.name:
-                print(f"\n{'=' * 80}")
+            if 'add_kernel' in kernel.name or 'mul_kernel' in kernel.name:
+                print(f"\n{'='*80}")
                 print(f"Kernel #{idx}: {kernel.name}")
                 print(f"Signature: {kernel.signature}")
-                print(f"{'=' * 80}")
+                print(f"{'='*80}")
 
                 print(f"\nAssembly ({len(kernel.assembly)} instructions):")
                 # Show first 10 and last 5 instructions for brevity
@@ -111,18 +111,17 @@ if __name__ == "__main__":
                 else:
                     print("  (No HIP source captured)")
 
-        print(f"\n{'=' * 80}")
+        print(f"\n{'='*80}")
         print("Example completed!")
 
         # Also save to JSON for reference
         trace.save("multiple_triton_trace.json")
-        print("Trace saved to multiple_triton_trace.json")
+        print(f"Trace saved to multiple_triton_trace.json")
         return 0
 
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         import traceback
-
         traceback.print_exc()
         return 1
 
@@ -134,3 +133,4 @@ if __name__ == "__main__":
 
 if __name__ == "__main__":
     sys.exit(main())
+

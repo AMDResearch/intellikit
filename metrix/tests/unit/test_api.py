@@ -68,24 +68,24 @@ class TestMetrixMetricListing:
         """Test getting metric information"""
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("memory.l2_hit_rate")
-        assert info["name"] == "L2 Cache Hit Rate"
-        assert info["unit"] == "percent"
+        assert info['name'] == "L2 Cache Hit Rate"
+        assert info['unit'] == "percent"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_compute_metric_info(self, arch):
         """Test getting compute metric information"""
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("compute.total_flops")
-        assert info["name"] == "Total FLOPS"
-        assert info["unit"] == "FLOPS"
+        assert info['name'] == "Total FLOPS"
+        assert info['unit'] == "FLOPS"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_arithmetic_intensity_info(self, arch):
         """Test getting arithmetic intensity metric information"""
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("compute.hbm_arithmetic_intensity")
-        assert info["name"] == "HBM Arithmetic Intensity"
-        assert info["unit"] == "FLOP/byte"
+        assert info['name'] == "HBM Arithmetic Intensity"
+        assert info['unit'] == "FLOP/byte"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_unknown_metric_raises(self, arch):
@@ -104,7 +104,9 @@ class TestKernelResults:
         metric_stats = Statistics(min=50.0, max=60.0, avg=55.0, count=3)
 
         result = KernelResults(
-            name="test_kernel", duration_us=duration_stats, metrics={"memory.l2_hit_rate": metric_stats}
+            name="test_kernel",
+            duration_us=duration_stats,
+            metrics={"memory.l2_hit_rate": metric_stats}
         )
 
         assert result.name == "test_kernel"
@@ -117,9 +119,17 @@ class TestProfilingResults:
 
     def test_create_profiling_results(self):
         """Test creating profiling results"""
-        kernel1 = KernelResults(name="kernel1", duration_us=Statistics(100.0, 100.0, 100.0, 1), metrics={})
+        kernel1 = KernelResults(
+            name="kernel1",
+            duration_us=Statistics(100.0, 100.0, 100.0, 1),
+            metrics={}
+        )
 
-        results = ProfilingResults(command="./test", kernels=[kernel1], total_kernels=1)
+        results = ProfilingResults(
+            command="./test",
+            kernels=[kernel1],
+            total_kernels=1
+        )
 
         assert results.command == "./test"
         assert len(results.kernels) == 1
@@ -145,15 +155,13 @@ class TestUnsupportedMetricsAPI:
         test_metrics = [
             "memory.l2_hit_rate",
             "memory.atomic_latency",  # Unsupported on gfx90a
-            "memory.hbm_bandwidth_utilization",
+            "memory.hbm_bandwidth_utilization"
         ]
 
         # Check unsupported
-        unsupported = {
-            m: profiler.backend._unsupported_metrics[m]
-            for m in test_metrics
-            if m in profiler.backend._unsupported_metrics
-        }
+        unsupported = {m: profiler.backend._unsupported_metrics[m] 
+                      for m in test_metrics 
+                      if m in profiler.backend._unsupported_metrics}
         assert "memory.atomic_latency" in unsupported
 
         # Filter supported
@@ -161,3 +169,4 @@ class TestUnsupportedMetricsAPI:
         assert "memory.atomic_latency" not in filtered
         assert "memory.l2_hit_rate" in filtered
         assert "memory.hbm_bandwidth_utilization" in filtered
+

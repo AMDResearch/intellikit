@@ -65,7 +65,9 @@ Examples:
         help="Use pre-defined metric profile (default: all metrics)",
     )
 
-    profile_group.add_argument("--metrics", "-m", help="Comma-separated list of metrics to collect")
+    profile_group.add_argument(
+        "--metrics", "-m", help="Comma-separated list of metrics to collect"
+    )
 
     profile_group.add_argument(
         "--time-only",
@@ -73,9 +75,13 @@ Examples:
         help="Only collect timing, no hardware counters",
     )
 
-    profile_parser.add_argument("--kernel", "-k", help="Filter kernels by name pattern (supports wildcards)")
+    profile_parser.add_argument(
+        "--kernel", "-k", help="Filter kernels by name pattern (supports wildcards)"
+    )
 
-    profile_parser.add_argument("--top", type=int, metavar="K", help="Show only top K slowest kernels")
+    profile_parser.add_argument(
+        "--top", type=int, metavar="K", help="Show only top K slowest kernels"
+    )
 
     profile_parser.add_argument(
         "--output",
@@ -99,7 +105,9 @@ Examples:
         help="Set logging level (default: warning)",
     )
 
-    profile_parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode - minimal output")
+    profile_parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Quiet mode - minimal output"
+    )
 
     profile_parser.add_argument(
         "--no-counters",
@@ -135,7 +143,9 @@ Examples:
         help="Type of items to list",
     )
 
-    list_parser.add_argument("--category", "-c", help="Filter by category (for metrics)")
+    list_parser.add_argument(
+        "--category", "-c", help="Filter by category (for metrics)"
+    )
 
     # Info command
     info_parser = subparsers.add_parser(
@@ -144,7 +154,9 @@ Examples:
         description="Show detailed information",
     )
 
-    info_subparsers = info_parser.add_subparsers(dest="info_type", help="Information type")
+    info_subparsers = info_parser.add_subparsers(
+        dest="info_type", help="Information type"
+    )
 
     metric_info = info_subparsers.add_parser("metric", help="Metric information")
     metric_info.add_argument("name", help="Metric name")
@@ -210,7 +222,6 @@ def main():
         # Show traceback if log level is debug
         if hasattr(args, "log") and args.log == "debug":
             import traceback
-
             traceback.print_exc()
         return 1
 

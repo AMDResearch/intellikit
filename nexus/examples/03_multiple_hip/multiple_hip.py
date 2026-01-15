@@ -79,21 +79,23 @@ int main() {
 """
 
     # Write to temporary files
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".cpp", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
         f.write(hip_code)
         cpp_file = Path(f.name)
 
-    exe_file = cpp_file.with_suffix("")
+    exe_file = cpp_file.with_suffix('')
 
     try:
         # 1. Compile the HIP code with debug symbols
-        print("Compiling HIP code...")
+        print(f"Compiling HIP code...")
         compile_result = subprocess.run(
-            ["hipcc", "-g", str(cpp_file), "-o", str(exe_file)], capture_output=True, text=True
+            ["hipcc", "-g", str(cpp_file), "-o", str(exe_file)],
+            capture_output=True,
+            text=True
         )
 
         if compile_result.returncode != 0:
-            print("ERROR: Compilation failed!")
+            print(f"ERROR: Compilation failed!")
             print(f"STDOUT: {compile_result.stdout}")
             print(f"STDERR: {compile_result.stderr}")
             return 1
@@ -114,10 +116,10 @@ int main() {
         print(f"Captured {len(trace)} kernel(s):")
 
         for idx, kernel in enumerate(trace, 1):
-            print(f"\n{'=' * 80}")
+            print(f"\n{'='*80}")
             print(f"Kernel #{idx}: {kernel.name}")
             print(f"Signature: {kernel.signature}")
-            print(f"{'=' * 80}")
+            print(f"{'='*80}")
 
             print(f"\nAssembly ({len(kernel.assembly)} instructions):")
             for i, asm_line in enumerate(kernel.assembly, 1):
@@ -137,23 +139,22 @@ int main() {
                 print("  (No HIP source captured)")
 
             if kernel.files:
-                print("\nSource Files:")
+                print(f"\nSource Files:")
                 unique_files = sorted(set(kernel.files))
                 for file in unique_files:
                     print(f"  - {file}")
 
-        print(f"\n{'=' * 80}")
+        print(f"\n{'='*80}")
         print("Example completed!")
 
         # Save to JSON for reference
         trace.save("multiple_hip_trace.json")
-        print("Trace saved to multiple_hip_trace.json")
+        print(f"Trace saved to multiple_hip_trace.json")
         return 0
 
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         import traceback
-
         traceback.print_exc()
         return 1
 
@@ -167,3 +168,4 @@ int main() {
 
 if __name__ == "__main__":
     sys.exit(main())
+
