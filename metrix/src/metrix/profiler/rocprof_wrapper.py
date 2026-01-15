@@ -18,7 +18,7 @@ from ..logger import logger
 class ROCProfV3Wrapper:
     """
     Clean wrapper around rocprofv3
-    - 60s timeout
+    - No timeout by default (configurable via timeout_seconds parameter)
     - Robust CSV parsing (using csv module, NOT regex)
     - Proper error handling
     - Multi-pass profiling when counter limit is exceeded
@@ -27,24 +27,26 @@ class ROCProfV3Wrapper:
     # Maximum counters per pass (conservative limit for gfx942/MI300)
     MAX_COUNTERS_PER_PASS = 14
 
-    def __init__(self, timeout: Optional[int] = 60):
+    def __init__(self, timeout_seconds: Optional[int] = 0):
         """
         Args:
-            timeout: Timeout in seconds for profiling (default 60s, None for no timeout)
+            timeout_seconds: Timeout in seconds for profiling (0 or None for no timeout)
         """
-        self.timeout = timeout
+        # Convert 0 to None for "no timeout" (subprocess.run treats 0 as immediate timeout)
+        self.timeout = None if timeout_seconds == 0 or timeout_seconds is None else timeout_seconds
         self._check_rocprofv3()
 
     def _check_rocprofv3(self):
         """Verify rocprofv3 is available"""
         try:
+            # Always use a fixed 5s timeout for the --help check, regardless of profiling timeout
             result = subprocess.run(["rocprofv3", "--help"], capture_output=True, timeout=5, text=True)
             if result.returncode != 0:
                 raise RuntimeError("rocprofv3 not working correctly")
         except FileNotFoundError:
             raise RuntimeError("rocprofv3 not found. Is ROCm installed?")
         except subprocess.TimeoutExpired:
-            raise RuntimeError("rocprofv3 --help timed out")
+            raise RuntimeError("rocprofv3 --help timed out after 5 seconds")
 
     def profile(
         self,
@@ -150,8 +152,9 @@ class ROCProfV3Wrapper:
             return results
 
         except subprocess.TimeoutExpired:
+            # This exception can only occur if self.timeout was set (not None)
             logger.error(f"Profiling timed out after {self.timeout} seconds")
-            raise subprocess.TimeoutExpired(cmd=command, timeout=self.timeout if self.timeout else 0)
+            raise subprocess.TimeoutExpired(cmd=command, timeout=self.timeout)
 
         finally:
             # Cleanup temp directory if we created it

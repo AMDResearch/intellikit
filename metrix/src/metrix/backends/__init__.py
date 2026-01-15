@@ -36,6 +36,7 @@ def get_backend(arch: str) -> CounterBackend:
         "gfx942": GFX942Backend,
         "mi300x": GFX942Backend,
         "mi300": GFX942Backend,
+        "gfx950": GFX942Backend,  # MI355X uses gfx942 backend
         "gfx1201": GFX1201Backend,
     }
 
