@@ -30,7 +30,9 @@ jobs:
           ref: ${{ github.head_ref }}
 
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: 'latest'
 
       - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
