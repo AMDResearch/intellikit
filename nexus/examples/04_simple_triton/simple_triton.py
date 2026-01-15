@@ -14,6 +14,7 @@ import tempfile
 import os
 from pathlib import Path
 
+
 def main():
     print("Tracing a simple Triton kernel...")
 
@@ -50,24 +51,24 @@ if __name__ == "__main__":
     print(f"Triton add completed. Output shape: {output.shape}")
 """
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix=".py", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write(triton_script_content)
         triton_file = Path(f.name)
 
     try:
         # 2. Use Nexus to run and trace the Triton script
         nexus = Nexus(log_level=1)  # Set log_level to 1 for info messages
-        print(f"\nRunning Triton script with Nexus...")
+        print("\nRunning Triton script with Nexus...")
         trace = nexus.run(["python3", str(triton_file)])
 
         # 3. Process and display the trace
         print(f"\nCaptured {len(trace)} kernel(s):")
 
         for kernel in trace:
-            print(f"\n{'='*80}")
+            print(f"\n{'=' * 80}")
             print(f"Kernel: {kernel.name}")
             print(f"Signature: {kernel.signature}")
-            print(f"{'='*80}")
+            print(f"{'=' * 80}")
 
             print(f"\nAssembly ({len(kernel.assembly)} instructions):")
             for i, asm_line in enumerate(kernel.assembly, 1):
@@ -85,12 +86,12 @@ if __name__ == "__main__":
             else:
                 print("  (No HIP source captured)")
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("Example completed!")
 
         # Also save to JSON for reference
         trace.save("triton_trace.json")
-        print(f"Trace saved to triton_trace.json")
+        print("Trace saved to triton_trace.json")
         return 0
 
     finally:
@@ -98,11 +99,12 @@ if __name__ == "__main__":
         if triton_file.exists():
             os.remove(triton_file)
 
+
 if __name__ == "__main__":
     try:
         exit(main())
     except ImportError as e:
-        if 'triton' in str(e).lower() or 'torch' in str(e).lower():
+        if "triton" in str(e).lower() or "torch" in str(e).lower():
             print("ERROR: This example requires PyTorch and Triton to be installed.")
             print("Install them with: pip install torch triton")
             exit(1)

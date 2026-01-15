@@ -10,4 +10,3 @@ from .profiler.engine import Profiler
 from .profiler.result import CollectionResult, KernelDispatch
 
 __all__ = ["Metrix", "Profiler", "CollectionResult", "KernelDispatch"]
-

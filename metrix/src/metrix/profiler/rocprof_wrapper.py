@@ -38,12 +38,7 @@ class ROCProfV3Wrapper:
     def _check_rocprofv3(self):
         """Verify rocprofv3 is available"""
         try:
-            result = subprocess.run(
-                ["rocprofv3", "--help"],
-                capture_output=True,
-                timeout=5,
-                text=True
-            )
+            result = subprocess.run(["rocprofv3", "--help"], capture_output=True, timeout=5, text=True)
             if result.returncode != 0:
                 raise RuntimeError("rocprofv3 not working correctly")
         except FileNotFoundError:
@@ -57,7 +52,7 @@ class ROCProfV3Wrapper:
         counters: List[str],
         output_dir: Optional[Path] = None,
         kernel_filter: Optional[str] = None,
-        cwd: Optional[str] = None
+        cwd: Optional[str] = None,
     ) -> List[ProfileResult]:
         """
         Profile a command with specified counters (single pass).
@@ -121,13 +116,7 @@ class ROCProfV3Wrapper:
             logger.debug(f"Timeout: {self.timeout}")
             logger.debug(f"CWD: {cwd}")
 
-            result = subprocess.run(
-                prof_cmd,
-                capture_output=True,
-                timeout=self.timeout,
-                text=True,
-                cwd=cwd
-            )
+            result = subprocess.run(prof_cmd, capture_output=True, timeout=self.timeout, text=True, cwd=cwd)
             logger.info("subprocess.run returned!")
 
             logger.info("subprocess.run returned successfully")
@@ -162,15 +151,13 @@ class ROCProfV3Wrapper:
 
         except subprocess.TimeoutExpired:
             logger.error(f"Profiling timed out after {self.timeout} seconds")
-            raise subprocess.TimeoutExpired(
-                cmd=command,
-                timeout=self.timeout if self.timeout else 0
-            )
+            raise subprocess.TimeoutExpired(cmd=command, timeout=self.timeout if self.timeout else 0)
 
         finally:
             # Cleanup temp directory if we created it
             if output_dir.name.startswith("metrix_"):
                 import shutil
+
                 shutil.rmtree(output_dir, ignore_errors=True)
 
     def _create_input_file(self, counters: List[str], output_dir: Path) -> Path:
@@ -184,7 +171,7 @@ class ROCProfV3Wrapper:
         # Let's use comma-separated on one line
         content = "pmc: " + " ".join(counters) + "\\n"
 
-        with open(input_file, 'w') as f:
+        with open(input_file, "w") as f:
             f.write(content)
 
         return input_file
@@ -218,33 +205,33 @@ class ROCProfV3Wrapper:
 
         dispatches = {}  # dispatch_id -> {kernel info, counters dict}
 
-        with open(csv_file, 'r') as f:
+        with open(csv_file, "r") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
                 try:
-                    dispatch_id = int(row['Dispatch_Id'])
+                    dispatch_id = int(row["Dispatch_Id"])
 
                     # Initialize dispatch entry if first time seeing it
                     if dispatch_id not in dispatches:
                         dispatches[dispatch_id] = {
-                            'kernel_name': row['Kernel_Name'],
-                            'agent_id': row['Agent_Id'],
-                            'start_ts': int(row['Start_Timestamp']),
-                            'end_ts': int(row['End_Timestamp']),
-                            'grid_size': int(row['Grid_Size']),
-                            'workgroup_size': int(row['Workgroup_Size']),
-                            'lds': int(row.get('LDS_Block_Size', 0)),
-                            'vgpr': int(row.get('VGPR_Count', 0)),
-                            'accum_vgpr': int(row.get('Accum_VGPR_Count', 0)),
-                            'sgpr': int(row.get('SGPR_Count', 0)),
-                            'counters': {}
+                            "kernel_name": row["Kernel_Name"],
+                            "agent_id": row["Agent_Id"],
+                            "start_ts": int(row["Start_Timestamp"]),
+                            "end_ts": int(row["End_Timestamp"]),
+                            "grid_size": int(row["Grid_Size"]),
+                            "workgroup_size": int(row["Workgroup_Size"]),
+                            "lds": int(row.get("LDS_Block_Size", 0)),
+                            "vgpr": int(row.get("VGPR_Count", 0)),
+                            "accum_vgpr": int(row.get("Accum_VGPR_Count", 0)),
+                            "sgpr": int(row.get("SGPR_Count", 0)),
+                            "counters": {},
                         }
 
                     # Add counter value
-                    counter_name = row['Counter_Name']
-                    counter_value = float(row['Counter_Value'])
-                    dispatches[dispatch_id]['counters'][counter_name] = counter_value
+                    counter_name = row["Counter_Name"]
+                    counter_value = float(row["Counter_Value"])
+                    dispatches[dispatch_id]["counters"][counter_name] = counter_value
 
                 except (KeyError, ValueError) as e:
                     print(f"Warning: Failed to parse row: {e}: {row}")
@@ -255,23 +242,23 @@ class ROCProfV3Wrapper:
         for dispatch_id, dispatch_data in dispatches.items():
             # Convert grid/workgroup size to tuple format (x, 1, 1)
             # rocprofv3 reports total threads, we'll put it in x dimension
-            grid_size = (dispatch_data['grid_size'], 1, 1)
-            workgroup_size = (dispatch_data['workgroup_size'], 1, 1)
+            grid_size = (dispatch_data["grid_size"], 1, 1)
+            workgroup_size = (dispatch_data["workgroup_size"], 1, 1)
 
-            duration_ns = dispatch_data['end_ts'] - dispatch_data['start_ts']
+            duration_ns = dispatch_data["end_ts"] - dispatch_data["start_ts"]
 
             result = ProfileResult(
                 dispatch_id=dispatch_id,
-                kernel_name=dispatch_data['kernel_name'],
-                gpu_id=dispatch_data['agent_id'],
+                kernel_name=dispatch_data["kernel_name"],
+                gpu_id=dispatch_data["agent_id"],
                 duration_ns=duration_ns,
                 grid_size=grid_size,
                 workgroup_size=workgroup_size,
-                counters=dispatch_data['counters'],
-                lds_per_workgroup=dispatch_data['lds'],
-                arch_vgpr=dispatch_data['vgpr'],
-                accum_vgpr=dispatch_data['accum_vgpr'],
-                sgpr=dispatch_data['sgpr']
+                counters=dispatch_data["counters"],
+                lds_per_workgroup=dispatch_data["lds"],
+                arch_vgpr=dispatch_data["vgpr"],
+                accum_vgpr=dispatch_data["accum_vgpr"],
+                sgpr=dispatch_data["sgpr"],
             )
             results.append(result)
 
@@ -284,17 +271,17 @@ class ROCProfV3Wrapper:
         """
         dispatches = {}
 
-        with open(csv_file, 'r') as f:
+        with open(csv_file, "r") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
                 try:
                     # Extract basic info
-                    kernel_name = row['Kernel_Name']
-                    start_ts = int(row['Start_Timestamp'])
-                    end_ts = int(row['End_Timestamp'])
-                    grid_size_val = int(row.get('Grid_Size', 0))
-                    workgroup_size_val = int(row.get('Workgroup_Size', 256))
+                    kernel_name = row["Kernel_Name"]
+                    start_ts = int(row["Start_Timestamp"])
+                    end_ts = int(row["End_Timestamp"])
+                    grid_size_val = int(row.get("Grid_Size", 0))
+                    workgroup_size_val = int(row.get("Workgroup_Size", 256))
 
                     # Create unique dispatch ID
                     dispatch_id = len(dispatches)
@@ -307,7 +294,7 @@ class ROCProfV3Wrapper:
                         duration_ns=end_ts - start_ts,
                         grid_size=(grid_size_val, 1, 1),
                         workgroup_size=(workgroup_size_val, 1, 1),
-                        counters={}  # No counters in timing-only mode
+                        counters={},  # No counters in timing-only mode
                     )
                     dispatches[dispatch_id] = result
 
@@ -324,37 +311,48 @@ class ROCProfV3Wrapper:
         """
 
         # Extract basic info
-        dispatch_id = int(row['Dispatch_ID'])
-        kernel_name = row['Kernel_Name']
-        gpu_id = int(row['GPU_ID'])
+        dispatch_id = int(row["Dispatch_ID"])
+        kernel_name = row["Kernel_Name"]
+        gpu_id = int(row["GPU_ID"])
 
         # Parse timing (start/end timestamps)
-        start_ts = int(row['Start_Timestamp'])
-        end_ts = int(row['End_Timestamp'])
+        start_ts = int(row["Start_Timestamp"])
+        end_ts = int(row["End_Timestamp"])
         duration_ns = end_ts - start_ts
 
         # Parse grid/workgroup sizes
         # Format: "x,y,z" or "x y z" - handle both
-        grid_str = row['Grid_Size'].replace(',', ' ')
+        grid_str = row["Grid_Size"].replace(",", " ")
         grid_parts = grid_str.split()
         grid_size = tuple(int(x) for x in grid_parts[:3])
 
-        wg_str = row['Workgroup_Size'].replace(',', ' ')
+        wg_str = row["Workgroup_Size"].replace(",", " ")
         wg_parts = wg_str.split()
         workgroup_size = tuple(int(x) for x in wg_parts[:3])
 
         # Parse kernel resources
-        lds_per_wg = int(row.get('LDS_Per_Workgroup', 0))
-        arch_vgpr = int(row.get('Arch_VGPR', 0))
-        accum_vgpr = int(row.get('Accum_VGPR', 0))
-        sgpr = int(row.get('SGPR', 0))
+        lds_per_wg = int(row.get("LDS_Per_Workgroup", 0))
+        arch_vgpr = int(row.get("Arch_VGPR", 0))
+        accum_vgpr = int(row.get("Accum_VGPR", 0))
+        sgpr = int(row.get("SGPR", 0))
 
         # Extract all counter values
         # Skip known metadata columns
         metadata_cols = {
-            'Dispatch_ID', 'Kernel_Name', 'GPU_ID', 'Grid_Size', 'Workgroup_Size',
-            'LDS_Per_Workgroup', 'Scratch_Per_Workitem', 'Arch_VGPR', 'Accum_VGPR',
-            'SGPR', 'wave_size', 'obj', 'Start_Timestamp', 'End_Timestamp'
+            "Dispatch_ID",
+            "Kernel_Name",
+            "GPU_ID",
+            "Grid_Size",
+            "Workgroup_Size",
+            "LDS_Per_Workgroup",
+            "Scratch_Per_Workitem",
+            "Arch_VGPR",
+            "Accum_VGPR",
+            "SGPR",
+            "wave_size",
+            "obj",
+            "Start_Timestamp",
+            "End_Timestamp",
         }
 
         counters = {}
@@ -378,6 +376,5 @@ class ROCProfV3Wrapper:
             lds_per_workgroup=lds_per_wg,
             arch_vgpr=arch_vgpr,
             accum_vgpr=accum_vgpr,
-            sgpr=sgpr
+            sgpr=sgpr,
         )
-
