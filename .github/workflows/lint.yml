@@ -35,7 +35,7 @@ jobs:
         run: ruff check --fix
 
       - name: Run ruff format
-      - run: ruff format
+        run: ruff format
 
       - name: Fail if formatting changes are needed
         run: |
