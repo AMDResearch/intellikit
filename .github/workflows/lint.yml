@@ -15,6 +15,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+    ROCM_VERSION: 7.1.1
+    AMDGPU_INSTALLER_VERSION: 7.1.1.70101-1
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -28,6 +32,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+
+      - name: Install ROCm Dev
+        run: |
+          wget https://repo.radeon.com/amdgpu-install/${{ env.ROCM_VERSION }}/ubuntu/noble/amdgpu-install_${{ env.AMDGPU_INSTALLER_VERSION }}_all.deb
+          apt-get -y install ./amdgpu-install_${{ env.AMDGPU_INSTALLER_VERSION }}_all.deb &&
+          apt-get update -qq &&
+          apt-get -y install rocm-dev rocm-llvm-dev
+          echo "/opt/rocm/bin" >> $GITHUB_PATH
+          echo "ROCM_PATH=/opt/rocm" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/opt/rocm/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          apt-get autoclean
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
