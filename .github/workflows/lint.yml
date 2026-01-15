@@ -15,10 +15,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-    ROCM_VERSION: 7.1.1
-    AMDGPU_INSTALLER_VERSION: 7.1.1.70101-1
-
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -33,35 +29,13 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
 
-      - name: Install ROCm Dev
-        run: |
-          wget https://repo.radeon.com/amdgpu-install/${{ env.ROCM_VERSION }}/ubuntu/noble/amdgpu-install_${{ env.AMDGPU_INSTALLER_VERSION }}_all.deb
-          sudo apt-get -y install ./amdgpu-install_${{ env.AMDGPU_INSTALLER_VERSION }}_all.deb &&
-          sudo apt-get update -qq &&
-          sudo apt-get -y install rocm-dev rocm-llvm-dev &&
-          sudo apt-get autoclean
-          echo "/opt/rocm/bin" >> $GITHUB_PATH
-          echo "ROCM_PATH=/opt/rocm" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=/opt/rocm/lib:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: 'latest'
-
-      - name: Set up Python
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get -y install libdwarf-dev
-          uv sync --all-extras --dev
+      - uses: astral-sh/ruff-action@v3
 
       - name: Run ruff check
         run: ruff check --fix
 
       - name: Run ruff format
-        run: ruff format
+      - run: ruff format
 
       - name: Fail if formatting changes are needed
         run: |
