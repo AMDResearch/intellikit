@@ -232,6 +232,7 @@ class CounterBackend(ABC):
         aggregate_by_kernel: bool = False,
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
+        timeout_seconds: Optional[int] = 0,
     ):
         """
         Profile command with two-level aggregation and multi-pass support
@@ -245,6 +246,8 @@ class CounterBackend(ABC):
             num_replays: Number of times to replay/run the command
             aggregate_by_kernel: If True, merge dispatches with same kernel name
             kernel_filter: Regex pattern to filter kernels at rocprofv3 level
+            cwd: Working directory for command execution
+            timeout_seconds: Timeout in seconds for profiling (default: 0, None for no timeout)
 
         Returns:
             self (for chaining)
@@ -269,7 +272,7 @@ class CounterBackend(ABC):
 
             pass_results = []
             for replay_id in range(num_replays):
-                results = self._run_rocprof(command, pass_counters, kernel_filter, cwd=cwd)
+                results = self._run_rocprof(command, pass_counters, kernel_filter, cwd=cwd, timeout_seconds=timeout_seconds)
                 # Tag with replay_id for debugging
                 for r in results:
                     r.run_id = replay_id
@@ -355,7 +358,7 @@ class CounterBackend(ABC):
 
     @abstractmethod
     def _run_rocprof(
-        self, command: str, counters: List[str], kernel_filter: Optional[str] = None
+        self, command: str, counters: List[str], kernel_filter: Optional[str] = None, cwd: Optional[str] = None, timeout_seconds: Optional[int] = 0
     ) -> List[ProfileResult]:
         """
         Run rocprofv3 and return results
