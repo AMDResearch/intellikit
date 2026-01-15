@@ -160,9 +160,9 @@ def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, pr
         logging.debug(f"Opened IPC Ptr: {ptr} (0x{ptr:x})")
 
         # Strip type qualifiers (restrict, const, volatile) and type specifiers (struct, union, class, enum)
-		    words_to_strip = ("restrict", "const", "volatile", "struct", "union", "class", "enum")
-		    arg_type = " ".join(word for word in arg.split() if word not in words_to_strip)
-		    logging.debug(f"arg_type (after stripping qualifiers and specifiers): {arg_type}")
+        words_to_strip = ("restrict", "const", "volatile", "struct", "union", "class", "enum")
+        arg_type = " ".join(word for word in arg.split() if word not in words_to_strip)
+        logging.debug(f"arg_type (after stripping qualifiers and specifiers): {arg_type}")
 
         if arg_type in type_map:
             dtype = type_map[arg_type]
