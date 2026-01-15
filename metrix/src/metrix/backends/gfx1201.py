@@ -5,9 +5,10 @@ Each metric is defined with @metric decorator.
 """
 
 from .base import CounterBackend, DeviceSpecs, ProfileResult
+from ..utils.common import split_counters_into_passes
 from .decorator import metric
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 class GFX1201Backend(CounterBackend):
@@ -37,7 +38,25 @@ class GFX1201Backend(CounterBackend):
             boost_clock_mhz=2420,  # From rocminfo
         )
 
-    def _get_counter_block_limits(self):
+    def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
+        """
+        Group counters into passes using RDNA3-specific block limits.
+
+        This keeps the hardware-specific knowledge (block limits and naming)
+        in the gfx1201 backend while reusing the generic helper from
+        `common.py` for the actual bin-packing.
+        """
+        from ..logger import logger
+
+        block_limits = self._get_counter_block_limits()
+        return split_counters_into_passes(
+            counters,
+            block_limits=block_limits,
+            get_counter_block=self._get_counter_block,
+            logger=logger,
+        )
+
+    def _get_counter_block_limits(self) -> Dict[str, int]:
         """
         Return per-hardware-block counter limits for gfx1201 (RDNA3).
         
@@ -74,21 +93,22 @@ class GFX1201Backend(CounterBackend):
     # Memory bandwidth metrics
 
     @metric("memory.hbm_read_bandwidth")
-    def _hbm_read_bandwidth(self, GL2C_EA_RDREQ_128B_sum, GL2C_EA_RDREQ_64B_sum, GL2C_EA_RDREQ_32B_sum, GRBM_GUI_ACTIVE):
+    def _hbm_read_bandwidth(self, GL2C_MISS_sum, GRBM_GUI_ACTIVE):
         """
-        Memory read bandwidth in GB/s
+        Memory read bandwidth in GB/s (estimated from L2 misses)
 
-        Formula: (128B_req * 128 + 64B_req * 64 + 32B_req * 32) / time_seconds
+        Formula: (L2_misses * 128 bytes) / time_seconds
         
         Counters:
-        - GL2C_EA_RDREQ_128B_sum: Number of 128-byte read requests
-        - GL2C_EA_RDREQ_64B_sum: Number of 64-byte read requests
-        - GL2C_EA_RDREQ_32B_sum: Number of 32-byte read requests
+        - GL2C_MISS_sum: L2 cache misses (go to memory)
         - GRBM_GUI_ACTIVE: Number of active GPU cycles
+        
+        Note: GL2C_EA_RDREQ counters return zero on gfx1201 (RDNA3).
+        Using L2 misses as proxy - misses trigger memory reads.
+        This underestimates true bandwidth as it doesn't include writes.
         """
-        bytes_read = (GL2C_EA_RDREQ_128B_sum * 128 + 
-                     GL2C_EA_RDREQ_64B_sum * 64 + 
-                     GL2C_EA_RDREQ_32B_sum * 32)
+        # L2 misses go to memory (128-byte cache lines)
+        bytes_read = GL2C_MISS_sum * 128
         
         if GRBM_GUI_ACTIVE == 0:
             return 0.0
@@ -96,71 +116,56 @@ class GFX1201Backend(CounterBackend):
         time_seconds = GRBM_GUI_ACTIVE / (self.device_specs.base_clock_mhz * 1e6)
         return (bytes_read / 1e9) / time_seconds if time_seconds > 0 else 0.0
 
-    @metric("memory.hbm_write_bandwidth")
-    def _hbm_write_bandwidth(self, GL2C_EA_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
+    @metric("memory.hbm_write_bandwidth", unsupported_reason="GL2C_EA_WRREQ counters return zero on gfx1201 (RDNA3)")
+    def _hbm_write_bandwidth(self):
         """
         Memory write bandwidth in GB/s
 
-        Formula: (write_requests * 64 bytes) / time_seconds
-        
-        Counters:
-        - GL2C_EA_WRREQ_64B_sum: Number of 64-byte write requests
-        - GRBM_GUI_ACTIVE: Number of active GPU cycles
-        
-        Note: RDNA3 primarily uses 64B write granularity
+        Note: GL2C_EA_WRREQ_64B_sum returns zero on gfx1201 (RDNA3).
+        No reliable proxy available from L2 cache counters for write bandwidth.
         """
-        bytes_written = GL2C_EA_WRREQ_64B_sum * 64
-        
-        if GRBM_GUI_ACTIVE == 0:
-            return 0.0
-        
-        time_seconds = GRBM_GUI_ACTIVE / (self.device_specs.base_clock_mhz * 1e6)
-        return (bytes_written / 1e9) / time_seconds if time_seconds > 0 else 0.0
+        return 0.0
 
     @metric("memory.hbm_bandwidth_utilization")
-    def _hbm_bandwidth_utilization(self, GL2C_EA_RDREQ_128B_sum, GL2C_EA_RDREQ_64B_sum, 
-                                   GL2C_EA_RDREQ_32B_sum, GL2C_EA_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
+    def _hbm_bandwidth_utilization(self, GL2C_MISS_sum, GRBM_GUI_ACTIVE):
         """
-        Memory bandwidth utilization as percentage of peak
+        Memory bandwidth utilization as percentage of peak (estimated from L2 misses)
 
-        Formula: ((read_bw + write_bw) / peak_bandwidth) * 100
+        Formula: ((L2_miss_traffic) / peak_bandwidth) * 100
         
         Counters:
-        - GL2C_EA_RDREQ_*: Read requests at different granularities
-        - GL2C_EA_WRREQ_64B_sum: 64-byte write requests
+        - GL2C_MISS_sum: L2 cache misses (go to memory)
         - GRBM_GUI_ACTIVE: Number of active GPU cycles
+        
+        Note: GL2C_EA read/write request counters return zero on gfx1201 (RDNA3).
+        Using L2 misses as proxy - each miss transfers 128 bytes from memory.
+        This provides a lower bound estimate (doesn't include write-backs).
         """
-        bytes_read = (GL2C_EA_RDREQ_128B_sum * 128 + 
-                     GL2C_EA_RDREQ_64B_sum * 64 + 
-                     GL2C_EA_RDREQ_32B_sum * 32)
-        bytes_written = GL2C_EA_WRREQ_64B_sum * 64
-        total_bytes = bytes_read + bytes_written
+        # L2 misses trigger memory reads (128-byte cache lines)
+        bytes_from_memory = GL2C_MISS_sum * 128
         
         if GRBM_GUI_ACTIVE == 0:
             return 0.0
         
         time_seconds = GRBM_GUI_ACTIVE / (self.device_specs.base_clock_mhz * 1e6)
-        actual_bandwidth = (total_bytes / 1e9) / time_seconds if time_seconds > 0 else 0.0
+        actual_bandwidth = (bytes_from_memory / 1e9) / time_seconds if time_seconds > 0 else 0.0
         
         return (actual_bandwidth / self.device_specs.hbm_bandwidth_gbs) * 100
 
     @metric("memory.bytes_transferred_hbm")
-    def _bytes_transferred_hbm(self, GL2C_EA_RDREQ_128B_sum, GL2C_EA_RDREQ_64B_sum, 
-                               GL2C_EA_RDREQ_32B_sum, GL2C_EA_WRREQ_64B_sum):
+    def _bytes_transferred_hbm(self, GL2C_MISS_sum):
         """
-        Total bytes transferred through memory
+        Total bytes transferred from memory (estimated from L2 misses)
 
-        Formula: (read_bytes + write_bytes)
+        Formula: L2_misses * 128 bytes
         
         Counters:
-        - GL2C_EA_RDREQ_*: Read requests at different granularities
-        - GL2C_EA_WRREQ_64B_sum: 64-byte write requests
+        - GL2C_MISS_sum: L2 cache misses (each triggers 128-byte read from memory)
+        
+        Note: GL2C_EA read/write request counters return zero on gfx1201 (RDNA3).
+        Using L2 misses as proxy. This counts read traffic only (misses).
         """
-        bytes_read = (GL2C_EA_RDREQ_128B_sum * 128 + 
-                     GL2C_EA_RDREQ_64B_sum * 64 + 
-                     GL2C_EA_RDREQ_32B_sum * 32)
-        bytes_written = GL2C_EA_WRREQ_64B_sum * 64
-        return bytes_read + bytes_written
+        return GL2C_MISS_sum * 128
 
     @metric("memory.bytes_transferred_l2")
     def _bytes_transferred_l2(self, GL2C_HIT_sum, GL2C_MISS_sum):
