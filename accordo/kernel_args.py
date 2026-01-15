@@ -72,7 +72,7 @@ def extract_kernel_arguments(binary_path: str, kernel_name: str, working_directo
         logging.info(f"Extracting arguments from kernel: {matched_kernel}")
 
         # Extract arguments using kernelDB
-        kdb_args = kdb.get_kernel_arguments(matched_kernel)
+        kdb_args = kdb.get_kernel_arguments(matched_kernel, resolve_typedefs=True)
 
         if not kdb_args:
             raise AccordoError(
