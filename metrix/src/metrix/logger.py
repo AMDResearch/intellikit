@@ -40,4 +40,3 @@ class MetrixLogger:
 
 # Global logger instance
 logger = MetrixLogger()
-
