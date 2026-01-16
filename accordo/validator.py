@@ -449,8 +449,7 @@ class Accordo:
         # Create mapping from array index to kernel arg index (only for output args)
         # Arrays list contains only outputs, but kernel_args contains all arguments
         output_arg_indices = [
-            i for i, (arg_name, arg_type) in enumerate(self.kernel_args)
-            if "*" in arg_type and "const" not in arg_type
+            i for i, (arg_name, arg_type) in enumerate(self.kernel_args) if "*" in arg_type and "const" not in arg_type
         ]
 
         for array_idx, (ref_arr, opt_arr) in enumerate(zip(reference_arrays, optimized_arrays)):
@@ -472,7 +471,9 @@ class Accordo:
                 )
                 mismatches.append(mismatch)
 
-                logging.debug(f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - NOT close")
+                logging.debug(
+                    f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - NOT close"
+                )
                 logging.debug(f"  Max difference: {mismatch.max_difference}")
                 logging.debug(f"  Mean difference: {mismatch.mean_difference}")
             else:
