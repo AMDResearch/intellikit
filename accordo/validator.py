@@ -446,14 +446,23 @@ class Accordo:
         mismatches = []
         matched_arrays = {}
 
-        for i, (ref_arr, opt_arr) in enumerate(zip(reference_arrays, optimized_arrays)):
-            arg_name, arg_type = self.kernel_args[i]
+        # Create mapping from array index to kernel arg index (only for output args)
+        # Arrays list contains only outputs, but kernel_args contains all arguments
+        output_arg_indices = [
+            i for i, (arg_name, arg_type) in enumerate(self.kernel_args)
+            if "*" in arg_type and "const" not in arg_type
+        ]
+
+        for array_idx, (ref_arr, opt_arr) in enumerate(zip(reference_arrays, optimized_arrays)):
+            # Map array index to the correct kernel argument index
+            kernel_arg_idx = output_arg_indices[array_idx]
+            arg_name, arg_type = self.kernel_args[kernel_arg_idx]
 
             if not _validate_arrays(ref_arr, opt_arr, tolerance):
                 # Array mismatch
                 diff = np.abs(ref_arr - opt_arr)
                 mismatch = ArrayMismatch(
-                    arg_index=i,
+                    arg_index=kernel_arg_idx,  # Use kernel arg index, not array index
                     arg_name=arg_name,
                     arg_type=arg_type,
                     max_difference=float(np.max(diff)),
@@ -463,17 +472,17 @@ class Accordo:
                 )
                 mismatches.append(mismatch)
 
-                logging.debug(f"Arrays at index {i} for arg '{arg_name}' ({arg_type}) are NOT close.")
+                logging.debug(f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - NOT close")
                 logging.debug(f"  Max difference: {mismatch.max_difference}")
                 logging.debug(f"  Mean difference: {mismatch.mean_difference}")
             else:
                 # Array matched
                 matched_arrays[arg_name] = {
-                    "index": i,
+                    "index": kernel_arg_idx,  # Use kernel arg index
                     "type": arg_type,
                     "size": len(ref_arr),
                 }
-                logging.debug(f"Arrays at index {i} for arg '{arg_name}' ({arg_type}) are close.")
+                logging.debug(f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - MATCH")
 
         # Determine overall success
         is_valid = len(mismatches) == 0
