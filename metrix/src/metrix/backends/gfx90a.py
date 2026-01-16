@@ -93,7 +93,12 @@ class GFX90aBackend(CounterBackend):
         }
 
     def _run_rocprof(
-        self, command: str, counters: List[str], kernel_filter: Optional[str] = None, cwd: Optional[str] = None, timeout_seconds: Optional[int] = 0
+        self,
+        command: str,
+        counters: List[str],
+        kernel_filter: Optional[str] = None,
+        cwd: Optional[str] = None,
+        timeout_seconds: Optional[int] = 0,
     ) -> List[ProfileResult]:
         """Run rocprofv3 and return results (single pass only - base class handles multi-pass)"""
         wrapper = ROCProfV3Wrapper(timeout_seconds=timeout_seconds)
