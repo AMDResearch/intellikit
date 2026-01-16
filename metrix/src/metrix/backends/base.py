@@ -272,7 +272,9 @@ class CounterBackend(ABC):
 
             pass_results = []
             for replay_id in range(num_replays):
-                results = self._run_rocprof(command, pass_counters, kernel_filter, cwd=cwd, timeout_seconds=timeout_seconds)
+                results = self._run_rocprof(
+                    command, pass_counters, kernel_filter, cwd=cwd, timeout_seconds=timeout_seconds
+                )
                 # Tag with replay_id for debugging
                 for r in results:
                     r.run_id = replay_id
@@ -358,7 +360,12 @@ class CounterBackend(ABC):
 
     @abstractmethod
     def _run_rocprof(
-        self, command: str, counters: List[str], kernel_filter: Optional[str] = None, cwd: Optional[str] = None, timeout_seconds: Optional[int] = 0
+        self,
+        command: str,
+        counters: List[str],
+        kernel_filter: Optional[str] = None,
+        cwd: Optional[str] = None,
+        timeout_seconds: Optional[int] = 0,
     ) -> List[ProfileResult]:
         """
         Run rocprofv3 and return results

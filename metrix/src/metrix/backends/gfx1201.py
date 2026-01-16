@@ -75,16 +75,21 @@ class GFX1201Backend(CounterBackend):
             Dict mapping block_name -> max_counters_per_pass
         """
         return {
-            "SQ": 8,      # Shader Queue - wave and instruction counters
-            "SQC": 4,     # Shader Queue Cache - LDS and instruction cache
-            "TA": 2,      # Texture Addresser
-            "TCP": 4,     # L0 Cache (Texture Cache per Pipe)
-            "GL2C": 4,    # L2 Cache / Memory Controller
-            "GRBM": 2,    # Graphics Register Bus Manager
+            "SQ": 8,  # Shader Queue - wave and instruction counters
+            "SQC": 4,  # Shader Queue Cache - LDS and instruction cache
+            "TA": 2,  # Texture Addresser
+            "TCP": 4,  # L0 Cache (Texture Cache per Pipe)
+            "GL2C": 4,  # L2 Cache / Memory Controller
+            "GRBM": 2,  # Graphics Register Bus Manager
         }
 
     def _run_rocprof(
-        self, command: str, counters: List[str], kernel_filter: Optional[str] = None, cwd: Optional[str] = None, timeout_seconds: Optional[int] = 0
+        self,
+        command: str,
+        counters: List[str],
+        kernel_filter: Optional[str] = None,
+        cwd: Optional[str] = None,
+        timeout_seconds: Optional[int] = 0,
     ) -> List[ProfileResult]:
         """Run rocprofv3 and return results"""
         wrapper = ROCProfV3Wrapper(timeout_seconds=timeout_seconds)
@@ -276,7 +281,10 @@ class GFX1201Backend(CounterBackend):
             return 0.0
         return (TA_TOTAL_WAVEFRONTS_sum / tcp_total_accesses) * 100
 
-    @metric("memory.global_load_efficiency", unsupported_reason="Requires instruction-level counters not available in current YAML configs")
+    @metric(
+        "memory.global_load_efficiency",
+        unsupported_reason="Requires instruction-level counters not available in current YAML configs",
+    )
     def _global_load_efficiency(self):
         """
         Global load efficiency - ratio of requested vs fetched memory
@@ -288,7 +296,10 @@ class GFX1201Backend(CounterBackend):
         """
         return 0.0
 
-    @metric("memory.global_store_efficiency", unsupported_reason="Requires instruction-level counters not available in current YAML configs")
+    @metric(
+        "memory.global_store_efficiency",
+        unsupported_reason="Requires instruction-level counters not available in current YAML configs",
+    )
     def _global_store_efficiency(self):
         """
         Global store efficiency - ratio of requested vs written memory
