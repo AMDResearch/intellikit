@@ -88,6 +88,27 @@ for kernel in results.kernels:
     print(f"Memory BW: {kernel.metrics['memory.hbm_bandwidth_utilization'].avg:.1f}%")
 ```
 
+### [Linex](linex/) - Source-Level GPU Performance Profiling
+Maps GPU performance metrics to your source code lines.
+
+**Use cases:**
+- Identify performance hotspots at source code granularity
+- Understand cycle-level timing for each line of code
+- Analyze stall patterns and execution bottlenecks
+
+**Quick example:**
+```python
+from linex import Linex
+
+profiler = Linex()
+profiler.profile("./my_app", kernel_filter="my_kernel")
+
+# Show hotspots
+for line in profiler.source_lines[:5]:
+    print(f"{line.file}:{line.line_number}")
+    print(f"  {line.total_cycles:,} cycles ({line.stall_percent:.1f}% stalled)")
+```
+
 ## Installation
 
 ### Install All Tools
@@ -96,7 +117,7 @@ for kernel in results.kernels:
 pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[all]"
 ```
 
-This installs: `nexus`, `accordo`, and `metrix`
+This installs: `nexus`, `accordo`, `metrix`, and `linex`
 
 ### Install Individual Tools
 
@@ -111,6 +132,9 @@ pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[accordo
 
 # Metrix only
 pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[metrix]"
+
+# Linex only
+pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[linex]"
 
 # Multiple tools
 pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[nexus,metrix]"
@@ -129,12 +153,13 @@ pip install -e ".[all]"
 pip install -e ".[nexus]"
 pip install -e ".[accordo]"
 pip install -e ".[metrix]"
+pip install -e ".[linex]"
 ```
 
 ## Requirements
 
 - **Python**: >= 3.8 (3.9+ for metrix)
-- **ROCm**: >= 6.0 (tested on 6.3.2)
+- **ROCm**: >= 6.0 (7.0+ for linex)
 - **Hardware**: MI300+ GPUs
 
 ## Documentation
@@ -143,6 +168,7 @@ Each tool has its own detailed documentation:
 - [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
 - [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
 - [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
+- [Linex Documentation](linex/README.md) + [Examples](linex/examples/)
 
 
 ## Example Workflow

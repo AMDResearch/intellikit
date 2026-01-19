@@ -31,6 +31,7 @@ Documentation = "https://github.com/AMDResearch/intellikit/blob/main/README.md"
 nexus = []
 accordo = []
 metrix = ["pandas>=1.5.0"]
+linex = []
 
 # Install all tools
 all = ["pandas>=1.5.0"]
@@ -42,8 +43,8 @@ dev = [
 
 [tool.scikit-build]
 cmake.build-type = "Release"
-# Install all three packages with their correct paths
-wheel.packages = ["nexus/nexus", "accordo", "metrix/src/metrix"]
+# Install all packages with their correct paths
+wheel.packages = ["nexus/nexus", "accordo", "metrix/src/metrix", "linex/src/linex"]
 wheel.py-api = "cp38"
 
 [tool.scikit-build.cmake.define]
