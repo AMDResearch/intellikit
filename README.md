@@ -1,8 +1,6 @@
 <div align="center">
-  <img src="docs/intellikit.svg" alt="IntelliKit" width="400"/>
-</div>
 
-<div align="center">
+![Intellikit Logo](./docs/intellikit.svg)
 
 # IntelliKit
 
@@ -15,20 +13,24 @@ IntelliKit is a collection of intelligent tools designed to make GPU kernel deve
 ## Philosophy
 
 Traditional GPU profiling and analysis tools expose raw hardware counters and assembly. IntelliKit tools are designed to:
+
 - **Decode complexity**: Turn hardware metrics into human-readable insights
 - **Enable LLM integration**: Provide clean APIs suitable for LLM-driven workflows (MCP-ready)
 
 ## Tools
 
 ### [Nexus](nexus/) - HSA Packet Source Code Extractor
+
 Intercepts GPU kernel launches and extracts source code + assembly from HSA packets.
 
 **Use cases:**
+
 - Understand what code actually runs on the GPU
 - Debug kernel compilation and optimization
 - Trace HIP, Triton, and other GPU frameworks
 
 **Quick example:**
+
 ```python
 from nexus import Nexus
 
@@ -41,14 +43,17 @@ for kernel in trace:
 ```
 
 ### [Accordo](accordo/) - Automated Kernel Validation
+
 Side-by-side correctness validation for GPU kernel optimizations.
 
 **Use cases:**
+
 - Verify optimized kernels match reference implementation
 - Compare performance while ensuring correctness
 - Snapshot-based testing for multiple optimization candidates
 
 **Quick example:**
+
 ```python
 from accordo import Accordo
 
@@ -69,14 +74,17 @@ print(result.summary())  # Shows validation results
 ```
 
 ### [Metrix](metrix/) - Human-Readable GPU Metrics
+
 Decodes hardware counters into actionable performance insights.
 
 **Use cases:**
+
 - Profile GPU kernels with clean, understandable metrics
 - Identify memory bandwidth bottlenecks
 - Analyze compute utilization patterns
 
 **Quick example:**
+
 ```python
 from metrix import Metrix
 
@@ -89,14 +97,17 @@ for kernel in results.kernels:
 ```
 
 ### [Linex](linex/) - Source-Level GPU Performance Profiling
+
 Maps GPU performance metrics to your source code lines.
 
 **Use cases:**
+
 - Identify performance hotspots at source code granularity
 - Understand cycle-level timing for each line of code
 - Analyze stall patterns and execution bottlenecks
 
 **Quick example:**
+
 ```python
 from linex import Linex
 
@@ -165,11 +176,11 @@ pip install -e ".[linex]"
 ## Documentation
 
 Each tool has its own detailed documentation:
+
 - [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
 - [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
 - [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
 - [Linex Documentation](linex/README.md) + [Examples](linex/examples/)
-
 
 ## Example Workflow
 
@@ -216,7 +227,6 @@ MIT License - Copyright (c) 2025 Advanced Micro Devices, Inc.
 
 See [LICENSE](LICENSE) for full details.
 
-
 ## Support
 
 Need help? Here's how to reach us:
@@ -226,4 +236,3 @@ Need help? Here's how to reach us:
 ---
 
 **Made with 🧠 for the future of LLM-assisted GPU development**
-
