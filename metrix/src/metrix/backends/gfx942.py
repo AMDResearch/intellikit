@@ -107,7 +107,9 @@ class GFX942Backend(CounterBackend):
     # Memory bandwidth metrics
 
     @metric("memory.hbm_read_bandwidth")
-    def _hbm_read_bandwidth(self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum, GRBM_GUI_ACTIVE):
+    def _hbm_read_bandwidth(
+        self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum, GRBM_GUI_ACTIVE
+    ):
         """
         HBM read bandwidth in GB/s
 
@@ -172,7 +174,9 @@ class GFX942Backend(CounterBackend):
             + (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64
             + TCC_EA0_RDREQ_32B_sum * 32
         )
-        bytes_written = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        bytes_written = (
+            TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        )
         total_bytes = bytes_read + bytes_written
 
         if GRBM_GUI_ACTIVE == 0:
@@ -185,7 +189,12 @@ class GFX942Backend(CounterBackend):
 
     @metric("memory.bytes_transferred_hbm")
     def _bytes_transferred_hbm(
-        self, TCC_EA0_RDREQ_sum, TCC_EA0_RDREQ_32B_sum, TCC_BUBBLE_sum, TCC_EA0_WRREQ_sum, TCC_EA0_WRREQ_64B_sum
+        self,
+        TCC_EA0_RDREQ_sum,
+        TCC_EA0_RDREQ_32B_sum,
+        TCC_BUBBLE_sum,
+        TCC_EA0_WRREQ_sum,
+        TCC_EA0_WRREQ_64B_sum,
     ):
         """
         Total bytes transferred through HBM
@@ -201,7 +210,9 @@ class GFX942Backend(CounterBackend):
             + (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64
             + TCC_EA0_RDREQ_32B_sum * 32
         )
-        bytes_written = TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        bytes_written = (
+            TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
+        )
         return bytes_read + bytes_written
 
     @metric("memory.bytes_transferred_l2")
@@ -378,9 +389,24 @@ class GFX942Backend(CounterBackend):
         - MFMA instructions produce 512 operations per instruction
         """
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -418,9 +444,24 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS (same as compute.total_flops)
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -468,9 +509,24 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -520,9 +576,24 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -566,9 +637,24 @@ class GFX942Backend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16

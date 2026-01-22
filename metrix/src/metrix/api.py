@@ -107,7 +107,9 @@ class Metrix:
             explicitly_requested = True  # User explicitly specified metrics
         elif profile:
             if profile not in METRIC_PROFILES:
-                raise ValueError(f"Unknown profile: {profile}. Available: {list(METRIC_PROFILES.keys())}")
+                raise ValueError(
+                    f"Unknown profile: {profile}. Available: {list(METRIC_PROFILES.keys())}"
+                )
             metrics_to_compute = METRIC_PROFILES[profile]["metrics"]
         else:
             # Default: all available metrics
@@ -171,15 +173,21 @@ class Metrix:
             computed_metrics = {}
             for metric in metrics_to_compute:
                 try:
-                    computed_metrics[metric] = self.backend.compute_metric_stats(dispatch_key, metric)
+                    computed_metrics[metric] = self.backend.compute_metric_stats(
+                        dispatch_key, metric
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to compute {metric} for {dispatch_key}: {e}")
 
             # Create clean result object
-            kernel_result = KernelResults(name=dispatch_key, duration_us=duration, metrics=computed_metrics)
+            kernel_result = KernelResults(
+                name=dispatch_key, duration_us=duration, metrics=computed_metrics
+            )
             kernel_results.append(kernel_result)
 
-        return ProfilingResults(command=command, kernels=kernel_results, total_kernels=len(kernel_results))
+        return ProfilingResults(
+            command=command, kernels=kernel_results, total_kernels=len(kernel_results)
+        )
 
     def list_metrics(self, category: Optional[str] = None) -> List[str]:
         """
@@ -192,7 +200,9 @@ class Metrix:
             List of metric names
         """
         if category:
-            return [name for name, defn in METRIC_CATALOG.items() if defn["category"].value == category]
+            return [
+                name for name, defn in METRIC_CATALOG.items() if defn["category"].value == category
+            ]
         return self.backend.get_available_metrics()
 
     def list_profiles(self) -> List[str]:

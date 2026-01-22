@@ -78,7 +78,9 @@ def split_counters_into_passes(
     # Greedy bin-packing algorithm:
     # For each pass, take as many counters from each block as the limit allows
     passes: List[List[str]] = []
-    remaining: Dict[str, List[str]] = {block: list(cntrs) for block, cntrs in counters_by_block.items()}
+    remaining: Dict[str, List[str]] = {
+        block: list(cntrs) for block, cntrs in counters_by_block.items()
+    }
 
     while any(remaining.values()):
         current_pass: List[str] = []
@@ -107,7 +109,9 @@ def split_counters_into_passes(
         if current_pass:
             passes.append(current_pass)
             if logger is not None:
-                logger.debug(f"Pass {len(passes)}: {len(current_pass)} counters, blocks: {dict(pass_block_count)}")
+                logger.debug(
+                    f"Pass {len(passes)}: {len(current_pass)} counters, blocks: {dict(pass_block_count)}"
+                )
 
         # Remove blocks with no remaining counters
         remaining = {k: v for k, v in remaining.items() if v}

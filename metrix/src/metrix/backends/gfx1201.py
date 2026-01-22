@@ -121,7 +121,10 @@ class GFX1201Backend(CounterBackend):
         time_seconds = GRBM_GUI_ACTIVE / (self.device_specs.base_clock_mhz * 1e6)
         return (bytes_read / 1e9) / time_seconds if time_seconds > 0 else 0.0
 
-    @metric("memory.hbm_write_bandwidth", unsupported_reason="GL2C_EA_WRREQ counters return zero on gfx1201 (RDNA3)")
+    @metric(
+        "memory.hbm_write_bandwidth",
+        unsupported_reason="GL2C_EA_WRREQ counters return zero on gfx1201 (RDNA3)",
+    )
     def _hbm_write_bandwidth(self):
         """
         Memory write bandwidth in GB/s
@@ -259,7 +262,9 @@ class GFX1201Backend(CounterBackend):
     # Coalescing metrics
 
     @metric("memory.coalescing_efficiency")
-    def _coalescing_efficiency(self, TA_TOTAL_WAVEFRONTS_sum, TCP_REQ_READ_sum, TCP_REQ_NON_READ_sum):
+    def _coalescing_efficiency(
+        self, TA_TOTAL_WAVEFRONTS_sum, TCP_REQ_READ_sum, TCP_REQ_NON_READ_sum
+    ):
         """
         Memory coalescing efficiency as percentage
 
@@ -382,7 +387,9 @@ class GFX1201Backend(CounterBackend):
         wave_cycles_actual = SQ_WAVE_CYCLES_sum * 4
 
         # Maximum possible wave-cycles = active_cycles * num_CUs * max_waves_per_CU
-        max_wave_cycles = GRBM_GUI_ACTIVE * self.device_specs.num_cu * self.device_specs.max_waves_per_cu
+        max_wave_cycles = (
+            GRBM_GUI_ACTIVE * self.device_specs.num_cu * self.device_specs.max_waves_per_cu
+        )
 
         return (wave_cycles_actual / max_wave_cycles) * 100 if max_wave_cycles > 0 else 0.0
 

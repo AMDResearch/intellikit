@@ -144,7 +144,12 @@ class GFX90aBackend(CounterBackend):
 
     @metric("memory.hbm_bandwidth_utilization")
     def _hbm_bandwidth_utilization(
-        self, TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum, TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum, GRBM_GUI_ACTIVE
+        self,
+        TCC_EA_RDREQ_sum,
+        TCC_EA_RDREQ_32B_sum,
+        TCC_EA_WRREQ_sum,
+        TCC_EA_WRREQ_64B_sum,
+        GRBM_GUI_ACTIVE,
     ):
         """
         HBM bandwidth utilization as percentage of peak
@@ -165,7 +170,9 @@ class GFX90aBackend(CounterBackend):
         return (actual_bw_gbs / self.device_specs.hbm_bandwidth_gbs) * 100
 
     @metric("memory.bytes_transferred_hbm")
-    def _bytes_transferred_hbm(self, TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum, TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum):
+    def _bytes_transferred_hbm(
+        self, TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum, TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum
+    ):
         """
         Total bytes transferred through HBM
 
@@ -354,9 +361,24 @@ class GFX90aBackend(CounterBackend):
         - MFMA instructions produce 512 operations per instruction
         """
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -394,9 +416,24 @@ class GFX90aBackend(CounterBackend):
         """
         # Calculate total FLOPS (same as compute.total_flops)
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -443,9 +480,24 @@ class GFX90aBackend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -491,9 +543,24 @@ class GFX90aBackend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16
@@ -537,9 +604,24 @@ class GFX90aBackend(CounterBackend):
         """
         # Calculate total FLOPS
         fops = 64 * (
-            (SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16 + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
-            + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32 + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
-            + (SQ_INSTS_VALU_ADD_F64 + SQ_INSTS_VALU_MUL_F64 + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2)
+            (
+                SQ_INSTS_VALU_ADD_F16
+                + SQ_INSTS_VALU_MUL_F16
+                + SQ_INSTS_VALU_TRANS_F16
+                + SQ_INSTS_VALU_FMA_F16 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F32
+                + SQ_INSTS_VALU_MUL_F32
+                + SQ_INSTS_VALU_TRANS_F32
+                + SQ_INSTS_VALU_FMA_F32 * 2
+            )
+            + (
+                SQ_INSTS_VALU_ADD_F64
+                + SQ_INSTS_VALU_MUL_F64
+                + SQ_INSTS_VALU_TRANS_F64
+                + SQ_INSTS_VALU_FMA_F64 * 2
+            )
         ) + 512 * (
             SQ_INSTS_VALU_MFMA_MOPS_F16
             + SQ_INSTS_VALU_MFMA_MOPS_BF16

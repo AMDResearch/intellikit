@@ -261,14 +261,18 @@ class CounterBackend(ABC):
         counter_passes = self._split_counters_into_passes(counters)
 
         if len(counter_passes) > 1:
-            logger.info(f"Splitting {len(counters)} counters into {len(counter_passes)} compatibility-based passes")
+            logger.info(
+                f"Splitting {len(counters)} counters into {len(counter_passes)} compatibility-based passes"
+            )
 
         # Collect all replays across all passes
         all_results_by_kernel = {}
 
         for pass_num, pass_counters in enumerate(counter_passes, 1):
             if len(counter_passes) > 1:
-                logger.info(f"Pass {pass_num}/{len(counter_passes)}: collecting {len(pass_counters)} counters")
+                logger.info(
+                    f"Pass {pass_num}/{len(counter_passes)}: collecting {len(pass_counters)} counters"
+                )
 
             pass_results = []
             for replay_id in range(num_replays):
@@ -336,7 +340,9 @@ class CounterBackend(ABC):
 
         return Statistics(min=metric_min, max=metric_max, avg=metric_avg, count=count)
 
-    def _compute_with_stat_type(self, metric: str, counter_stats: Dict[str, Statistics], stat_type: str) -> float:
+    def _compute_with_stat_type(
+        self, metric: str, counter_stats: Dict[str, Statistics], stat_type: str
+    ) -> float:
         """
         Extract one stat type (min/max/avg) from counter stats and compute metric
 
@@ -382,7 +388,9 @@ class CounterBackend(ABC):
         """
         pass
 
-    def _aggregate_by_dispatch_across_runs(self, results: List[ProfileResult]) -> Dict[str, Dict[str, Statistics]]:
+    def _aggregate_by_dispatch_across_runs(
+        self, results: List[ProfileResult]
+    ) -> Dict[str, Dict[str, Statistics]]:
         """
         Aggregate by (dispatch_id, kernel_name) across runs
 

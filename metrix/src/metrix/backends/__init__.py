@@ -42,6 +42,8 @@ def get_backend(arch: str) -> CounterBackend:
 
     backend_class = backends.get(arch.lower())
     if backend_class is None:
-        raise ValueError(f"Unsupported architecture: {arch}. Supported: {', '.join(backends.keys())}")
+        raise ValueError(
+            f"Unsupported architecture: {arch}. Supported: {', '.join(backends.keys())}"
+        )
 
     return backend_class()

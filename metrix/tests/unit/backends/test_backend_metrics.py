@@ -114,7 +114,11 @@ class TestCoalescingEfficiency:
 
     def test_no_memory_instructions(self, backend):
         """Handle zero memory instructions"""
-        backend._raw_data = {"SQ_INSTS_VMEM_RD": 0, "SQ_INSTS_VMEM_WR": 0, "TCP_TOTAL_ACCESSES_sum": 1000}
+        backend._raw_data = {
+            "SQ_INSTS_VMEM_RD": 0,
+            "SQ_INSTS_VMEM_WR": 0,
+            "TCP_TOTAL_ACCESSES_sum": 1000,
+        }
 
         result = backend._coalescing_efficiency()
         assert result == 0.0
@@ -164,7 +168,11 @@ class TestBandwidthMetrics:
             }
         else:  # gfx90a
             active_cycles = 1700000  # 1 ms at 1.7 GHz
-            counters = {"TCC_EA_RDREQ_sum": 1000, "TCC_EA_RDREQ_32B_sum": 0, "GRBM_GUI_ACTIVE": active_cycles}
+            counters = {
+                "TCC_EA_RDREQ_sum": 1000,
+                "TCC_EA_RDREQ_32B_sum": 0,
+                "GRBM_GUI_ACTIVE": active_cycles,
+            }
 
         backend._raw_data = get_arch_counter_names(backend, counters)
         result = backend._hbm_read_bandwidth()
@@ -190,7 +198,11 @@ class TestBandwidthMetrics:
         else:  # gfx90a
             # MI200 without 128B counter (all 64B or 32B)
             active_cycles = 1700000  # 1 ms at 1.7 GHz
-            counters = {"TCC_EA_RDREQ_sum": 1000, "TCC_EA_RDREQ_32B_sum": 400, "GRBM_GUI_ACTIVE": active_cycles}
+            counters = {
+                "TCC_EA_RDREQ_sum": 1000,
+                "TCC_EA_RDREQ_32B_sum": 400,
+                "GRBM_GUI_ACTIVE": active_cycles,
+            }
             # 400 × 32B = 12800, 600 × 64B = 38400, Total = 51200 bytes
             expected_min, expected_max = 0.05, 0.06
 
@@ -207,7 +219,11 @@ class TestBandwidthMetrics:
         else:  # gfx90a
             active_cycles = 1700000  # 1 ms at 1.7 GHz
 
-        counters = {"TCC_EA_WRREQ_sum": 1000, "TCC_EA_WRREQ_64B_sum": 1000, "GRBM_GUI_ACTIVE": active_cycles}
+        counters = {
+            "TCC_EA_WRREQ_sum": 1000,
+            "TCC_EA_WRREQ_64B_sum": 1000,
+            "GRBM_GUI_ACTIVE": active_cycles,
+        }
 
         backend._raw_data = get_arch_counter_names(backend, counters)
         result = backend._hbm_write_bandwidth()
@@ -223,7 +239,11 @@ class TestBandwidthMetrics:
         else:  # gfx90a
             active_cycles = 1700000  # 1 ms at 1.7 GHz
 
-        counters = {"TCC_EA_WRREQ_sum": 1000, "TCC_EA_WRREQ_64B_sum": 600, "GRBM_GUI_ACTIVE": active_cycles}
+        counters = {
+            "TCC_EA_WRREQ_sum": 1000,
+            "TCC_EA_WRREQ_64B_sum": 600,
+            "GRBM_GUI_ACTIVE": active_cycles,
+        }
         # 600 × 64B = 38400, 400 × 32B = 12800, Total = 51200 bytes
 
         backend._raw_data = get_arch_counter_names(backend, counters)
@@ -436,7 +456,12 @@ class TestComputeMetrics:
         backend._raw_data = self._get_zero_flops_counters()
         backend._raw_data["SQ_INSTS_VALU_ADD_F32"] = 1000
 
-        counters = {"TCC_EA_RDREQ_sum": 0, "TCC_EA_RDREQ_32B_sum": 0, "TCC_EA_WRREQ_sum": 0, "TCC_EA_WRREQ_64B_sum": 0}
+        counters = {
+            "TCC_EA_RDREQ_sum": 0,
+            "TCC_EA_RDREQ_32B_sum": 0,
+            "TCC_EA_WRREQ_sum": 0,
+            "TCC_EA_WRREQ_64B_sum": 0,
+        }
 
         if backend.device_specs.arch == "gfx942":
             counters["TCC_BUBBLE_sum"] = 0
