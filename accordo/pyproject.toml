@@ -45,18 +45,10 @@ local_scheme = "node-and-date"
 fallback_version = "0.2.0"
 root = ".."
 
+# ---- Ruff configuration ----
 [tool.ruff]
-line-length = 120
-exclude = [
-    "**/*.ipynb",
-    "build/**",
-    "test/**"
-]
+extend = "../pyproject.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
-
-[tool.ruff.format]
-quote-style = "double"
-

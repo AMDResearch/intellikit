@@ -142,7 +142,9 @@ def main():
 
             # Create validator
             try:
-                validator = Accordo(binary=str(binary), kernel_name=kernel_base, working_directory=str(tmp_path))
+                validator = Accordo(
+                    binary=str(binary), kernel_name=kernel_base, working_directory=str(tmp_path)
+                )
                 print(f"  Arguments: {[f'{name}:{type}' for name, type in validator.kernel_args]}")
             except Exception as e:
                 print(f"  Failed to create validator: {e}")

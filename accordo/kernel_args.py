@@ -17,7 +17,9 @@ except ImportError:
     KERNELDB_AVAILABLE = False
 
 
-def extract_kernel_arguments(binary_path: str, kernel_name: str, working_directory: str = ".") -> List[Tuple[str, str]]:
+def extract_kernel_arguments(
+    binary_path: str, kernel_name: str, working_directory: str = "."
+) -> List[Tuple[str, str]]:
     """Extract kernel arguments from a compiled binary using kernelDB.
 
     Args:
@@ -83,7 +85,9 @@ def extract_kernel_arguments(binary_path: str, kernel_name: str, working_directo
         # Convert kernelDB arguments to simple (name, type) tuples
         kernel_args = [(arg.name, arg.type_name) for arg in kdb_args]
 
-        logging.info(f"Extracted {len(kernel_args)} argument(s): {[name for name, _ in kernel_args]}")
+        logging.info(
+            f"Extracted {len(kernel_args)} argument(s): {[name for name, _ in kernel_args]}"
+        )
         return kernel_args
 
     except Exception as e:

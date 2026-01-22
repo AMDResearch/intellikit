@@ -89,7 +89,9 @@ class ValidationResult:
     def summary(self) -> str:
         """Get a human-readable summary of validation results."""
         if self.is_valid:
-            return f"✓ Validation passed! {self.num_arrays_validated} arrays matched within tolerance."
+            return (
+                f"✓ Validation passed! {self.num_arrays_validated} arrays matched within tolerance."
+            )
         else:
             lines = [f"✗ Validation failed: {self.error_message}"]
             if self.mismatches:
