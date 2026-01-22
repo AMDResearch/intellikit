@@ -52,18 +52,10 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# ---- Ruff configuration ----
 [tool.ruff]
-line-length = 100
-exclude = [
-    "**/*.ipynb",
-    "build/**",
-    "test/**",
-    "resources/**",
-]
+extend = "../pyproject.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501", "E731", "E741"]
-
-[tool.ruff.format]
-quote-style = "double"
