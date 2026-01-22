@@ -59,6 +59,7 @@ version_scheme = "post-release"
 local_scheme = "node-and-date"
 fallback_version = "0.1.0"
 
+# ---- Ruff configuration ----
 [tool.ruff]
 line-length = 100
 exclude = [
