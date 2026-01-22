@@ -35,7 +35,7 @@ Nexus is a custom tool that intercepts Heterogeneous System Architecture (HSA) p
 ### From Git Repository (Recommended)
 
 ```bash
-pip install git+https://github.com/AMDResearch/nexus.git
+pip install git+https://github.com/AMDResearch/intellikit.git
 ```
 
 This will automatically build the native C++ library during installation.
@@ -43,8 +43,8 @@ This will automatically build the native C++ library during installation.
 For development/editable install:
 
 ```bash
-git clone https://github.com/AMDResearch/nexus.git
-cd nexus
+git clone https://github.com/AMDResearch/intellikit.git
+cd intellikit
 pip install -e .
 ```
 

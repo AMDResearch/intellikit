@@ -128,48 +128,48 @@ for line in profiler.source_lines[:5]:
 pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[all]"
 ```
 
-This installs: `nexus`, `accordo`, `metrix`, and `linex`
+This installs: `accordo`, `linex`, `metrix`, and `nexus`
 
 ### Install Individual Tools
 
 Install only what you need using extras:
 
 ```bash
-# Nexus only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[nexus]"
-
 # Accordo only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[accordo]"
-
-# Metrix only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[metrix]"
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[accordo]"
 
 # Linex only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[linex]"
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[linex]"
+
+# Metrix only
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[metrix]"
+
+# Nexus only
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[nexus]"
 
 # Multiple tools
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[nexus,metrix]"
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[nexus,metrix]"
 ```
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/AMDResearch/nexus.git
-cd nexus
+git clone https://github.com/AMDResearch/intellikit.git
+cd intellikit
 
 # Install all tools in editable mode
 pip install -e ".[all]"
 
 # Or install specific tools only
-pip install -e ".[nexus]"
 pip install -e ".[accordo]"
-pip install -e ".[metrix]"
 pip install -e ".[linex]"
+pip install -e ".[metrix]"
+pip install -e ".[nexus]"
 ```
 
 ## Requirements
 
-- **Python**: >= 3.8 (3.9+ for metrix)
+- **Python**: >= 3.9
 - **ROCm**: >= 6.0 (7.0+ for linex)
 - **Hardware**: MI300+ GPUs
 
@@ -177,10 +177,10 @@ pip install -e ".[linex]"
 
 Each tool has its own detailed documentation:
 
-- [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
 - [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
-- [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
 - [Linex Documentation](linex/README.md) + [Examples](linex/examples/)
+- [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
+- [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
 
 ## Example Workflow
 
@@ -231,7 +231,7 @@ See [LICENSE](LICENSE) for full details.
 
 Need help? Here's how to reach us:
 
-- **Issues**: Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/AMDResearch/nexus/issues)
+- **Issues**: Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/AMDResearch/intellikit/issues)
 
 ---
 
