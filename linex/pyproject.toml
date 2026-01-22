@@ -29,9 +29,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/intellikit"
-Repository = "https://github.com/AMDResearch/intellikit"
-Documentation = "https://github.com/AMDResearch/intellikit/tree/main/linex"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/linex"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/linex"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/linex/README.md"
 
 [project.optional-dependencies]
 dev = [

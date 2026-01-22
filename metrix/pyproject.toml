@@ -30,9 +30,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/nexus"
-Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/tree/main/metrix"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/metrix"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/metrix"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/metrix/README.md"
 
 [project.scripts]
 metrix = "metrix.cli.main:main"

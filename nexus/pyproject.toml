@@ -18,9 +18,9 @@ requires-python = ">=3.8"
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/nexus"
-Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/tree/main/nexus"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/nexus"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/nexus"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/nexus/README.md"
 
 [project.optional-dependencies]
 dev = [

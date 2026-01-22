@@ -21,9 +21,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/nexus"
-Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/tree/main/accordo"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/accordo"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/accordo"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/accordo/README.md"
 
 [project.optional-dependencies]
 dev = [
