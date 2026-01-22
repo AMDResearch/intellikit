@@ -12,7 +12,7 @@ description = "Metrix: GPU Profiling. Decoded. Clean metrics for humans, not har
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = { text = "MIT" }
+license-files = ["../LICENSE"]
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

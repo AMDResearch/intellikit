@@ -12,7 +12,7 @@ description = "Linex: Source-Level SQTT Profiling - Map GPU cycles to your sourc
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = { text = "MIT" }
+license-files = ["../LICENSE"]
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = []
