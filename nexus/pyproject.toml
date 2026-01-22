@@ -12,7 +12,7 @@ description = "HSA Packet Source Code Extractor for AMD ROCm - Research tool for
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license-files = ["../LICENSE"]
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = []

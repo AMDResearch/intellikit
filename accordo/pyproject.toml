@@ -12,7 +12,7 @@ description = "Accordo: Automated side-by-side correctness validation for GPU ke
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license-files = ["../LICENSE"]
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
