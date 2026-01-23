@@ -104,7 +104,9 @@ class TestKernelResults:
         metric_stats = Statistics(min=50.0, max=60.0, avg=55.0, count=3)
 
         result = KernelResults(
-            name="test_kernel", duration_us=duration_stats, metrics={"memory.l2_hit_rate": metric_stats}
+            name="test_kernel",
+            duration_us=duration_stats,
+            metrics={"memory.l2_hit_rate": metric_stats},
         )
 
         assert result.name == "test_kernel"
@@ -117,7 +119,9 @@ class TestProfilingResults:
 
     def test_create_profiling_results(self):
         """Test creating profiling results"""
-        kernel1 = KernelResults(name="kernel1", duration_us=Statistics(100.0, 100.0, 100.0, 1), metrics={})
+        kernel1 = KernelResults(
+            name="kernel1", duration_us=Statistics(100.0, 100.0, 100.0, 1), metrics={}
+        )
 
         results = ProfilingResults(command="./test", kernels=[kernel1], total_kernels=1)
 

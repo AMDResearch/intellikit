@@ -12,15 +12,15 @@ description = "HSA Packet Source Code Extractor for AMD ROCm - Research tool for
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = { text = "MIT" }
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/nexus"
-Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/tree/main/nexus"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/nexus"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/nexus"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/nexus/README.md"
 
 [project.optional-dependencies]
 dev = [
@@ -43,18 +43,10 @@ local_scheme = "node-and-date"    # add commit hash (e.g. +gabc1234) and date (e
 fallback_version = "0.1.0"        # used if git metadata unavailable
 root = ".."                       # Look for git repo in parent directory
 
+# ---- Ruff configuration ----
 [tool.ruff]
-line-length = 120
-exclude = [
-    "**/*.ipynb",
-    "build/**",
-    "test/**"
-]
+extend = "../pyproject.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
-
-[tool.ruff.format]
-quote-style = "double"
-

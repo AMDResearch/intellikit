@@ -66,7 +66,9 @@ def test_all_memory_metrics_are_displayed(vector_add_binary):
         if metric not in output:
             missing_metrics.append(metric)
 
-    assert len(missing_metrics) == 0, f"Missing memory metrics: {missing_metrics}\n\nOutput:\n{output}"
+    assert len(missing_metrics) == 0, (
+        f"Missing memory metrics: {missing_metrics}\n\nOutput:\n{output}"
+    )
 
     print(f"✓ All {len(expected_memory_metrics)} memory metrics displayed successfully")
 
@@ -130,7 +132,9 @@ def test_all_compute_metrics_are_displayed(vector_add_binary):
         if metric not in output:
             missing_metrics.append(metric)
 
-    assert len(missing_metrics) == 0, f"Missing compute metrics: {missing_metrics}\n\nOutput:\n{output}"
+    assert len(missing_metrics) == 0, (
+        f"Missing compute metrics: {missing_metrics}\n\nOutput:\n{output}"
+    )
 
     print(f"✓ All {len(expected_compute_metrics)} compute metrics displayed successfully")
 

@@ -14,20 +14,20 @@ Accordo is an automated side-by-side correctness validation tool for GPU kernels
 ### From Git Repository (Subdirectory)
 
 ```bash
-pip install git+https://github.com/AMDResearch/nexus.git#subdirectory=accordo
+pip install git+https://github.com/AMDResearch/intellikit.git#subdirectory=accordo
 ```
 
 ### From IntelliKit (All Tools)
 
 ```bash
-pip install git+https://github.com/AMDResearch/nexus.git
+pip install git+https://github.com/AMDResearch/intellikit.git
 ```
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/AMDResearch/nexus.git
-cd nexus/accordo
+git clone https://github.com/AMDResearch/intellikit.git
+cd intellikit/accordo
 pip install -e .
 ```
 

@@ -31,7 +31,9 @@ def detect_gpu_arch() -> str:
         raise RuntimeError("No AMD GPU architecture found in rocminfo output")
 
     except FileNotFoundError:
-        raise RuntimeError("rocminfo not found. Please install ROCm or specify architecture with --arch")
+        raise RuntimeError(
+            "rocminfo not found. Please install ROCm or specify architecture with --arch"
+        )
     except subprocess.TimeoutExpired:
         raise RuntimeError("rocminfo timed out")
 

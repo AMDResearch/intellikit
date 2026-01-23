@@ -7,39 +7,28 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "intellikit"
-dynamic = ["version"]
+version = "0.1.0"
 description = "IntelliKit: LLM-ready GPU profiling and analysis toolkit for AMD ROCm"
 authors = [
+    { name = "Cole Ramos", email = "colramos@amd.com" },
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
+    { name = "Yiannis Papadopoulos", email = "ypapadop@amd.com" },
 ]
-license = { text = "MIT" }
+license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.8"
-
-dependencies = [
-    "numpy",
-    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@c67ceefb548125c6ef9bc4042207f11fcb624c62"
-]
+requires-python = ">=3.9"
+dependencies = ["accordo", "linex", "metrix", "nexus"]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/intellikit"
 Repository = "https://github.com/AMDResearch/intellikit"
 Documentation = "https://github.com/AMDResearch/intellikit/blob/main/README.md"
 
-[project.optional-dependencies]
-# Install individual tools (base dependencies are always included)
-nexus = []
-accordo = []
-metrix = ["pandas>=1.5.0"]
-linex = []
-
-# Install all tools
-all = ["pandas>=1.5.0"]
-
-dev = [
-    "pytest",
-    "ruff",
-]
+[tool.uv.sources]
+"accordo" = { path = "accordo" }
+"linex" = { path = "linex" }
+"metrix" = { path = "metrix" }
+"nexus" = { path = "nexus" }
 
 [tool.scikit-build]
 cmake.build-type = "Release"
@@ -47,18 +36,13 @@ cmake.build-type = "Release"
 wheel.packages = ["nexus/nexus", "accordo", "metrix/src/metrix", "linex/src/linex"]
 wheel.py-api = "cp38"
 
-[tool.scikit-build.cmake.define]
-CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
-LLVM_INSTALL_DIR = {env="LLVM_INSTALL_DIR", default="/opt/rocm/llvm"}
-# Control which components to build (only nexus needs building)
-BUILD_NEXUS = {env="BUILD_NEXUS", default="ON"}
-
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "node-and-date"
 fallback_version = "0.1.0"
 
+# ---- Ruff configuration ----
 [tool.ruff]
 line-length = 100
 exclude = [

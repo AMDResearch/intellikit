@@ -114,7 +114,9 @@ def main():
             ]
 
             print(f"  Running: {binary_file}")
-            results = profiler.profile(command=str(binary_file), metrics=metrics_to_collect, cwd=str(tmp_path))
+            results = profiler.profile(
+                command=str(binary_file), metrics=metrics_to_collect, cwd=str(tmp_path)
+            )
 
             print()
             print("=" * 80)

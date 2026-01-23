@@ -97,7 +97,9 @@ def test_cli_with_metric_aggregated():
 
 def test_cli_list_metrics():
     """Test metrix list metrics"""
-    result = subprocess.run(["metrix", "list", "metrics"], capture_output=True, text=True, timeout=5)
+    result = subprocess.run(
+        ["metrix", "list", "metrics"], capture_output=True, text=True, timeout=5
+    )
 
     assert result.returncode == 0
     assert "memory.l2_hit_rate" in result.stdout
@@ -105,7 +107,9 @@ def test_cli_list_metrics():
 
 def test_cli_list_metrics_includes_compute():
     """Test that metrix list metrics includes compute metrics"""
-    result = subprocess.run(["metrix", "list", "metrics"], capture_output=True, text=True, timeout=5)
+    result = subprocess.run(
+        ["metrix", "list", "metrics"], capture_output=True, text=True, timeout=5
+    )
 
     assert result.returncode == 0
     assert "compute.total_flops" in result.stdout
@@ -114,7 +118,9 @@ def test_cli_list_metrics_includes_compute():
 
 def test_cli_list_profiles_includes_compute():
     """Test that metrix list profiles includes compute profile"""
-    result = subprocess.run(["metrix", "list", "profiles"], capture_output=True, text=True, timeout=5)
+    result = subprocess.run(
+        ["metrix", "list", "profiles"], capture_output=True, text=True, timeout=5
+    )
 
     assert result.returncode == 0
     assert "COMPUTE" in result.stdout
@@ -143,7 +149,11 @@ def test_cli_compute_profile():
     assert result.returncode == 0, f"Command failed: {result.stderr}"
     assert "vector_add" in result.stdout
     # Compute profile should show compute metrics
-    assert "COMPUTE" in result.stdout or "Total FLOPS" in result.stdout or "Arithmetic Intensity" in result.stdout
+    assert (
+        "COMPUTE" in result.stdout
+        or "Total FLOPS" in result.stdout
+        or "Arithmetic Intensity" in result.stdout
+    )
 
 
 @pytest.mark.timeout(120)

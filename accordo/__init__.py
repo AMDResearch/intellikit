@@ -10,10 +10,7 @@ Quick Example:
     >>> from accordo import Accordo
     >>>
     >>> # Create validator for a specific kernel (builds library once)
-    >>> validator = Accordo(
-    ...     binary="./app_ref",
-    ...     kernel_name="reduce_sum"
-    ... )
+    >>> validator = Accordo(binary="./app_ref", kernel_name="reduce_sum")
     >>>
     >>> # Capture snapshots from different binaries
     >>> ref = validator.capture_snapshot(binary="./app_ref")

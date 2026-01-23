@@ -19,7 +19,7 @@ python3 validate.py
 ## Requirements
 
 - ROCm and `hipcc` installed
-- Accordo installed: `pip install git+https://github.com/AMDResearch/nexus.git#egg=intellikit[accordo]`
+- Accordo installed: `pip install git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[accordo]`
 
 ## What gets validated
 

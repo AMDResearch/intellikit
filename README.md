@@ -1,8 +1,6 @@
 <div align="center">
-  <img src="docs/intellikit.svg" alt="IntelliKit" width="400"/>
-</div>
 
-<div align="center">
+![Intellikit Logo](./docs/intellikit.svg)
 
 # IntelliKit
 
@@ -15,20 +13,24 @@ IntelliKit is a collection of intelligent tools designed to make GPU kernel deve
 ## Philosophy
 
 Traditional GPU profiling and analysis tools expose raw hardware counters and assembly. IntelliKit tools are designed to:
+
 - **Decode complexity**: Turn hardware metrics into human-readable insights
 - **Enable LLM integration**: Provide clean APIs suitable for LLM-driven workflows (MCP-ready)
 
 ## Tools
 
 ### [Nexus](nexus/) - HSA Packet Source Code Extractor
+
 Intercepts GPU kernel launches and extracts source code + assembly from HSA packets.
 
 **Use cases:**
+
 - Understand what code actually runs on the GPU
 - Debug kernel compilation and optimization
 - Trace HIP, Triton, and other GPU frameworks
 
 **Quick example:**
+
 ```python
 from nexus import Nexus
 
@@ -41,14 +43,17 @@ for kernel in trace:
 ```
 
 ### [Accordo](accordo/) - Automated Kernel Validation
+
 Side-by-side correctness validation for GPU kernel optimizations.
 
 **Use cases:**
+
 - Verify optimized kernels match reference implementation
 - Compare performance while ensuring correctness
 - Snapshot-based testing for multiple optimization candidates
 
 **Quick example:**
+
 ```python
 from accordo import Accordo
 
@@ -69,14 +74,17 @@ print(result.summary())  # Shows validation results
 ```
 
 ### [Metrix](metrix/) - Human-Readable GPU Metrics
+
 Decodes hardware counters into actionable performance insights.
 
 **Use cases:**
+
 - Profile GPU kernels with clean, understandable metrics
 - Identify memory bandwidth bottlenecks
 - Analyze compute utilization patterns
 
 **Quick example:**
+
 ```python
 from metrix import Metrix
 
@@ -89,14 +97,17 @@ for kernel in results.kernels:
 ```
 
 ### [Linex](linex/) - Source-Level GPU Performance Profiling
+
 Maps GPU performance metrics to your source code lines.
 
 **Use cases:**
+
 - Identify performance hotspots at source code granularity
 - Understand cycle-level timing for each line of code
 - Analyze stall patterns and execution bottlenecks
 
 **Quick example:**
+
 ```python
 from linex import Linex
 
@@ -117,59 +128,59 @@ for line in profiler.source_lines[:5]:
 pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[all]"
 ```
 
-This installs: `nexus`, `accordo`, `metrix`, and `linex`
+This installs: `accordo`, `linex`, `metrix`, and `nexus`
 
 ### Install Individual Tools
 
 Install only what you need using extras:
 
 ```bash
-# Nexus only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[nexus]"
-
 # Accordo only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[accordo]"
-
-# Metrix only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[metrix]"
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[accordo]"
 
 # Linex only
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[linex]"
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[linex]"
+
+# Metrix only
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[metrix]"
+
+# Nexus only
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[nexus]"
 
 # Multiple tools
-pip install "git+https://github.com/AMDResearch/nexus.git#egg=intellikit[nexus,metrix]"
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[nexus,metrix]"
 ```
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/AMDResearch/nexus.git
-cd nexus
+git clone https://github.com/AMDResearch/intellikit.git
+cd intellikit
 
 # Install all tools in editable mode
 pip install -e ".[all]"
 
 # Or install specific tools only
-pip install -e ".[nexus]"
 pip install -e ".[accordo]"
-pip install -e ".[metrix]"
 pip install -e ".[linex]"
+pip install -e ".[metrix]"
+pip install -e ".[nexus]"
 ```
 
 ## Requirements
 
-- **Python**: >= 3.8 (3.9+ for metrix)
+- **Python**: >= 3.9
 - **ROCm**: >= 6.0 (7.0+ for linex)
 - **Hardware**: MI300+ GPUs
 
 ## Documentation
 
 Each tool has its own detailed documentation:
-- [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
-- [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
-- [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
-- [Linex Documentation](linex/README.md) + [Examples](linex/examples/)
 
+- [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
+- [Linex Documentation](linex/README.md) + [Examples](linex/examples/)
+- [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
+- [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
 
 ## Example Workflow
 
@@ -216,14 +227,12 @@ MIT License - Copyright (c) 2025 Advanced Micro Devices, Inc.
 
 See [LICENSE](LICENSE) for full details.
 
-
 ## Support
 
 Need help? Here's how to reach us:
 
-- **Issues**: Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/AMDResearch/nexus/issues)
+- **Issues**: Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/AMDResearch/intellikit/issues)
 
 ---
 
 **Made with 🧠 for the future of LLM-assisted GPU development**
-

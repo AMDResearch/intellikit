@@ -18,6 +18,6 @@ python3 profile.py
 ## Requirements
 
 - ROCm and `hipcc` installed
-- Metrix installed: `pip install git+https://github.com/AMDResearch/nexus.git#egg=intellikit[metrix]`
+- Metrix installed: `pip install git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[metrix]`
 
 See [metrix documentation](../../README.md) for more details.

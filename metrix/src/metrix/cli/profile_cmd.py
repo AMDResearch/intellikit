@@ -53,19 +53,27 @@ def profile_command(args):
             mode = f"profile '{profile_name}'"
 
     # Check for unsupported metrics
-    unsupported = {m: backend._unsupported_metrics[m] for m in metrics_to_compute if m in backend._unsupported_metrics}
+    unsupported = {
+        m: backend._unsupported_metrics[m]
+        for m in metrics_to_compute
+        if m in backend._unsupported_metrics
+    }
     if unsupported:
         if explicitly_requested:
             # User explicitly requested unsupported metric via --metrics flag - fail with error
             metric_name = list(unsupported.keys())[0]
             reason = unsupported[metric_name]
-            logger.error(f"ERROR: Metric '{metric_name}' is not supported on {backend.device_specs.arch}")
+            logger.error(
+                f"ERROR: Metric '{metric_name}' is not supported on {backend.device_specs.arch}"
+            )
             logger.error(f"Reason: {reason}")
             return 1
         else:
             # Metrics from profile/category - filter and warn
             for metric_name, reason in unsupported.items():
-                logger.warning(f"Skipping '{metric_name}' (not supported on {backend.device_specs.arch}): {reason}")
+                logger.warning(
+                    f"Skipping '{metric_name}' (not supported on {backend.device_specs.arch}): {reason}"
+                )
             metrics_to_compute = [m for m in metrics_to_compute if m not in unsupported]
 
     # Log configuration
@@ -124,11 +132,16 @@ def profile_command(args):
     # Compute metrics for each dispatch
     results = {}
     for dispatch_key in dispatch_keys:
-        results[dispatch_key] = {"duration_us": backend._aggregated[dispatch_key].get("duration_us"), "metrics": {}}
+        results[dispatch_key] = {
+            "duration_us": backend._aggregated[dispatch_key].get("duration_us"),
+            "metrics": {},
+        }
 
         for metric in metrics_to_compute:
             try:
-                results[dispatch_key]["metrics"][metric] = backend.compute_metric_stats(dispatch_key, metric)
+                results[dispatch_key]["metrics"][metric] = backend.compute_metric_stats(
+                    dispatch_key, metric
+                )
             except Exception as e:
                 logger.warning(f"Failed to compute {metric} for {dispatch_key}: {e}")
 
@@ -207,7 +220,9 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
                     unit = metric_def.get("unit", "")
 
                     # Log detailed stats at DEBUG level
-                    logger.debug(f"  {name}: min={stats.min:.2f}, max={stats.max:.2f}, avg={stats.avg:.2f}")
+                    logger.debug(
+                        f"  {name}: min={stats.min:.2f}, max={stats.max:.2f}, avg={stats.avg:.2f}"
+                    )
 
                     # Print average to stdout
                     print(f"  {name:45s} {stats.avg:10.2f} {unit}")
