@@ -16,8 +16,8 @@ authors = [
 ]
 license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.9"
-dependencies = ["accordo", "linex", "metrix", "nexus"]
+requires-python = ">=3.10"
+dependencies = ["accordo", "linex", "metrix", "nexus", "rocm_mcp"]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/intellikit"
@@ -29,11 +29,12 @@ Documentation = "https://github.com/AMDResearch/intellikit/blob/main/README.md"
 "linex" = { path = "linex" }
 "metrix" = { path = "metrix" }
 "nexus" = { path = "nexus" }
+"rocm_mcp" = { path = "rocm_mcp" }
 
 [tool.scikit-build]
 cmake.build-type = "Release"
 # Install all packages with their correct paths
-wheel.packages = ["nexus/nexus", "accordo", "metrix/src/metrix", "linex/src/linex"]
+wheel.packages = ["accordo", "linex/src/linex", "metrix/src/metrix", "nexus/nexus", "rocm_mcp/src/rocm_mcp"]
 wheel.py-api = "cp38"
 
 # ---- setuptools-scm versioning ----
