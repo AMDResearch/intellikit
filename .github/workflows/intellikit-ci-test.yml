@@ -48,7 +48,8 @@ jobs:
       - name: Test Installation
         run: |
           bash .github/scripts/container_exec.sh "
-            pip install -e .[all]
+            pip install uv
+            uv pip install -e .
             python3 -c 'import nexus'
             python3 -c 'import accordo'
             python3 -c 'import metrix'
