@@ -16,7 +16,7 @@ From: rocm/pytorch:rocm7.1_ubuntu24.04_py3.13_pytorch_release_2.9.1
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         git wget ninja-build cmake python3-pip python3-dev build-essential jq \
-        libhwloc-dev libhwloc15 hwloc-nox libnuma-dev && \
+        libhwloc-dev libhwloc15 hwloc-nox libnuma-dev libdwarf-dev && \
     rm -rf /var/lib/apt/lists/*
 
     # Create groups if they don't exist
