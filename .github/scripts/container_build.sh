@@ -1,29 +1,34 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
-#
-# Build Apptainer container image
 
 set -e
 
 # Check if Apptainer is available
 if ! command -v apptainer &> /dev/null; then
-    echo "[ERROR] Apptainer not found"
-    echo "[ERROR] Please install Apptainer to continue"
+    echo "[ERROR] Apptainer not found. Please install Apptainer to continue"
     exit 1
 fi
 
-echo "[INFO] Building Apptainer image..."
+# Paths
+DEF_FILE="apptainer/intellikit.def"
+IMAGE_FILE=~/apptainer/intellikit-dev.sif
+HASH_FILE=~/apptainer/intellikit.def.sha256
 
-# Create persistent Apptainer directory
+# Create directory
 mkdir -p ~/apptainer
 
-# Build Apptainer image from definition file (only if it doesn't exist)
-if [ ! -f ~/apptainer/intellikit-dev.sif ]; then
-    echo "[INFO] Building new Apptainer image..."
-    apptainer build ~/apptainer/intellikit-dev.sif apptainer/intellikit.def
-else
-    echo "[INFO] Using existing Apptainer image at ~/apptainer/intellikit-dev.sif"
+# Calculate current hash
+CURRENT_HASH=$(sha256sum "$DEF_FILE" | awk '{print $1}')
+
+# Check if rebuild is needed
+if [ -f "$IMAGE_FILE" ] && [ -f "$HASH_FILE" ] && [ "$CURRENT_HASH" = "$(cat "$HASH_FILE")" ]; then
+    echo "[INFO] Definition unchanged (hash: $CURRENT_HASH), using cached image"
+    exit 0
 fi
 
-echo "[INFO] Container build completed successfully"
+# Rebuild
+echo "[INFO] Building Apptainer image..."
+apptainer build --force "$IMAGE_FILE" "$DEF_FILE"
+echo "$CURRENT_HASH" > "$HASH_FILE"
+echo "[INFO] Build completed (hash: $CURRENT_HASH)"
