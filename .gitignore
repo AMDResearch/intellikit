@@ -28,3 +28,6 @@ vector_add_template
 
 # Editors
 .vscode
+
+# Apptainer images
+*.sif
