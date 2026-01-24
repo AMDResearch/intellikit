@@ -4,6 +4,7 @@
 
 # Build the SIF image
 IMAGE_NAME="intellikit.sif"
+mkdir -p apptainer/images
 apptainer build apptainer/images/"$IMAGE_NAME" apptainer/intellikit.def
 
 echo "Built image: $IMAGE_NAME"

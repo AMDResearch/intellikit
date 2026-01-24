@@ -20,15 +20,11 @@ while getopts "s:" opt; do
     esac
 done
 
-# Create filesystem image overlay, if it doesn't exist
+# Create a new filesystem image overlay for this run
 timestamp=$(date +%s)
 overlay="/tmp/intellikit_overlay_$(whoami)_${timestamp}.img"
-if [ ! -f $overlay ]; then
-    echo "[Log] Overlay image ${overlay} does not exist. Creating overlay of ${size} MiB..."
-    apptainer overlay create --size ${size} --create-dir /var/cache/intellikit ${overlay}
-else
-    echo "[Log] Overlay image ${overlay} already exists. Using this one."
-fi
+echo "[Log] Overlay image ${overlay} does not exist. Creating overlay of ${size} MiB..."
+apptainer overlay create --size ${size} --create-dir /var/cache/intellikit ${overlay}
 echo "[Log] Utilize the directory /var/cache/intellikit as a sandbox to store data you'd like to persist between container runs."
 
 # Run the container
