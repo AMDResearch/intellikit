@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
+set -e
+
 # Build the SIF image
 IMAGE_NAME="intellikit.sif"
 mkdir -p apptainer/images
