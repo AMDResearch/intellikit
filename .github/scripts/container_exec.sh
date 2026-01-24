@@ -41,7 +41,7 @@ EXEC_CMD="$EXEC_CMD --bind ${PWD}:/intellikit_workspace --cwd /intellikit_worksp
 
 # Execute with cleanup of overlay file
 EXIT_CODE=0
-$EXEC_CMD "$IMAGE" bash -c "$COMMAND" || EXIT_CODE=$?
+$EXEC_CMD "$IMAGE" bash -c "set -e; $COMMAND" || EXIT_CODE=$?
 
 # Clean up overlay file (always cleanup, even on failure)
 rm -f "${OVERLAY}" 2>/dev/null || true
