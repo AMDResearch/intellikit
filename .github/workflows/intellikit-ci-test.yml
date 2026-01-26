@@ -1,0 +1,60 @@
+name: Intellikit CI Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build-container-image:
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Apptainer (if not available)
+        run: |
+          if ! command -v apptainer &> /dev/null; then
+            echo "Apptainer not found, installing..."
+            apt-get update && apt-get install -y software-properties-common
+            add-apt-repository -y ppa:apptainer/ppa
+            apt-get update && apt-get install -y apptainer
+          else
+            echo "Apptainer already available"
+          fi
+
+      - name: Build Intellikit container
+        run: |
+          bash .github/scripts/container_build.sh
+
+  test-installation:
+    name: Test Installation
+    needs: build-container-image
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test Installation
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e ./nexus
+            pip install -e ./accordo
+            pip install -e ./metrix
+            pip install -e ./linex
+            pip install -e .
+            python3 -c 'import nexus'
+            python3 -c 'import accordo'
+            python3 -c 'import metrix'
+            python3 -c 'import linex'
+          "

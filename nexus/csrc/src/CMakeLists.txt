@@ -45,7 +45,7 @@ set(KERNELDB_SKIP_INSTALL ON CACHE BOOL "Skip kernelDB install rules" FORCE)
 CPMAddPackage(
     NAME kernelDB
     GIT_REPOSITORY https://github.com/AMDResearch/kerneldb.git
-    GIT_TAG 125643cb4b5843b9630cf69fbe5a75c651fbf909
+    GIT_TAG bb5d9d1bdc7433d81e04b194adba2c0158520a38
     EXCLUDE_FROM_ALL YES
 )
 

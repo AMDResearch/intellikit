@@ -17,7 +17,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
-    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@c67ceefb548125c6ef9bc4042207f11fcb624c62"
+    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@bb5d9d1bdc7433d81e04b194adba2c0158520a38"
 ]
 
 [project.urls]
