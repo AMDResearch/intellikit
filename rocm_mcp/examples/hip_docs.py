@@ -46,7 +46,7 @@ async def main() -> None:
         {
             "messages": [
                 HumanMessage(
-                    content=("Search for HIP API documentation about memory allocation functions.")
+                    content=("Search for HIP API documentation about memory sharing functions.")
                 )
             ]
         },

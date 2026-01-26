@@ -3,6 +3,7 @@
 
 import logging
 from dataclasses import dataclass
+from typing import ClassVar
 
 import httpx
 from bs4 import BeautifulSoup
@@ -62,6 +63,7 @@ class HipDocs:
     logger: logging.Logger
     version: str
     base_url: str
+    _cache: ClassVar[dict[str, list[HipApiResult]]] = {}
 
     def __init__(self, logger: logging.Logger | None = None, version: str = "latest") -> None:
         """Initialize the HipDocs accessor.
@@ -76,6 +78,62 @@ class HipDocs:
         self.base_url = f"https://rocm.docs.amd.com/projects/HIP/en/{version}"
         self.logger.info("Initialized HIP documentation accessor for version %s", version)
 
+    def _fetch_index(self) -> list[HipApiResult]:
+        """Fetch and parse the API index."""
+        if self.version in self._cache:
+            return self._cache[self.version]
+
+        self.logger.info("Fetching HIP API index for version %s", self.version)
+        results = []
+        try:
+            url = f"{self.base_url}/genindex.html"
+            with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+                response = client.get(url)
+                response.raise_for_status()
+
+                # Parse the HTML to find relevant API functions
+                soup = BeautifulSoup(response.text, "html.parser")
+
+                # Find all links in the index tables
+                tables = soup.find_all("table", class_="genindextable")
+
+                for table in tables:
+                    links = table.find_all("a", href=True)
+                    for link in links:
+                        link_text = link.get_text().strip()
+                        href = link["href"]
+
+                        if isinstance(href, list):
+                            href = href[0]
+
+                        # Construct full URL
+                        if not href.startswith("http"):
+                            full_url = f"{self.base_url}/{href}"
+                        else:
+                            full_url = href
+
+                        # Get description (use title as description since genindex doesn't have context)
+                        description = link_text
+
+                        results.append(
+                            HipApiResult(
+                                title=link_text,
+                                url=full_url,
+                                description=description,
+                                content=None,
+                            )
+                        )
+
+            self._cache[self.version] = results
+            self.logger.info("Cached %d API entries for version %s", len(results), self.version)
+
+        except httpx.HTTPError as e:
+            self.logger.exception("Failed to fetch HIP API index: %s", str(e))
+        except Exception as e:
+            self.logger.exception("Unexpected error while fetching HIP API index: %s", str(e))
+
+        return results
+
     def search_api(self, query: str, limit: int = 5) -> list[HipApiResult]:
         """Search HIP API documentation.
 
@@ -87,57 +145,19 @@ class HipDocs:
             list[HipApiResult]: List of API documentation results.
         """
         self.logger.info("Searching HIP API documentation for query: %s", query)
-        results = []
 
-        try:
-            # First, try to get the API reference index page
-            url = f"{self.base_url}/doxygen/html/index.html"
-            with httpx.Client(follow_redirects=True, timeout=30.0) as client:
-                response = client.get(url)
-                response.raise_for_status()
+        all_results = self._fetch_index()
+        query_lower = query.lower()
 
-                # Parse the HTML to find relevant API functions
-                soup = BeautifulSoup(response.text, "html.parser")
+        matches = []
+        for result in all_results:
+            if query_lower in result.title.lower():
+                matches.append(result)
+                if len(matches) >= limit:
+                    break
 
-                # Find all links that might be API references
-                links = soup.find_all("a", href=True)
-                query_lower = query.lower()
-
-                for link in links:
-                    link_text = link.get_text().strip()
-                    href = link["href"]
-
-                    if query_lower in link_text.lower() and len(results) < limit:
-                        # Construct full URL
-                        if not href.startswith("http"):
-                            full_url = f"{self.base_url}/doxygen/html/{href}"
-                        else:
-                            full_url = href
-
-                        # Get description from surrounding context
-                        description = link_text
-                        parent = link.parent
-                        if parent:
-                            parent_text = parent.get_text().strip()
-                            if len(parent_text) > len(link_text):
-                                description = parent_text[:MAX_DESCRIPTION_LENGTH]
-
-                        results.append(
-                            HipApiResult(
-                                title=link_text,
-                                url=full_url,
-                                description=description,
-                                content=None,
-                            )
-                        )
-
-        except httpx.HTTPError as e:
-            self.logger.exception("Failed to search HIP API documentation: %s", str(e))
-        except Exception as e:
-            self.logger.exception("Unexpected error while searching HIP API: %s", str(e))
-
-        self.logger.info("Found %d results for query: %s", len(results), query)
-        return results
+        self.logger.info("Found %d results for query: %s", len(matches), query)
+        return matches
 
     def get_api_reference(self, api_name: str) -> HipApiResult | None:
         """Get detailed API reference for a specific HIP API function or class.
