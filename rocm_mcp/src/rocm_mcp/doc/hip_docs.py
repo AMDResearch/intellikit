@@ -112,7 +112,7 @@ class HipDocs:
                         else:
                             full_url = href
 
-                        # Get description (use title as description since genindex doesn't have context)
+                        # Get description (use title as description since genindex lacks context)
                         description = link_text
 
                         results.append(
