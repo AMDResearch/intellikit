@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
 name: Intellikit CI Test
 
 on:
@@ -48,13 +51,15 @@ jobs:
       - name: Test Installation
         run: |
           bash .github/scripts/container_exec.sh "
-            pip install -e ./nexus
             pip install -e ./accordo
-            pip install -e ./metrix
             pip install -e ./linex
+            pip install -e ./metrix
+            pip install -e ./nexus
+            pip install -e ./rocm_mcp
             pip install -e .
-            python3 -c 'import nexus'
             python3 -c 'import accordo'
-            python3 -c 'import metrix'
             python3 -c 'import linex'
+            python3 -c 'import metrix'
+            python3 -c 'import nexus'
+            python3 -c 'import rocm_mcp'
           "
