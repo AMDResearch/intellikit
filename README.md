@@ -122,7 +122,7 @@ for kernel in trace:
 
 ### [ROCm-MCP](rocm_mcp/) - Model Context Protocol Servers of ROCm Tools
 
-Enables LLMs to interact with ROCm tools tools via MCP.
+Enables LLMs to interact with ROCm tools via MCP.
 
 **Use cases:**
 
@@ -170,7 +170,7 @@ Add to your JSON MCP config:
         "--directory",
         "/path/to/uprof_mcp",
         "run",
-        "uprof-mcp"
+        "uprof-profiler-mcp"
       ]
     }
   }

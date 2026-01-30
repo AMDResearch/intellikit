@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class ProfilerResult:
+class UProfProfilerResult:
     """Class for the results of a profiling session.
 
     Attributes:
@@ -120,7 +120,7 @@ class UProfProfiler:
         output_dir: str | PathLike,
         executable: str | PathLike,
         executable_args: list[str] | None,
-    ) -> ProfilerResult:
+    ) -> UProfProfilerResult:
         """Finds hotspots via profiling.
 
         Parameters:
@@ -197,4 +197,4 @@ class UProfProfiler:
         self.logger.info(
             "Profiling %s complete. Results in '%s', report in '%s'", cmd, results_path, report_path
         )
-        return ProfilerResult(Path(results_path), Path(report_path))
+        return UProfProfilerResult(Path(results_path), Path(report_path))
