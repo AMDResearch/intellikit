@@ -150,6 +150,33 @@ Add to your JSON MCP config:
 }
 ```
 
+### [uprof-MCP](uprof_mcp/) - Model Context Protocol Server for uProf
+
+Enables LLMs to interact with AMD uProf via MCP.
+
+**Use cases:**
+
+- Profile applications using uProf.
+
+**Quick example:**
+Add to your JSON MCP config:
+
+```json
+{
+  "mcpServers": {
+    "uprof": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/uprof_mcp",
+        "run",
+        "uprof-mcp"
+      ]
+    }
+  }
+}
+```
+
 ## Installation
 
 ### Install All Tools
@@ -158,7 +185,7 @@ Add to your JSON MCP config:
 pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[all]"
 ```
 
-This installs: `accordo`, `linex`, `metrix`, `nexus`, and `rocm_mcp`.
+This installs: `accordo`, `linex`, `metrix`, `nexus`, `rocm_mcp`, and `uprof_mcp`.
 
 ### Install Individual Tools
 
@@ -180,6 +207,9 @@ pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[ne
 # ROCm-MCP only
 pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[rocm_mcp]"
 
+# uprof-MCP only
+pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[uprof_mcp]"
+
 # Multiple tools
 pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[nexus,metrix]"
 ```
@@ -199,6 +229,7 @@ pip install -e ".[linex]"
 pip install -e ".[metrix]"
 pip install -e ".[nexus]"
 pip install -e ".[rocm_mcp]"
+pip install -e ".[uprof_mcp]"
 ```
 
 ## Requirements
@@ -216,6 +247,7 @@ Each tool has its own detailed documentation:
 - [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
 - [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
 - [ROCm-MCP Documentation](rocm_mcp/README.md) + [Examples](rocm_mcp/examples/)
+- [uprof-MCP Documentation](uprof_mcp/README.md) + [Examples](uprof_mcp/examples/)
 
 ## Example Workflow
 
