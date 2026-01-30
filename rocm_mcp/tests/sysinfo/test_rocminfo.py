@@ -102,7 +102,7 @@ def test_rocminfo_init_custom_path() -> None:
 def test_rocminfo_init_env_variable() -> None:
     """Test Rocminfo initialization with environment variable."""
     env_path = "/custom/path/to/rocminfo"
-    with patch.dict("os.environ", {"OMNIKIT_ROCMINFO": env_path}):
+    with patch.dict("os.environ", {"INTELLIKIT_ROCMINFO": env_path}):
         rocminfo = Rocminfo()
         assert rocminfo.rocminfo_exe == env_path
 

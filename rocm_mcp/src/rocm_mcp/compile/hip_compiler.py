@@ -35,7 +35,7 @@ class HipCompiler:
     Example:
         Basic compilation::
 
-            from omnikit import HipCompiler
+            from rocm_mcp import HipCompiler
 
             # Initialize compiler
             compiler = HipCompiler()
@@ -68,7 +68,7 @@ class HipCompiler:
             # Or use environment variable
             import os
 
-            os.environ["OMNIKIT_HIPCC"] = "/opt/rocm-6.0/bin/hipcc"
+            os.environ["INTELLIKIT_HIPCC"] = "/opt/rocm-6.0/bin/hipcc"
             compiler = HipCompiler()
 
     Attributes:
@@ -90,11 +90,11 @@ class HipCompiler:
             logger (logging.Logger | None): Logger for logging messages. If None, a default
                 logger is created.
             hipcc (str | PathLike | None): Path to the `hipcc` compiler
-                executable. If None, uses the `OMNIKIT_HIPCC` environment variable
+                executable. If None, uses the `INTELLIKIT_HIPCC` environment variable
                 or defaults to 'hipcc' in the system PATH.
         """
         self.logger = logger or logging.getLogger(self.__class__.__name__)
-        self.hipcc_exe = os.getenv("OMNIKIT_HIPCC", str(hipcc) if hipcc is not None else "hipcc")
+        self.hipcc_exe = os.getenv("INTELLIKIT_HIPCC", str(hipcc) if hipcc is not None else "hipcc")
         self.logger.info("Initialized compiler.")
 
     def compile(

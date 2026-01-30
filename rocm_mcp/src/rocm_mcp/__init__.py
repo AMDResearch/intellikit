@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 
-"""rocm-mcp - Tools for use by LLM agents."""
+"""rocm-mcp - ROCm-based tools for use by LLM agents."""
 
 from importlib.metadata import version
 
