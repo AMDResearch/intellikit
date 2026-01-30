@@ -38,3 +38,7 @@ examples = [
 # ---- Ruff configuration ----
 [tool.ruff]
 extend = "../pyproject.toml"
+
+# ---- UV configuration ----
+[tool.uv]
+package = true
