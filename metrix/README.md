@@ -6,13 +6,13 @@ Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
 
 ## Why Metrix?
 
-Existing GPU profilers are **trash**:
+Existing GPU profilers have challenges:
 - Cryptic hardware counters everywhere
 - No clear interpretation
-- Poor software quality
-- No unit tests
+- Inconsistent software quality
+- Limited testing
 
-**Metrix** is different:
+**Metrix** takes a different approach:
 - **Clean Python API** with modern design
 - **Human-readable metrics** instead of raw counters
 - **Unit tested** and reliable

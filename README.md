@@ -44,33 +44,33 @@ for kernel in trace:
 
 ### [Accordo](accordo/) - Automated Kernel Validation
 
-Side-by-side correctness validation for GPU kernel optimizations.
+Automated correctness validation for GPU kernel optimizations.
 
 **Use cases:**
 
 - Verify optimized kernels match reference implementation
 - Compare performance while ensuring correctness
-- Snapshot-based testing for multiple optimization candidates
+- Test multiple optimization candidates efficiently
 
 **Quick example:**
 
 ```python
 from accordo import Accordo
 
-config = Accordo.Config(
-    kernel_name="my_kernel",
-    kernel_args=[Accordo.KernelArg(name="result", type="double*")],
-    tolerance=1e-6
-)
-validator = Accordo(config)
+# Create validator (auto-extracts kernel signature)
+validator = Accordo(binary="./ref", kernel_name="reduce_sum")
 
-# Capture snapshots from both versions
-ref_snapshot = validator.capture_snapshot(binary=["./ref"], working_directory=".")
-opt_snapshot = validator.capture_snapshot(binary=["./opt"], working_directory=".")
+# Capture snapshots from reference and optimized binaries
+ref = validator.capture_snapshot(binary="./ref")
+opt = validator.capture_snapshot(binary="./opt")
 
 # Compare for correctness
-result = validator.compare_snapshots(ref_snapshot, opt_snapshot)
-print(result.summary())  # Shows validation results
+result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
+
+if result.is_valid:
+    print(f"✓ PASS: {result.num_arrays_validated} arrays matched")
+else:
+    print(f"✗ FAIL: {result.summary()}")
 ```
 
 ### [Metrix](metrix/) - Human-Readable GPU Metrics
@@ -203,17 +203,16 @@ for kernel in trace:
 
 # 4. Validate with Accordo
 from accordo import Accordo
-config = Accordo.Config(kernel_name="my_kernel", ...)
-validator = Accordo(config)
+validator = Accordo(binary="./app_baseline", kernel_name="my_kernel")
 
-ref_snap = validator.capture_snapshot(binary=["./app_baseline"], working_directory=".")
-opt_snap = validator.capture_snapshot(binary=["./app_opt"], working_directory=".")
-result = validator.compare_snapshots(ref_snap, opt_snap)
+ref_snap = validator.capture_snapshot(binary="./app_baseline")
+opt_snap = validator.capture_snapshot(binary="./app_opt")
+result = validator.compare_snapshots(ref_snap, opt_snap, tolerance=1e-6)
 
 if result.is_valid:
     opt_results = profiler.profile("./app_opt")
     opt_bw = opt_results.kernels[0].metrics['memory.hbm_bandwidth_utilization'].avg
-    print(f"VALIDATION PASSED: {result.num_arrays_validated} arrays matched")
+    print(f"✓ PASS: {result.num_arrays_validated} arrays matched")
     print(f"BW Improvement: {opt_bw - baseline_bw:.1f}%")
 ```
 
