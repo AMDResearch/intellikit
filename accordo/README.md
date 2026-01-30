@@ -37,7 +37,7 @@ result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
 if result.is_valid:
     print(f"✓ PASS: {result.num_arrays_validated} arrays matched")
 else:
-    print(f"✗ FAIL: {result.summary()}")
+    print(result.summary())
 ```
 
 ### Testing Multiple Optimizations
