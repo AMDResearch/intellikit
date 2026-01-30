@@ -162,6 +162,23 @@ pip install -e ".[linex]"
 - **ROCm**: >= 6.0 (7.0+ for linex)
 - **Hardware**: MI300+ GPUs
 
+## MCP Integration (AI/LLM Support)
+
+IntelliKit tools work seamlessly with Cursor via Model Context Protocol (MCP):
+
+```bash
+# One-time setup
+pip install mcp
+python mcp/setup_cursor.py
+
+# Restart Cursor, then ask questions like:
+# "What instructions are taking the most latency?"
+# "Extract the kernel source from my app"
+# "What's my memory bandwidth utilization?"
+```
+
+See [MCP Documentation](mcp/README.md) and [Demo](mcp/DEMO.md) for details.
+
 ## Documentation
 
 Each tool has its own detailed documentation:
