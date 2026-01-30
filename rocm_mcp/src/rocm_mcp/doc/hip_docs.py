@@ -38,7 +38,7 @@ class HipDocs:
     Example:
         Basic usage::
 
-            from omnikit import HipDocs
+            from rocm_mcp import HipDocs
 
             # Initialize HIP docs accessor
             hip_docs = HipDocs()

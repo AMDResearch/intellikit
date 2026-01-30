@@ -13,8 +13,6 @@ from langchain_core.messages import HumanMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 
-from uprof_mcp.uprof_profiler import UProfProfiler
-
 load_dotenv()
 
 
@@ -67,6 +65,8 @@ async def agentic_hotspot_analysis(executable: str, executable_args: list[str]) 
 def non_agentic_hotspot_analysis(executable: str, executable_args: list[str]) -> None:
     """Profile an executable using UProf Profiler MCP tool in non-agentic mode."""
     print("Running in non-agentic mode...")
+
+    from uprof_mcp.uprof_profiler import UProfProfiler
 
     profiler = UProfProfiler()
     with tempfile.TemporaryDirectory() as tmpdirname:

@@ -33,7 +33,7 @@ class UProfProfiler:
     Example:
         Basic profiling to find hotspots::
 
-            from omnikit import UProfProfiler
+            from uprof_mcp import UProfProfiler
             from pathlib import Path
 
             # Initialize profiler
@@ -68,7 +68,7 @@ class UProfProfiler:
             # Or use environment variable
             import os
 
-            os.environ["OMNIKIT_UPROF_CLI"] = "/opt/AMDuProf_6.0/bin/AMDuProfCLI"
+            os.environ["INTELLIKIT_UPROF_CLI"] = "/opt/AMDuProf_6.0/bin/AMDuProfCLI"
             profiler = UProfProfiler()
 
         Handling profiling errors::
@@ -97,18 +97,21 @@ class UProfProfiler:
     logger: logging.Logger
     profiler_exe: str
 
-    def __init__(self, logger: logging.Logger | None, uprof: str | PathLike | None = None) -> None:
+    def __init__(
+        self, logger: logging.Logger | None = None, uprof: str | PathLike | None = None
+    ) -> None:
         """Initializes the UProfProfiler instance.
 
         Args:
             logger (logging.Logger): Logger instance for logging. If None, a default logger is
                 created.
             uprof (str | PathLike | None): Optional path to the uProf executable. If None, uses the
-                environment variable 'OMNIKIT_UPROF_CLI' or the default path DEFAULT_EXE_PATH.
+                environment variable 'INTELLIKIT_UPROF_CLI' or the default path DEFAULT_EXE_PATH.
         """
         self.logger = logger if logger is not None else logging.getLogger(self.__class__.__name__)
         self.profiler_exe = os.getenv(
-            "OMNIKIT_UPROF_CLI", str(uprof) if uprof is not None else UProfProfiler.DEFAULT_EXE_PATH
+            "INTELLIKIT_UPROF_CLI",
+            str(uprof) if uprof is not None else UProfProfiler.DEFAULT_EXE_PATH,
         )
         self.logger.info("Initialized profiler.")
 

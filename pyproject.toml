@@ -73,6 +73,7 @@ ignore = [
     "D104",    # missing docstring in public package
     "INP001",  # implicit namespace package
     "LOG015",  # logging on root logger
+    "PLC0415", # top-level imports
     "PLR0912", # too many branches
     "PLR0913", # too many arguments in function
     "S101",    # allow assert
