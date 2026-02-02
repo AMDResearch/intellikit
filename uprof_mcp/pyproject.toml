@@ -2,9 +2,9 @@
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
 [project]
-name = "rocm-mcp"
+name = "uprof-mcp"
 version = "0.1.0"
-description = "Collection of MCP servers for accessing ROCm capabilities from LLMs."
+description = "MCP server for profiling CPU code via AMD uprof."
 authors = [
     { name = "Yiannis Papadopoulos", email = "ypapadop@amd.com" },
 ]
@@ -12,15 +12,11 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "beautifulsoup4>=4.12.0",
-    "httpx>=0.28.1",
     "mcp[cli]>=1.21.0",
 ]
 
 [project.scripts]
-hip-compiler-mcp = "rocm_mcp.compile.hip_compiler_mcp:main"
-hip-docs-mcp = "rocm_mcp.doc.hip_docs_mcp:main"
-rocminfo-mcp = "rocm_mcp.sysinfo.rocminfo_mcp:main"
+uprof-profiler-mcp = "uprof_mcp.uprof_profiler_mcp:main"
 
 [dependency-groups]
 dev = [

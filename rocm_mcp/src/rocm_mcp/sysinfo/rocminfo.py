@@ -69,7 +69,7 @@ class Rocminfo:
     Example:
         Basic usage to get information about all agents::
 
-            from omnikit import Rocminfo
+            from rocm_mcp import Rocminfo
 
             # Initialize with default rocminfo path
             rocminfo = Rocminfo()
@@ -95,12 +95,12 @@ class Rocminfo:
             # Or use environment variable
             import os
 
-            os.environ["OMNIKIT_ROCMINFO"] = "/opt/rocm/bin/rocminfo"
+            os.environ["INTELLIKIT_ROCMINFO"] = "/opt/rocm/bin/rocminfo"
             rocminfo = Rocminfo()
 
         Filtering agents by device type::
 
-            from omnikit.sysinfo import DeviceType
+            from rocm_mcp import DeviceType
 
             result = rocminfo.get_agents()
             gpus = [agent for agent in result.agents if agent.device_type == DeviceType.GPU]
@@ -127,12 +127,12 @@ class Rocminfo:
             logger (logging.Logger): Logger instance for logging. If None, a default logger is
                 created.
             rocminfo (str | PathLike | None): Path to the `rocminfo`
-                executable. If None, uses the `OMNIKIT_ROCMINFO` environment variable
+                executable. If None, uses the `INTELLIKIT_ROCMINFO` environment variable
                 or defaults to 'rocminfo' in the system PATH.
         """
         self.logger = logger or logging.getLogger(self.__class__.__name__)
         self.rocminfo_exe = os.getenv(
-            "OMNIKIT_ROCMINFO", str(rocminfo) if rocminfo is not None else "rocminfo"
+            "INTELLIKIT_ROCMINFO", str(rocminfo) if rocminfo is not None else "rocminfo"
         )
         self.logger.info("Initialized rocminfo wrapper.")
 
