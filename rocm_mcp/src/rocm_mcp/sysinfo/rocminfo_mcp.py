@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 
-import logging
+from typing import Annotated
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.utilities.logging import get_logger
+from pydantic import Field
 
 from rocm_mcp.sysinfo import DeviceType, Rocminfo
 
@@ -12,12 +14,12 @@ mcp = FastMCP(
     name="rocminfo",
     instructions=("MCP server for querying ROCm GPU and system information."),
 )
-logger = logging.getLogger(mcp.name)
+logger = get_logger(mcp.name)
 rocminfo = Rocminfo(logger=logger)
 
 
 @mcp.tool()
-def get_gpu_architecture() -> str:
+async def get_gpu_architecture(ctx: Annotated[Context, Field(description="MCP context.")]) -> str:
     """Get the architecture of all GPUs in the system.
 
     Returns:
@@ -44,12 +46,13 @@ def get_gpu_architecture() -> str:
 
         return "\n".join(output)
     except Exception as e:
-        logger.exception("Failed to get GPU architecture: %s", str(e))
-        return f"Failed to get GPU architecture: {e!s}"
+        msg = f"Failed to get GPU architecture: {e!s}"
+        await ctx.error(msg)
+        return msg
 
 
 @mcp.tool()
-def get_all_agents() -> str:
+async def get_all_agents(ctx: Annotated[Context, Field(description="MCP context.")]) -> str:
     """Get information about all HSA agents (CPUs, GPUs, etc.) in the system.
 
     Returns:
@@ -79,8 +82,9 @@ def get_all_agents() -> str:
 
         return "\n".join(output)
     except Exception as e:
-        logger.exception("Failed to get agent information: %s", str(e))
-        return f"Failed to get agent information: {e!s}"
+        msg = f"Failed to get agent information: {e!s}"
+        await ctx.error(msg)
+        return msg
 
 
 def main() -> None:
