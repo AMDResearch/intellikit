@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 
-import logging
 from typing import Annotated
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.utilities.logging import get_logger
 from pydantic import Field
 
 from rocm_mcp.doc.hip_docs import HipDocs
@@ -17,11 +17,12 @@ mcp = FastMCP(
         "language and runtime developer reference documentation."
     ),
 )
-logger = logging.getLogger(mcp.name)
+logger = get_logger(mcp.name)
 
 
 @mcp.tool()
-def search_hip_api(
+async def search_hip_api(
+    ctx: Annotated[Context, Field(description="MCP context.")],
     query: Annotated[str, Field(description="Search query for HIP API documentation.")],
     version: Annotated[
         str, Field(description="HIP version to search. Defaults to 'latest'.")
@@ -57,12 +58,14 @@ def search_hip_api(
 
         return "\n".join(lines)
     except Exception as e:
-        logger.exception("Failed to search HIP API documentation: %s", str(e))
-        return f"Error searching HIP API documentation: {e!s}"
+        msg = f"Error searching HIP API documentation: {e!s}"
+        await ctx.error(msg)
+        return msg
 
 
 @mcp.tool()
-def get_hip_api_reference(
+async def get_hip_api_reference(
+    ctx: Annotated[Context, Field(description="MCP context.")],
     api_name: Annotated[str, Field(description="Name of the HIP API function or class.")],
     version: Annotated[
         str, Field(description="HIP version to use. Defaults to 'latest'.")
@@ -97,8 +100,9 @@ def get_hip_api_reference(
 
         return "\n".join(lines)
     except Exception as e:
-        logger.exception("Failed to get HIP API reference: %s", str(e))
-        return f"Error getting HIP API reference: {e!s}"
+        msg = f"Failed to get HIP API reference: {e!s}"
+        await ctx.error(msg)
+        return msg
 
 
 def main() -> None:
