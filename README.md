@@ -137,14 +137,9 @@ Add to your JSON MCP config:
 ```json
 {
   "mcpServers": {
-    "hip-compiler": {
+    "hip-compiler-mcp": {
       "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/rocm_mcp",
-        "run",
-        "hip-compiler-mcp"
-      ]
+      "args": ["run", "--directory", "/path/to/rocm_mcp", "hip-compiler-mcp"]
     }
   }
 }
@@ -164,14 +159,9 @@ Add to your JSON MCP config:
 ```json
 {
   "mcpServers": {
-    "uprof": {
+    "uprof-profiler-mcp": {
       "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/uprof_mcp",
-        "run",
-        "uprof-profiler-mcp"
-      ]
+      "args": ["run", "--directory", "/path/to/uprof_mcp", "uprof-profiler-mcp"]
     }
   }
 }

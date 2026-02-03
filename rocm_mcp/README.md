@@ -35,32 +35,17 @@ To use these servers, add the following to your configuration file:
 ```json
 {
   "mcpServers": {
-    "hip-compiler": {
+    "hip-compiler-mcp": {
       "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/rocm_mcp",
-        "run",
-        "hip-compiler-mcp"
-      ]
+      "args": ["run", "--directory", "/path/to/rocm_mcp", "hip-compiler-mcp"]
     },
-    "hip-docs": {
+    "hip-docs-mcp": {
       "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/rocm_mcp",
-        "run",
-        "hip-docs-mcp"
-      ]
+      "args": ["run", "--directory", "/path/to/rocm_mcp", "hip-docs-mcp"]
     },
-    "rocminfo": {
+    "rocminfo-mcp": {
       "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/rocm_mcp",
-        "run",
-        "rocminfo-mcp"
-      ]
+      "args": ["run", "--directory", "/path/to/rocm_mcp", "rocminfo-mcp"]
     }
   }
 }
