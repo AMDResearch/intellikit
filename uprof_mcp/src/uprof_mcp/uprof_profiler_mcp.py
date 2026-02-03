@@ -22,7 +22,7 @@ profiler = UProfProfiler(logger=logger)
 
 @mcp.tool()
 async def profile_for_hotspots(
-    ctx: Context,
+    ctx: Annotated[Context, Field(description="MCP context.")],
     executable: Annotated[str | Path, Field(description="Path to the executable to be profiled.")],
     executable_arguments: Annotated[
         list[str], Field(description="Arguments to be passed to the executable.")
