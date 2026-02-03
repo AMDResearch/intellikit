@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 
-import logging
 import tempfile
 from pathlib import Path
 from typing import Annotated
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.utilities.logging import get_logger
 from pydantic import Field
 
 from rocm_mcp.compile.hip_compiler import HipCompiler
@@ -18,12 +18,13 @@ mcp = FastMCP(
         "MCP server for compiling HIP C/C++ code to a binary executable via the ROCm HIP compiler."
     ),
 )
-logger = logging.getLogger(mcp.name)
+logger = get_logger(mcp.name)
 compiler = HipCompiler(logger=logger)
 
 
 @mcp.tool()
-def compile_hip_source_file(
+async def compile_hip_source_file(
+    ctx: Annotated[Context, Field(description="MCP context.")],
     source_file: Annotated[
         str | Path, Field(description="Path to the HIP C/C++ source file to compile.")
     ],
@@ -55,7 +56,9 @@ def compile_hip_source_file(
             with tempfile.TemporaryDirectory(delete=False) as tmpdir:
                 output_file = Path(tmpdir) / source_file.stem
     except Exception as e:
-        return f"Failed to create output file: {e!s}"
+        msg = f"Failed to create output file: {e!s}"
+        await ctx.error(msg)
+        return msg
 
     try:
         result = compiler.compile(
@@ -64,25 +67,23 @@ def compile_hip_source_file(
             extra_flags=extra_flags,
         )
     except Exception as e:
-        logger.exception("Compilation of %s failed: %s", source_file, str(e))
-        return f"Compilation of {source_file} failed: {e!s}"
+        msg = f"Compilation of {source_file} failed: {e!s}"
+        await ctx.error(msg)
+        return msg
 
     if not result.success:
-        logger.error(
-            "Compilation of HIP code in %s failed. Error: %s", str(source_file), result.errors
-        )
-        return f"Compilation of HIP code in {source_file} failed: {result.errors}"
+        msg = f"Compilation of HIP code in {source_file} failed: {result.errors}"
+        await ctx.error(msg)
+        return msg
 
-    logger.info(
-        "Compilation of HIP code in %s succeeded. Executable in %s.",
-        str(source_file),
-        str(output_file),
-    )
-    return f"Compilation of HIP code in {source_file} succeeded. Executable at {output_file}"
+    msg = f"Compilation of HIP code in {source_file} succeeded. Executable at {output_file}"
+    await ctx.info(msg)
+    return msg
 
 
 @mcp.tool()
-def compile_hip_source_string(
+async def compile_hip_source_string(
+    ctx: Annotated[Context, Field(description="MCP context.")],
     source: Annotated[str, Field(description="HIP C/C++ source code as a string.")],
     output_file: Annotated[
         str | Path | None,
@@ -113,7 +114,9 @@ def compile_hip_source_string(
             with source_file.open("w") as f:
                 f.write(source)
     except Exception as e:
-        return f"Failed to create temporary source file: {e!s}"
+        msg = f"Failed to create temporary source file: {e!s}"
+        await ctx.error(msg)
+        return msg
 
     try:
         result = compiler.compile(
@@ -122,19 +125,18 @@ def compile_hip_source_string(
             extra_flags=extra_flags,
         )
     except Exception as e:
-        logger.exception("Compilation of %s failed: %s", source_file, str(e))
-        return f"Compilation of {source_file} failed: {e!s}"
+        msg = f"Compilation of {source_file} failed: {e!s}"
+        await ctx.error(msg)
+        return msg
 
     if not result.success:
-        logger.error("Compilation of HIP code in %s failed. Error: %s", source_file, result.errors)
-        return f"Compilation of HIP code in {source_file} failed: {result.errors}"
+        msg = f"Compilation of HIP code in {source_file} failed: {result.errors}"
+        await ctx.error(msg)
+        return msg
 
-    logger.info(
-        "Compilation of HIP code in %s succeeded. Executable in %s.",
-        str(source_file),
-        str(output_file),
-    )
-    return f"Compilation of HIP code in {source_file} succeeded. Executable at {output_file}"
+    msg = f"Compilation of HIP code in {source_file} succeeded. Executable at {output_file}"
+    await ctx.info(msg)
+    return msg
 
 
 def main() -> None:
