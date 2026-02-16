@@ -35,9 +35,6 @@ dev = [
 cmake.build-type = "Release"
 wheel.packages = ["accordo"]
 
-[tool.scikit-build.cmake.define]
-CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
-
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
 version_scheme = "post-release"

@@ -33,7 +33,6 @@ cmake.build-type = "Release"
 wheel.packages = ["nexus"]
 
 [tool.scikit-build.cmake.define]
-CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
 LLVM_INSTALL_DIR = {env="LLVM_INSTALL_DIR", default="/opt/rocm/llvm"}
 
 # ---- setuptools-scm versioning ----
