@@ -133,10 +133,10 @@ profiler = UProfProfiler(logger=None)
 
 **Methods:**
 
-- `find_hotspots(output_dir, executable, executable_args)` → `ProfilingResult`
+- `find_hotspots(output_dir, executable, executable_args)` → `UProfProfilerResult`
   - Profiles the executable and returns hotspot analysis
   - Parameters:
     - `output_dir` (str | Path): Directory to store results
     - `executable` (str | Path): Path to executable
     - `executable_args` (list[str]): Arguments for the executable
-  - Returns: `ProfilingResult` with `report_path` attribute
+  - Returns: `UProfProfilerResult` with `report_path` attribute
