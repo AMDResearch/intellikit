@@ -3,10 +3,7 @@
 
 """rocm-mcp - ROCm-based tools for use by LLM agents."""
 
-from importlib.metadata import version
-
-__version__ = version("rocm-mcp")
-
+from ._version import __version__
 from .compile import HipCompiler, HipCompilerResult
 from .doc import HipDocs
 from .sysinfo import AgentInfo, DeviceType, Rocminfo, RocminfoResult

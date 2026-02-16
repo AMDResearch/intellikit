@@ -3,6 +3,7 @@
 
 """uprof_mcp - AMD UProf MCP tool."""
 
+from ._version import __version__
 from .uprof_profiler import UProfProfiler, UProfProfilerResult
 
-__all__ = ["UProfProfiler", "UProfProfilerResult"]
+__all__ = ["UProfProfiler", "UProfProfilerResult", "__version__"]
