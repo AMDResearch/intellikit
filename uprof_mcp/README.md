@@ -67,20 +67,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
         print(report.read())
 ```
 
-### MCP Tool (Agentic Mode)
-
-When configured as an MCP server, the tool can be called by LLMs:
-
-**Tool:** `profile_for_hotspots`
-
-**Parameters:**
-
-- `executable` (str): Path to the executable to profile
-- `executable_arguments` (list[str]): Arguments to pass to the executable
-- `output_dir` (str, optional): Directory to store profiling results
-
-**Returns:** A summary report of the profiling results with CPU hotspots.
-
 ### Example with LangChain
 
 See `examples/uprof_profiler.py` for a complete example using LangChain agents:
@@ -96,7 +82,7 @@ python examples/uprof_profiler.py --executable ./my_app --args arg1 arg2 --class
 ## Requirements
 
 - Python >= 3.10
-- AMD uProf installed and available in PATH
+- AMD uProf installed
 - x86 CPU architecture
 
 ## Development
@@ -138,5 +124,5 @@ profiler = UProfProfiler(logger=None)
   - Parameters:
     - `output_dir` (str | Path): Directory to store results
     - `executable` (str | Path): Path to executable
-    - `executable_args` (list[str]): Arguments for the executable
+    - `executable_args` (list[str] | None): Arguments for the executable
   - Returns: `UProfProfilerResult` with `report_path` attribute
