@@ -108,7 +108,7 @@ trace.save("my_trace.json")
 old_trace = Nexus.load("my_trace.json")
 ```
 
-For more details, see the [Python package documentation](nexus/README.md) and [examples](examples/).
+For more details, see the [examples directory](examples/).
 
 ### Command Line Usage
 
