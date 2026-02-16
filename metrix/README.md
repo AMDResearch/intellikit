@@ -50,7 +50,7 @@ metrix -o results.json ./my_app
 ## Python API
 
 ```python
-from metrix.api import Metrix
+from metrix import Metrix
 
 # Architecture is auto-detected
 profiler = Metrix()
@@ -147,6 +147,8 @@ GPU architecture is automatically detected using `rocminfo`. Metrix will detect 
 This design makes it easy to add new metrics and support new GPU architectures.
 
 ## Example
+
+See the [examples directory](examples/) for complete working examples.
 
 ```bash
 $ metrix ./examples/01_vector_add/vector_add
