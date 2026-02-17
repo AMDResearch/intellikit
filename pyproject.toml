@@ -17,7 +17,7 @@ authors = [
 license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["accordo", "linex", "metrix", "nexus", "rocm_mcp", "uprof_mcp"]
+dependencies = ["accordo", "linex", "metrix", "nexus"]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/intellikit"
