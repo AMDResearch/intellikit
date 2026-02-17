@@ -48,17 +48,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      #- name: Test Installation - all tools
-      #  run: |
-      #    bash .github/scripts/container_exec.sh "
-      #      pip install -e .
-      #      python3 -c 'import accordo'
-      #      python3 -c 'import linex'
-      #      python3 -c 'import metrix'
-      #      python3 -c 'import nexus'
-      #      python3 -c 'import rocm_mcp'
-      #      python3 -c 'import uprof_mcp'
-      #    "
+      - name: Test Installation - all tools
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e accordo
+            pip install -e linex
+            pip install -e metrix
+            pip install -e nexus
+            pip install -e rocm_mcp
+            pip install -e uprof_mcp
+            pip install -e .
+            python3 -c 'import accordo'
+            python3 -c 'import linex'
+            python3 -c 'import metrix'
+            python3 -c 'import nexus'
+            python3 -c 'import rocm_mcp'
+            python3 -c 'import uprof_mcp'
+          "
 
       - name: Test Installation - accordo
         run: |
