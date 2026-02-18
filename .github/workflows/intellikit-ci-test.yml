@@ -14,6 +14,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions:
+  contents: read
+
 jobs:
   build-container-image:
     runs-on: [self-hosted, mi3xx]
@@ -39,71 +42,36 @@ jobs:
           bash .github/scripts/container_build.sh
 
   test-installation:
-    name: Test Installation
+    name: Test ${{ matrix.install-method }} - ${{ matrix.package }}
     needs: build-container-image
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [accordo, linex, metrix, nexus, rocm_mcp, uprof_mcp]
+        install-method: [editable, non-editable, github]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        if: matrix.install-method != 'github'
 
-      - name: Test Installation - all tools
+      - name: Test ${{ matrix.install-method }} install - ${{ matrix.package }}
         run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e accordo
-            pip install -e linex
-            pip install -e metrix
-            pip install -e nexus
-            pip install -e rocm_mcp
-            pip install -e uprof_mcp
-            pip install -e .
-            python3 -c 'import accordo'
-            python3 -c 'import linex'
-            python3 -c 'import metrix'
-            python3 -c 'import nexus'
-            python3 -c 'import rocm_mcp'
-            python3 -c 'import uprof_mcp'
-          "
-
-      - name: Test Installation - accordo
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e accordo
-            python3 -c 'import accordo'
-          "
-
-      - name: Test Installation - linex
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e linex
-            python3 -c 'import linex'
-          "
-
-      - name: Test Installation - metrix
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e metrix
-            python3 -c 'import metrix'
-          "
-
-      - name: Test Installation - nexus
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e nexus
-            python3 -c 'import nexus'
-          "
-
-      - name: Test Installation - rocm_mcp
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e rocm_mcp
-            python3 -c 'import rocm_mcp'
-          "
-
-      - name: Test Installation - uprof_mcp
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e uprof_mcp
-            python3 -c 'import uprof_mcp'
-          "
+          if [ "${{ matrix.install-method }}" = "editable" ]; then
+            bash .github/scripts/container_exec.sh "
+              pip install -e ${{ matrix.package }}
+              python3 -c 'import ${{ matrix.package }}'
+            "
+          elif [ "${{ matrix.install-method }}" = "non-editable" ]; then
+            bash .github/scripts/container_exec.sh "
+              pip install ./${{ matrix.package }}
+              python3 -c 'import ${{ matrix.package }}'
+            "
+          elif [ "${{ matrix.install-method }}" = "github" ]; then
+            bash .github/scripts/container_exec.sh "
+              pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=${{ matrix.package }}
+              python3 -c 'import ${{ matrix.package }}'
+            "
+          fi
