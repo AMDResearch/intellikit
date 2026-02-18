@@ -16,7 +16,6 @@ def validate_kernel_correctness(
     kernel_name: str,
     reference_command: list[str],
     optimized_command: list[str],
-    output_args: list[dict],
     tolerance: float = 1e-6,
     working_directory: str = ".",
 ) -> dict:
@@ -30,20 +29,16 @@ def validate_kernel_correctness(
         kernel_name: Name of the kernel to validate
         reference_command: Command for reference version as list (e.g., ['./ref'])
         optimized_command: Command for optimized version as list (e.g., ['./opt'])
-        output_args: List of kernel output arguments with name and type
         tolerance: Numerical tolerance for comparisons (default: 1e-6)
         working_directory: Working directory for commands (default: '.')
 
     Returns:
         Dictionary with is_valid, num_arrays_validated, and summary
     """
-    # Build kernel args from output_args: list of (name, type) tuples
-    kernel_args = [(arg["name"], arg["type"]) for arg in output_args]
-
     validator = Accordo(
         binary=reference_command,
         kernel_name=kernel_name,
-        kernel_args=kernel_args if kernel_args else None,
+        kernel_args=None,
         working_directory=working_directory,
     )
 

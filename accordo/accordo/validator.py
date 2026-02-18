@@ -183,9 +183,8 @@ class Accordo:
         logging.info("Generating kernel metadata...")
         self.metadata_path = generate_kernel_metadata(arg_types)
 
-        # Auto-detect accordo_path if not provided
         if accordo_path is None:
-            accordo_dir = Path(__file__).parent
+            accordo_dir = Path(__file__).resolve().parent.parent
             if (accordo_dir / "build").exists() or (accordo_dir / "CMakeLists.txt").exists():
                 accordo_path = accordo_dir
             else:
