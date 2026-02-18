@@ -4,7 +4,9 @@
 
 """MCP Server for Accordo - Automated Kernel Validation."""
 
-from fastmcp import FastMCP
+from typing import Dict, List
+
+from mcp.server.fastmcp import FastMCP
 
 from accordo import Accordo
 
@@ -14,9 +16,9 @@ mcp = FastMCP("IntelliKit Accordo")
 @mcp.tool()
 def validate_kernel_correctness(
     kernel_name: str,
-    reference_command: list[str],
-    optimized_command: list[str],
-    output_args: list[dict],
+    reference_command: List[str],
+    optimized_command: List[str],
+    output_args: List[Dict],
     tolerance: float = 1e-6,
     working_directory: str = ".",
 ) -> dict:

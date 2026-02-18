@@ -4,7 +4,7 @@
 
 """MCP Server for Linex - Source-Level GPU Performance Profiling."""
 
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 
 from linex import Linex
 
