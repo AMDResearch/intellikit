@@ -36,7 +36,7 @@ for line in profiler.source_lines[:5]:
 ## Requirements
 
 - Python >= 3.8
-- ROCm 6.0+ with `rocprofv3`
+- ROCm 7.0+ with `rocprofv3`
 - Kernels compiled with `-g` (debug symbols)
 
 ## API

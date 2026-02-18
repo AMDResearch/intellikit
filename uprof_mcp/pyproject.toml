@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uprof-mcp"
+dynamic = ["version"]
+description = "MCP server for profiling CPU code via AMD uprof."
+authors = [
+    { name = "Yiannis Papadopoulos", email = "ypapadop@amd.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.21.0",
+]
+
+[project.scripts]
+uprof-profiler-mcp = "uprof_mcp.uprof_profiler_mcp:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+    "ruff>=0.14.4",
+    {include-group = "examples"},
+]
+examples = [
+    "langchain>=1.0.5",
+    "langchain-mcp-adapters>=0.1.12",
+    "langchain-openai>=1.0.2",
+    "python-dotenv>=1.2.1",
+]
+
+# ---- Ruff configuration ----
+[tool.ruff]
+extend = "../pyproject.toml"
+
+# ---- UV configuration ----
+[tool.uv]
+package = true
+
+# ---- Setuptools configuration ----
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "uprof_mcp._version.__version__"}

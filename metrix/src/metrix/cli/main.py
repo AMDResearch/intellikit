@@ -73,9 +73,13 @@ Examples:
         help="Only collect timing, no hardware counters",
     )
 
-    profile_parser.add_argument("--kernel", "-k", help="Filter kernels by name pattern (supports wildcards)")
+    profile_parser.add_argument(
+        "--kernel", "-k", help="Filter kernels by name pattern (supports wildcards)"
+    )
 
-    profile_parser.add_argument("--top", type=int, metavar="K", help="Show only top K slowest kernels")
+    profile_parser.add_argument(
+        "--top", type=int, metavar="K", help="Show only top K slowest kernels"
+    )
 
     profile_parser.add_argument(
         "--output",
@@ -99,7 +103,9 @@ Examples:
         help="Set logging level (default: warning)",
     )
 
-    profile_parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode - minimal output")
+    profile_parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Quiet mode - minimal output"
+    )
 
     profile_parser.add_argument(
         "--no-counters",

@@ -12,7 +12,7 @@ description = "Linex: Source-Level SQTT Profiling - Map GPU cycles to your sourc
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = { text = "MIT" }
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = ["fastmcp"]
@@ -29,9 +29,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/intellikit"
-Repository = "https://github.com/AMDResearch/intellikit"
-Documentation = "https://github.com/AMDResearch/intellikit/tree/main/linex"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/linex"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/linex"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/linex/README.md"
 
 [project.optional-dependencies]
 dev = [
@@ -55,18 +55,10 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# ---- Ruff configuration ----
 [tool.ruff]
-line-length = 100
-exclude = [
-    "**/*.ipynb",
-    "build/**",
-    "test/**",
-    "resources/**",
-]
+extend = "../pyproject.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501", "E731", "E741"]
-
-[tool.ruff.format]
-quote-style = "double"

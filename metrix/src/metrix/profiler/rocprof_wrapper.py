@@ -40,7 +40,9 @@ class ROCProfV3Wrapper:
         """Verify rocprofv3 is available"""
         try:
             # Always use a fixed 5s timeout for the --help check, regardless of profiling timeout
-            result = subprocess.run(["rocprofv3", "--help"], capture_output=True, timeout=5, text=True)
+            result = subprocess.run(
+                ["rocprofv3", "--help"], capture_output=True, timeout=5, text=True
+            )
             if result.returncode != 0:
                 raise RuntimeError("rocprofv3 not working correctly")
         except FileNotFoundError:
@@ -118,7 +120,9 @@ class ROCProfV3Wrapper:
             logger.debug(f"Timeout: {self.timeout}")
             logger.debug(f"CWD: {cwd}")
 
-            result = subprocess.run(prof_cmd, capture_output=True, timeout=self.timeout, text=True, cwd=cwd)
+            result = subprocess.run(
+                prof_cmd, capture_output=True, timeout=self.timeout, text=True, cwd=cwd
+            )
             logger.info("subprocess.run returned!")
 
             logger.info("subprocess.run returned successfully")

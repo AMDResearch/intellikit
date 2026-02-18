@@ -79,7 +79,9 @@ def send_response(pipe_name):
         fifo.write("done\n")
 
 
-def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, process_pid=None, baseline_time_ms=None):
+def get_kern_arg_data(
+    pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, process_pid=None, baseline_time_ms=None
+):
     """Get kernel argument data via IPC.
 
     Args:
@@ -102,7 +104,9 @@ def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, pr
         # Use 2x baseline or minimum 3 seconds
         dynamic_timeout = max(3.0, (baseline_time_ms / 1000.0) * 2.0)
         ipc_timeout_seconds = dynamic_timeout
-        logging.debug(f"Using dynamic timeout: {ipc_timeout_seconds}s (2x baseline of {baseline_time_ms}ms)")
+        logging.debug(
+            f"Using dynamic timeout: {ipc_timeout_seconds}s (2x baseline of {baseline_time_ms}ms)"
+        )
 
     logging.debug(f"pipe_name: {pipe_name}")
     logging.debug(f"get_kern_arg_data args: {args}")
@@ -126,7 +130,9 @@ def get_kern_arg_data(pipe_name, args, ipc_file_name, ipc_timeout_seconds=30, pr
                     )
 
             if time.time() - start_time > ipc_timeout_seconds:
-                timeout_msg = f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
+                timeout_msg = (
+                    f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
+                )
                 if baseline_time_ms is not None:
                     timeout_msg += f" (baseline: {baseline_time_ms}ms, 2x timeout: {ipc_timeout_seconds}s). Code may be correct but too slow to be worth profiling."
                 raise TimeoutError(timeout_msg)

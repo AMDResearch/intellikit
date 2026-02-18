@@ -6,13 +6,13 @@ Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
 
 ## Why Metrix?
 
-Existing GPU profilers are **trash**:
+Existing GPU profilers have challenges:
 - Cryptic hardware counters everywhere
 - No clear interpretation
-- Poor software quality
-- No unit tests
+- Inconsistent software quality
+- Limited testing
 
-**Metrix** is different:
+**Metrix** takes a different approach:
 - **Clean Python API** with modern design
 - **Human-readable metrics** instead of raw counters
 - **Unit tested** and reliable
@@ -50,7 +50,7 @@ metrix -o results.json ./my_app
 ## Python API
 
 ```python
-from metrix.api import Metrix
+from metrix import Metrix
 
 # Architecture is auto-detected
 profiler = Metrix()
@@ -147,6 +147,8 @@ GPU architecture is automatically detected using `rocminfo`. Metrix will detect 
 This design makes it easy to add new metrics and support new GPU architectures.
 
 ## Example
+
+See the [examples directory](examples/) for complete working examples.
 
 ```bash
 $ metrix ./examples/01_vector_add/vector_add

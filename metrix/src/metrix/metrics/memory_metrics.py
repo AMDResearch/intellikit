@@ -204,10 +204,18 @@ MEMORY_PATTERN_METRICS = {
             return min(100.0, efficiency)
         """,
         "interpretation": {
-            "excellent": (80, 100, "Excellent memory coalescing - threads access contiguous memory"),
+            "excellent": (
+                80,
+                100,
+                "Excellent memory coalescing - threads access contiguous memory",
+            ),
             "good": (60, 80, "Good coalescing"),
             "fair": (40, 60, "Moderate coalescing - some optimization possible"),
-            "poor": (0, 40, "Poor coalescing - threads access scattered memory, causing many transactions"),
+            "poor": (
+                0,
+                40,
+                "Poor coalescing - threads access scattered memory, causing many transactions",
+            ),
         },
     },
     "memory.global_load_efficiency": {

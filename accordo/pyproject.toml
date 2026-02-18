@@ -12,19 +12,19 @@ description = "Accordo: Automated side-by-side correctness validation for GPU ke
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = { text = "MIT" }
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
     "fastmcp",
-    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@c67ceefb548125c6ef9bc4042207f11fcb624c62"
+    "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@6e0093972be276a51ed2bea963c756caa9324325"
 ]
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/nexus"
-Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/tree/main/accordo"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/accordo"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/accordo"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/accordo/README.md"
 
 [project.optional-dependencies]
 dev = [
@@ -41,9 +41,6 @@ cmake.build-type = "Release"
 build-dir = "build/{wheel_tag}"
 wheel.packages = ["accordo"]
 
-[tool.scikit-build.cmake.define]
-CMAKE_PREFIX_PATH = {env="ROCM_PATH", default="/opt/rocm"}
-
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
 version_scheme = "post-release"
@@ -51,18 +48,10 @@ local_scheme = "node-and-date"
 fallback_version = "0.2.0"
 root = ".."
 
+# ---- Ruff configuration ----
 [tool.ruff]
-line-length = 120
-exclude = [
-    "**/*.ipynb",
-    "build/**",
-    "test/**"
-]
+extend = "../pyproject.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
-
-[tool.ruff.format]
-quote-style = "double"
-

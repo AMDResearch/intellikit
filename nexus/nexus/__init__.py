@@ -234,7 +234,9 @@ class Nexus:
 
         # Check if command succeeded
         if result.returncode != 0:
-            raise RuntimeError(f"Command failed with exit code {result.returncode}:\n{result.stderr}")
+            raise RuntimeError(
+                f"Command failed with exit code {result.returncode}:\n{result.stderr}"
+            )
 
         # Load and return the trace data
         try:

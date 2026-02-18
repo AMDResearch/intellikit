@@ -12,7 +12,7 @@ description = "Metrix: GPU Profiling. Decoded. Clean metrics for humans, not har
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = { text = "MIT" }
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -31,9 +31,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AMDResearch/nexus"
-Repository = "https://github.com/AMDResearch/nexus"
-Documentation = "https://github.com/AMDResearch/nexus/tree/main/metrix"
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/metrix"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/metrix"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/metrix/README.md"
 
 [project.scripts]
 metrix = "metrix.cli.main:main"
@@ -58,19 +58,10 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# ---- Ruff configuration ----
 [tool.ruff]
-line-length = 120
-exclude = [
-    "**/*.ipynb",
-    "build/**",
-    "test/**",
-    "resources/**",
-]
+extend = "../pyproject.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
-
-[tool.ruff.format]
-quote-style = "double"
-

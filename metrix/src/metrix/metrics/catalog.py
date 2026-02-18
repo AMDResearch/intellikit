@@ -99,7 +99,9 @@ METRIC_PROFILES = {
 def get_metrics_by_category(category: str) -> list:
     """Get all metrics in a category"""
     return [
-        metric_name for metric_name, metric_def in METRIC_CATALOG.items() if metric_def["category"].value == category
+        metric_name
+        for metric_name, metric_def in METRIC_CATALOG.items()
+        if metric_def["category"].value == category
     ]
 
 

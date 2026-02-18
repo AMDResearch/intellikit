@@ -100,10 +100,7 @@ class Accordo:
     is built once in __init__, then reused for all capture_snapshot calls.
 
     Example:
-            >>> validator = Accordo(
-            ...     binary="./app_ref",
-            ...     kernel_name="reduce_sum"
-            ... )
+            >>> validator = Accordo(binary="./app_ref", kernel_name="reduce_sum")
             >>> ref = validator.capture_snapshot(binary=["./app_ref"])
             >>> opt = validator.capture_snapshot(binary=["./app_opt"])
             >>> result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
@@ -141,16 +138,13 @@ class Accordo:
 
         Example:
                 >>> # Auto-extract kernel args (requires -g flag)
-                >>> validator = Accordo(
-                ...     binary="./app_ref",
-                ...     kernel_name="reduce_sum"
-                ... )
+                >>> validator = Accordo(binary="./app_ref", kernel_name="reduce_sum")
                 >>>
                 >>> # Or specify manually
                 >>> validator = Accordo(
                 ...     binary="./app_ref",
                 ...     kernel_name="reduce_sum",
-                ...     kernel_args=[("input", "const float*"), ("output", "float*")]
+                ...     kernel_args=[("input", "const float*"), ("output", "float*")],
                 ... )
         """
         self.kernel_name = kernel_name
@@ -169,7 +163,9 @@ class Accordo:
             logging.info(f"Extracting kernel arguments for '{kernel_name}' from {binary[0]}...")
             try:
                 kernel_args = extract_kernel_arguments(
-                    binary_path=binary[0], kernel_name=kernel_name, working_directory=working_directory
+                    binary_path=binary[0],
+                    kernel_name=kernel_name,
+                    working_directory=working_directory,
                 )
                 logging.info(f"Successfully extracted {len(kernel_args)} kernel argument(s)")
             except Exception as e:
@@ -449,7 +445,9 @@ class Accordo:
         # Create mapping from array index to kernel arg index (only for output args)
         # Arrays list contains only outputs, but kernel_args contains all arguments
         output_arg_indices = [
-            i for i, (arg_name, arg_type) in enumerate(self.kernel_args) if "*" in arg_type and "const" not in arg_type
+            i
+            for i, (arg_name, arg_type) in enumerate(self.kernel_args)
+            if "*" in arg_type and "const" not in arg_type
         ]
 
         for array_idx, (ref_arr, opt_arr) in enumerate(zip(reference_arrays, optimized_arrays)):
@@ -483,7 +481,9 @@ class Accordo:
                     "type": arg_type,
                     "size": len(ref_arr),
                 }
-                logging.debug(f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - MATCH")
+                logging.debug(
+                    f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - MATCH"
+                )
 
         # Determine overall success
         is_valid = len(mismatches) == 0
