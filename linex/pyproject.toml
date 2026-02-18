@@ -15,7 +15,7 @@ authors = [
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = []
+dependencies = ["mcp[cli]"]
 
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -38,6 +38,9 @@ dev = [
     "pytest",
     "ruff",
 ]
+
+[project.scripts]
+linex-mcp = "linex.mcp.server:main"
 
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]

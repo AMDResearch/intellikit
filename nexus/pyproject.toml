@@ -15,7 +15,7 @@ authors = [
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = []
+dependencies = ["mcp[cli]"]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/intellikit/tree/main/nexus"
@@ -27,6 +27,9 @@ dev = [
     "pytest",
     "ruff",
 ]
+
+[project.scripts]
+nexus-mcp = "nexus.mcp.server:main"
 
 [tool.scikit-build]
 cmake.build-type = "Release"

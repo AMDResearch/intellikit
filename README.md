@@ -228,6 +228,7 @@ pip install -e ".[uprof_mcp]"
 - **ROCm**: >= 6.0 (7.0+ for linex)
 - **Hardware**: MI300+ GPUs
 
+
 ## Documentation
 
 Each tool has its own detailed documentation:

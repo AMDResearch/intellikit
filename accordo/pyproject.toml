@@ -17,6 +17,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
+    "mcp[cli]",
     "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@6e0093972be276a51ed2bea963c756caa9324325"
 ]
 
@@ -31,8 +32,13 @@ dev = [
     "ruff",
 ]
 
+[project.scripts]
+accordo-mcp = "accordo.mcp.server:main"
+
 [tool.scikit-build]
 cmake.build-type = "Release"
+# Persistent build dir so editable install can find the package (pip deletes temp build dir)
+build-dir = "build/{wheel_tag}"
 wheel.packages = ["accordo"]
 
 # ---- setuptools-scm versioning ----

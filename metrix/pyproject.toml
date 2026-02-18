@@ -17,6 +17,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "pandas>=1.5.0",
+    "mcp[cli]",
 ]
 
 classifiers = [
@@ -36,6 +37,7 @@ Documentation = "https://github.com/AMDResearch/intellikit/blob/main/metrix/READ
 
 [project.scripts]
 metrix = "metrix.cli.main:main"
+metrix-mcp = "metrix.mcp.server:main"
 
 [project.optional-dependencies]
 dev = [
