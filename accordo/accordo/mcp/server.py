@@ -11,6 +11,32 @@ from accordo import Accordo
 mcp = FastMCP("IntelliKit Accordo")
 
 
+def run_validate_kernel_correctness(
+    kernel_name: str,
+    reference_command: list[str],
+    optimized_command: list[str],
+    tolerance: float = 1e-6,
+    working_directory: str = ".",
+) -> dict:
+    """Run kernel correctness validation. Call this from Python; MCP tool wraps it."""
+    validator = Accordo(
+        binary=reference_command,
+        kernel_name=kernel_name,
+        kernel_args=None,
+        working_directory=working_directory,
+    )
+
+    ref_snapshot = validator.capture_snapshot(binary=reference_command)
+    opt_snapshot = validator.capture_snapshot(binary=optimized_command)
+    result = validator.compare_snapshots(ref_snapshot, opt_snapshot, tolerance=tolerance)
+
+    return {
+        "is_valid": result.is_valid,
+        "num_arrays_validated": result.num_arrays_validated,
+        "summary": result.summary(),
+    }
+
+
 @mcp.tool()
 def validate_kernel_correctness(
     kernel_name: str,
@@ -35,25 +61,13 @@ def validate_kernel_correctness(
     Returns:
         Dictionary with is_valid, num_arrays_validated, and summary
     """
-    validator = Accordo(
-        binary=reference_command,
+    return run_validate_kernel_correctness(
         kernel_name=kernel_name,
-        kernel_args=None,
+        reference_command=reference_command,
+        optimized_command=optimized_command,
+        tolerance=tolerance,
         working_directory=working_directory,
     )
-
-    # Capture snapshots
-    ref_snapshot = validator.capture_snapshot(binary=reference_command)
-    opt_snapshot = validator.capture_snapshot(binary=optimized_command)
-
-    # Compare
-    result = validator.compare_snapshots(ref_snapshot, opt_snapshot, tolerance=tolerance)
-
-    return {
-        "is_valid": result.is_valid,
-        "num_arrays_validated": result.num_arrays_validated,
-        "summary": result.summary(),
-    }
 
 
 def main() -> None:
