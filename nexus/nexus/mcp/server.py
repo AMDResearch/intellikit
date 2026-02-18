@@ -4,7 +4,9 @@
 
 """MCP Server for Nexus - HSA Packet Source Code Extractor."""
 
-from fastmcp import FastMCP
+from typing import List
+
+from mcp.server.fastmcp import FastMCP
 
 from nexus import Nexus
 
@@ -13,7 +15,7 @@ mcp = FastMCP("IntelliKit Nexus")
 
 @mcp.tool()
 def extract_kernel_code(
-    command: list[str], log_level: int = 1, include_assembly: bool = False
+    command: List[str], log_level: int = 1, include_assembly: bool = False
 ) -> dict:
     """
     Extract GPU kernel source code and assembly from an application.
@@ -60,7 +62,7 @@ def extract_kernel_code(
 
 
 @mcp.tool()
-def list_kernels(command: list[str]) -> dict:
+def list_kernels(command: List[str]) -> dict:
     """
     List all GPU kernels launched by an application.
 

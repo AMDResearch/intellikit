@@ -4,7 +4,7 @@
 
 """MCP Server for Metrix - Human-Readable GPU Metrics."""
 
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 
 from metrix import Metrix
 

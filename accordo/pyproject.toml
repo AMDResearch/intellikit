@@ -17,7 +17,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
-    "fastmcp",
+    "mcp[cli]",
     "kerneldb @ git+https://github.com/AMDResearch/kerneldb.git@6e0093972be276a51ed2bea963c756caa9324325"
 ]
 
