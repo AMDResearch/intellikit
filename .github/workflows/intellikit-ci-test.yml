@@ -38,8 +38,8 @@ jobs:
         run: |
           bash .github/scripts/container_build.sh
 
-  test-installation:
-    name: Test Installation
+  test-editable-install:
+    name: Test Editable Install
     needs: build-container-image
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 30
@@ -48,7 +48,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Test Installation - all tools
+      - name: Test Editable Install - all tools
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e accordo
@@ -66,44 +66,145 @@ jobs:
             python3 -c 'import uprof_mcp'
           "
 
-      - name: Test Installation - accordo
+      - name: Test Editable Install - accordo
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e accordo
             python3 -c 'import accordo'
           "
 
-      - name: Test Installation - linex
+      - name: Test Editable Install - linex
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e linex
             python3 -c 'import linex'
           "
 
-      - name: Test Installation - metrix
+      - name: Test Editable Install - metrix
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e metrix
             python3 -c 'import metrix'
           "
 
-      - name: Test Installation - nexus
+      - name: Test Editable Install - nexus
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e nexus
             python3 -c 'import nexus'
           "
 
-      - name: Test Installation - rocm_mcp
+      - name: Test Editable Install - rocm_mcp
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e rocm_mcp
             python3 -c 'import rocm_mcp'
           "
 
-      - name: Test Installation - uprof_mcp
+      - name: Test Editable Install - uprof_mcp
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e uprof_mcp
+            python3 -c 'import uprof_mcp'
+          "
+
+  test-non-editable-install:
+    name: Test Non-Editable Install
+    needs: build-container-image
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test Non-Editable Install - accordo
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install ./accordo
+            python3 -c 'import accordo'
+          "
+
+      - name: Test Non-Editable Install - linex
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install ./linex
+            python3 -c 'import linex'
+          "
+
+      - name: Test Non-Editable Install - metrix
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install ./metrix
+            python3 -c 'import metrix'
+          "
+
+      - name: Test Non-Editable Install - nexus
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install ./nexus
+            python3 -c 'import nexus'
+          "
+
+      - name: Test Non-Editable Install - rocm_mcp
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install ./rocm_mcp
+            python3 -c 'import rocm_mcp'
+          "
+
+      - name: Test Non-Editable Install - uprof_mcp
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install ./uprof_mcp
+            python3 -c 'import uprof_mcp'
+          "
+
+  test-github-install:
+    name: Test GitHub Install
+    needs: build-container-image
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 30
+
+    steps:
+      - name: Test GitHub Install - accordo
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=accordo
+            python3 -c 'import accordo'
+          "
+
+      - name: Test GitHub Install - linex
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=linex
+            python3 -c 'import linex'
+          "
+
+      - name: Test GitHub Install - metrix
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=metrix
+            python3 -c 'import metrix'
+          "
+
+      - name: Test GitHub Install - nexus
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=nexus
+            python3 -c 'import nexus'
+          "
+
+      - name: Test GitHub Install - rocm_mcp
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=rocm_mcp
+            python3 -c 'import rocm_mcp'
+          "
+
+      - name: Test GitHub Install - uprof_mcp
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=uprof_mcp
             python3 -c 'import uprof_mcp'
           "
