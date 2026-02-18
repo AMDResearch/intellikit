@@ -15,7 +15,7 @@ authors = [
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = []
+dependencies = ["fastmcp"]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/nexus"
@@ -27,6 +27,9 @@ dev = [
     "pytest",
     "ruff",
 ]
+
+[project.scripts]
+nexus-mcp = "nexus.mcp.server:main"
 
 [tool.scikit-build]
 cmake.build-type = "Release"
