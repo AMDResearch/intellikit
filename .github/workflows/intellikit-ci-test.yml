@@ -48,20 +48,62 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Test Installation
+      - name: Test Installation - all tools
         run: |
           bash .github/scripts/container_exec.sh "
-            pip install -e ./accordo
-            pip install -e ./linex
-            pip install -e ./metrix
-            pip install -e ./nexus
-            pip install -e ./rocm_mcp
-            pip install -e ./uprof_mcp
+            pip install -e accordo
+            pip install -e linex
+            pip install -e metrix
+            pip install -e nexus
+            pip install -e rocm_mcp
+            pip install -e uprof_mcp
             pip install -e .
             python3 -c 'import accordo'
             python3 -c 'import linex'
             python3 -c 'import metrix'
             python3 -c 'import nexus'
             python3 -c 'import rocm_mcp'
+            python3 -c 'import uprof_mcp'
+          "
+
+      - name: Test Installation - accordo
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e accordo
+            python3 -c 'import accordo'
+          "
+
+      - name: Test Installation - linex
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e linex
+            python3 -c 'import linex'
+          "
+
+      - name: Test Installation - metrix
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e metrix
+            python3 -c 'import metrix'
+          "
+
+      - name: Test Installation - nexus
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e nexus
+            python3 -c 'import nexus'
+          "
+
+      - name: Test Installation - rocm_mcp
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e rocm_mcp
+            python3 -c 'import rocm_mcp'
+          "
+
+      - name: Test Installation - uprof_mcp
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e uprof_mcp
             python3 -c 'import uprof_mcp'
           "

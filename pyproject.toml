@@ -43,7 +43,6 @@ wheel.packages = [
     "rocm_mcp/src/rocm_mcp",
     "uprof_mcp/src/uprof_mcp"
 ]
-wheel.py-api = "cp38"
 
 # ---- setuptools-scm versioning ----
 [tool.setuptools_scm]
