@@ -4,21 +4,44 @@
 
 """MCP Server for Accordo - Automated Kernel Validation."""
 
-from typing import Dict, List
-
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from accordo import Accordo
 
 mcp = FastMCP("IntelliKit Accordo")
 
 
+def run_validate_kernel_correctness(
+    kernel_name: str,
+    reference_command: list[str],
+    optimized_command: list[str],
+    tolerance: float = 1e-6,
+    working_directory: str = ".",
+) -> dict:
+    """Run kernel correctness validation. Call this from Python; MCP tool wraps it."""
+    validator = Accordo(
+        binary=reference_command,
+        kernel_name=kernel_name,
+        kernel_args=None,
+        working_directory=working_directory,
+    )
+
+    ref_snapshot = validator.capture_snapshot(binary=reference_command)
+    opt_snapshot = validator.capture_snapshot(binary=optimized_command)
+    result = validator.compare_snapshots(ref_snapshot, opt_snapshot, tolerance=tolerance)
+
+    return {
+        "is_valid": result.is_valid,
+        "num_arrays_validated": result.num_arrays_validated,
+        "summary": result.summary(),
+    }
+
+
 @mcp.tool()
 def validate_kernel_correctness(
     kernel_name: str,
-    reference_command: List[str],
-    optimized_command: List[str],
-    output_args: List[Dict],
+    reference_command: list[str],
+    optimized_command: list[str],
     tolerance: float = 1e-6,
     working_directory: str = ".",
 ) -> dict:
@@ -32,35 +55,19 @@ def validate_kernel_correctness(
         kernel_name: Name of the kernel to validate
         reference_command: Command for reference version as list (e.g., ['./ref'])
         optimized_command: Command for optimized version as list (e.g., ['./opt'])
-        output_args: List of kernel output arguments with name and type
         tolerance: Numerical tolerance for comparisons (default: 1e-6)
         working_directory: Working directory for commands (default: '.')
 
     Returns:
         Dictionary with is_valid, num_arrays_validated, and summary
     """
-    # Build kernel args from output_args: list of (name, type) tuples
-    kernel_args = [(arg["name"], arg["type"]) for arg in output_args]
-
-    validator = Accordo(
-        binary=reference_command,
+    return run_validate_kernel_correctness(
         kernel_name=kernel_name,
-        kernel_args=kernel_args if kernel_args else None,
+        reference_command=reference_command,
+        optimized_command=optimized_command,
+        tolerance=tolerance,
         working_directory=working_directory,
     )
-
-    # Capture snapshots
-    ref_snapshot = validator.capture_snapshot(binary=reference_command)
-    opt_snapshot = validator.capture_snapshot(binary=optimized_command)
-
-    # Compare
-    result = validator.compare_snapshots(ref_snapshot, opt_snapshot, tolerance=tolerance)
-
-    return {
-        "is_valid": result.is_valid,
-        "num_arrays_validated": result.num_arrays_validated,
-        "summary": result.summary(),
-    }
 
 
 def main() -> None:

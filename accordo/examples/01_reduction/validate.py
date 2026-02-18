@@ -30,7 +30,7 @@ __global__ void reduce_sum(const float* input, float* output, int N) {
 }
 
 int main() {
-    const int N = 1048576;  // 1M elements
+    const int N = 1024;  // small N for quick validation
 
     float *d_input, *d_output;
     hipMalloc(&d_input, N * sizeof(float));
@@ -86,7 +86,7 @@ __global__ void reduce_sum(const float* input, float* output, int N) {
 }
 
 int main() {
-    const int N = 1048576;  // 1M elements
+    const int N = 1024;  // small N for quick validation
 
     float *d_input, *d_output;
     hipMalloc(&d_input, N * sizeof(float));
