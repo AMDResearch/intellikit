@@ -18,7 +18,7 @@ def validate_kernel_correctness(
     optimized_command: list[str],
     output_args: list[dict],
     tolerance: float = 1e-6,
-    working_directory: str = "."
+    working_directory: str = ".",
 ) -> dict:
     """
     Validate that an optimized kernel produces the same results as a reference.
@@ -57,7 +57,7 @@ def validate_kernel_correctness(
     return {
         "is_valid": result.is_valid,
         "num_arrays_validated": result.num_arrays_validated,
-        "summary": result.summary()
+        "summary": result.summary(),
     }
 
 

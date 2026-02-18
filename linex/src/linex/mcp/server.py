@@ -37,28 +37,27 @@ def profile_application(command: str, kernel_filter: str = None, top_n: int = 10
     }
 
     for i, line in enumerate(profiler.source_lines[:top_n], 1):
-        results["hotspots"].append({
-            "rank": i,
-            "file": line.file,
-            "line_number": line.line_number,
-            "source_location": line.source_location,
-            "total_cycles": line.total_cycles,
-            "stall_cycles": line.stall_cycles,
-            "stall_percent": round(line.stall_percent, 2),
-            "idle_cycles": line.idle_cycles,
-            "execution_count": line.execution_count,
-            "num_instructions": len(line.instructions),
-        })
+        results["hotspots"].append(
+            {
+                "rank": i,
+                "file": line.file,
+                "line_number": line.line_number,
+                "source_location": line.source_location,
+                "total_cycles": line.total_cycles,
+                "stall_cycles": line.stall_cycles,
+                "stall_percent": round(line.stall_percent, 2),
+                "idle_cycles": line.idle_cycles,
+                "execution_count": line.execution_count,
+                "num_instructions": len(line.instructions),
+            }
+        )
 
     return results
 
 
 @mcp.tool()
 def analyze_instruction_hotspots(
-    command: str,
-    kernel_filter: str = None,
-    top_lines: int = 5,
-    top_instructions_per_line: int = 10
+    command: str, kernel_filter: str = None, top_lines: int = 5, top_instructions_per_line: int = 10
 ) -> dict:
     """
     Get detailed instruction-level analysis for the hottest source lines.
@@ -92,15 +91,17 @@ def analyze_instruction_hotspots(
         }
 
         for inst in sorted_insts[:top_instructions_per_line]:
-            line_data["instructions"].append({
-                "isa": inst.isa,
-                "latency_cycles": inst.latency_cycles,
-                "stall_cycles": inst.stall_cycles,
-                "stall_percent": round(inst.stall_percent, 2),
-                "idle_cycles": inst.idle_cycles,
-                "execution_count": inst.execution_count,
-                "instruction_address": f"0x{inst.instruction_address:08x}",
-            })
+            line_data["instructions"].append(
+                {
+                    "isa": inst.isa,
+                    "latency_cycles": inst.latency_cycles,
+                    "stall_cycles": inst.stall_cycles,
+                    "stall_percent": round(inst.stall_percent, 2),
+                    "idle_cycles": inst.idle_cycles,
+                    "execution_count": inst.execution_count,
+                    "instruction_address": f"0x{inst.instruction_address:08x}",
+                }
+            )
 
         results["hotspot_analysis"].append(line_data)
 

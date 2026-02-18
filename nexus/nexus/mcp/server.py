@@ -12,7 +12,9 @@ mcp = FastMCP("IntelliKit Nexus")
 
 
 @mcp.tool()
-def extract_kernel_code(command: list[str], log_level: int = 1, include_assembly: bool = False) -> dict:
+def extract_kernel_code(
+    command: list[str], log_level: int = 1, include_assembly: bool = False
+) -> dict:
     """
     Extract GPU kernel source code and assembly from an application.
 

@@ -40,17 +40,19 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     for kernel in results_obj.kernels:
         kernel_data = {
             "name": kernel.name,
-            "duration_us_avg": float(kernel.duration_us.avg) if hasattr(kernel.duration_us, 'avg') else 0.0,
-            "metrics": {}
+            "duration_us_avg": float(kernel.duration_us.avg)
+            if hasattr(kernel.duration_us, "avg")
+            else 0.0,
+            "metrics": {},
         }
 
         # Add metrics
         for metric_name in metrics:
-            if hasattr(kernel, 'metrics') and metric_name in kernel.metrics:
+            if hasattr(kernel, "metrics") and metric_name in kernel.metrics:
                 metric_obj = kernel.metrics[metric_name]
                 kernel_data["metrics"][metric_name] = {
-                    "avg": float(metric_obj.avg) if hasattr(metric_obj, 'avg') else 0.0,
-                    "unit": getattr(metric_obj, 'unit', ''),
+                    "avg": float(metric_obj.avg) if hasattr(metric_obj, "avg") else 0.0,
+                    "unit": getattr(metric_obj, "unit", ""),
                 }
 
         results["kernels"].append(kernel_data)
@@ -76,10 +78,7 @@ def list_available_metrics() -> dict:
         "compute.wave_occupancy",
     ]
 
-    return {
-        "metrics": common_metrics,
-        "note": "Use profile_metrics with these metric names"
-    }
+    return {"metrics": common_metrics, "note": "Use profile_metrics with these metric names"}
 
 
 def main() -> None:
