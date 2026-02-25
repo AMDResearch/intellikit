@@ -149,11 +149,13 @@ class CounterBackend(ABC):
             ValueError: If any metric is unknown
         """
         counters = set()
+        # duration_us comes from profiler timestamps, not rocprof - do not request it
+        skip = {"duration_us"}
         for metric in metrics:
             if metric not in self._metrics:
                 available = ", ".join(self.get_available_metrics())
                 raise ValueError(f"Unknown metric '{metric}'. Available metrics: {available}")
-            counters.update(self._metrics[metric]["counters"])
+            counters.update(c for c in self._metrics[metric]["counters"] if c not in skip)
         return list(counters)
 
     def _get_counter_block(self, counter_name: str) -> str:
@@ -360,6 +362,11 @@ class CounterBackend(ABC):
             for counter in self._metrics[metric]["counters"]
             if counter in counter_stats
         }
+        # Pass profiler duration for rate metrics (not a hardware counter)
+        if "duration_us" in counter_stats:
+            self._current_duration_us = getattr(counter_stats["duration_us"], stat_type)
+        else:
+            self._current_duration_us = 0.0
 
         # Call the metric's compute function (decorated method)
         return self._metrics[metric]["compute"]()
@@ -482,13 +489,16 @@ class CounterBackend(ABC):
         """
         Merge multiple dispatches by summing their counters
 
-        Used for within-run aggregation by kernel name
+        Used for within-run aggregation by kernel name (e.g. multi-pass profiling).
+        Counters are summed (each pass contributes one subset; others are 0).
+        Duration is stored as the average per dispatch so rate metrics (e.g. GFLOPS
+        = flops / time) use per-run time, not total time across passes.
 
         Args:
             dispatches: List of ProfileResult objects for same kernel
 
         Returns:
-            Single ProfileResult with summed counters
+            Single ProfileResult with summed counters and average duration_ns
         """
         if not dispatches:
             raise ValueError("Cannot merge empty dispatch list")
@@ -502,11 +512,14 @@ class CounterBackend(ABC):
                 merged_counters[counter] += value
             total_duration += dispatch.duration_ns
 
+        # Average duration so rate metrics (flops/time) use per-run time
+        avg_duration_ns = total_duration // len(dispatches)
+
         return ProfileResult(
             dispatch_id=first.dispatch_id,
             kernel_name=first.kernel_name,
             gpu_id=first.gpu_id,
-            duration_ns=total_duration,
+            duration_ns=avg_duration_ns,
             grid_size=first.grid_size,
             workgroup_size=first.workgroup_size,
             counters=dict(merged_counters),
