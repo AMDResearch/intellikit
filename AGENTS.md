@@ -16,7 +16,7 @@ uv sync
 
 # Or using pip - install individual tools (from repo root)
 # Note: root pyproject.toml only includes accordo, linex, metrix, nexus as dependencies
-pip install -e accordo/ -e linex/ -e metrix/ -e nexus/ rocm_mcp uprof_mcp/
+pip install -e accordo/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
 
 # Install individual tools
 pip install -e metrix/
