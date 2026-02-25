@@ -407,12 +407,12 @@ class GFX90aBackend(CounterBackend):
         SQ_INSTS_VALU_MFMA_MOPS_BF16,
         SQ_INSTS_VALU_MFMA_MOPS_F32,
         SQ_INSTS_VALU_MFMA_MOPS_F64,
-        GRBM_GUI_ACTIVE,
     ):
         """
-        Compute throughput (GFLOPS) normalized by kernel execution time
+        Compute throughput (GFLOPS) using profiler kernel duration.
 
-        Formula: (total_flops / 1e9) / time_seconds
+        Formula: (total_flops / 1e9) / (duration_us / 1e6)
+        Duration is set by the base class from profiler timestamps before calling.
         """
         # Calculate total FLOPS (same as compute.total_flops)
         fops = 64 * (
@@ -441,11 +441,12 @@ class GFX90aBackend(CounterBackend):
             + SQ_INSTS_VALU_MFMA_MOPS_F64
         )
 
-        if GRBM_GUI_ACTIVE == 0:
+        duration_us = getattr(self, "_current_duration_us", 0.0)
+        if duration_us <= 0:
             return 0.0
 
-        time_seconds = GRBM_GUI_ACTIVE / (self.device_specs.base_clock_mhz * 1e6)
-        gflops = (fops / 1e9) / time_seconds if time_seconds > 0 else 0.0
+        time_seconds = duration_us / 1e6
+        gflops = (fops / 1e9) / time_seconds
 
         return gflops
 
