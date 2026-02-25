@@ -11,11 +11,12 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 ## Build Commands
 
 ```bash
-# Using uv (preferred for development)
+# Using uv (preferred for development) - installs all tools
 uv sync
 
-# Or using pip - install all dependencies (from repo root)
-pip install -e accordo/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
+# Or using pip - install individual tools (from repo root)
+# Note: root pyproject.toml only includes accordo, linex, metrix, nexus as dependencies
+pip install -e accordo/ -e linex/ -e metrix/ -e nexus/ rocm_mcp uprof_mcp/
 
 # Install individual tools
 pip install -e metrix/
@@ -89,21 +90,27 @@ Counter names appear exactly once as function parameters - no mapping tables:
 ```python
 @metric("memory.l2_hit_rate")
 def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
+    """
+    L2 cache hit rate as percentage
+
+    Formula: (hits / (hits + misses)) * 100
+    """
     total = TCC_HIT_sum + TCC_MISS_sum
-    return (TCC_HIT_sum / total) * 100 if total else 0.0
+    return (TCC_HIT_sum / total) * 100 if total > 0 else 0.0
 ```
 
 ### MCP Server Pattern
 
-All tools expose MCP servers via FastMCP:
+All tools expose MCP servers via the MCP SDK's FastMCP module:
 
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
-- Tools: `metrix-mcp`, `linex-mcp`, `nexus-mcp`, `accordo-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- MCP servers: `accordo-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
 
 ### Nexus C++ Integration
 
-- C++ source in `nexus/csrc/` (headers in `include/nexus/`)
+- C++ source in `nexus/csrc/src/`
+- Headers in `nexus/csrc/include/nexus/`
 - Python bindings via shared library built with CMake
 - Requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`)
 
@@ -164,8 +171,10 @@ All MCP servers are defined in each tool's `pyproject.toml` under `[project.scri
 
 ```toml
 [project.scripts]
-metrix-mcp = "metrix.mcp.server:main"
 accordo-mcp = "accordo.mcp.server:main"
+linex-mcp = "linex.mcp.server:main"
+metrix-mcp = "metrix.mcp.server:main"
+nexus-mcp = "nexus.mcp.server:main"
 hip-compiler-mcp = "rocm_mcp.compile.hip_compiler_mcp:main"
 hip-docs-mcp = "rocm_mcp.doc.hip_docs_mcp:main"
 rocminfo-mcp = "rocm_mcp.sysinfo.rocminfo_mcp:main"
@@ -206,8 +215,10 @@ Add to your Claude Desktop or other MCP client config:
 
 ### MCP Server Implementation Pattern
 
-All servers use FastMCP library:
+All servers use the MCP SDK (`mcp[cli]` package) with the FastMCP module:
 
+- Dependency: `mcp[cli]` in each tool's `pyproject.toml`
+- Import: `from mcp.server.fastmcp import FastMCP`
 - Server code in `<tool>/mcp/server.py` or `<tool>/<tool>_mcp.py`
 - Use `@mcp.tool()` decorator for tool definitions
 - Follow async patterns for I/O operations
@@ -227,8 +238,13 @@ Example:
 ```python
 @metric("memory.l2_hit_rate")
 def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
+    """
+    L2 cache hit rate as percentage
+
+    Formula: (hits / (hits + misses)) * 100
+    """
     total = TCC_HIT_sum + TCC_MISS_sum
-    return (TCC_HIT_sum / total) * 100 if total else 0.0
+    return (TCC_HIT_sum / total) * 100 if total > 0 else 0.0
 ```
 
 ### Working with C++ Components
