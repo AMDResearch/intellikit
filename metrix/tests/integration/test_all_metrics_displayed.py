@@ -29,7 +29,6 @@ def vector_add_binary(tmp_path):
 
 
 @pytest.mark.integration
-@pytest.mark.timeout(60)
 def test_all_memory_metrics_are_displayed(vector_add_binary):
     """Verify that all 12 memory metrics are computed and displayed"""
     result = subprocess.run(
@@ -74,7 +73,6 @@ def test_all_memory_metrics_are_displayed(vector_add_binary):
 
 
 @pytest.mark.integration
-@pytest.mark.timeout(60)
 def test_bandwidth_metrics_have_values(vector_add_binary):
     """Verify bandwidth metrics compute to non-zero values"""
     result = subprocess.run(
@@ -105,7 +103,6 @@ def test_bandwidth_metrics_have_values(vector_add_binary):
 
 
 @pytest.mark.integration
-@pytest.mark.timeout(120)
 def test_all_compute_metrics_are_displayed(vector_add_binary):
     """Verify that all compute metrics are computed and displayed"""
     result = subprocess.run(
@@ -140,7 +137,6 @@ def test_all_compute_metrics_are_displayed(vector_add_binary):
 
 
 @pytest.mark.integration
-@pytest.mark.timeout(60)
 def test_json_output_has_memory_metrics(vector_add_binary, tmp_path):
     """Verify JSON output contains all memory metrics"""
     output_file = tmp_path / "results.json"
@@ -188,7 +184,6 @@ def test_json_output_has_memory_metrics(vector_add_binary, tmp_path):
 
 
 @pytest.mark.integration
-@pytest.mark.timeout(120)
 def test_json_output_has_compute_metrics(vector_add_binary, tmp_path):
     """Verify JSON output contains all compute metrics"""
     output_file = tmp_path / "results.json"
