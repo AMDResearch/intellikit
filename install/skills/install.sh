@@ -1,39 +1,55 @@
 #!/usr/bin/env bash
 # IntelliKit Agent Skills Installer
-# Downloads each tool's SKILL.md into .agents/skills/<tool>/ (local) or ~/.agents/skills/ (--global).
-# Usage: curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
-#    or: ./install.sh [--global] [--dry-run]
+# Downloads each tool's SKILL.md into a skills dir. Use --target to pick agent (agents/codex/cursor/claude).
+# Usage: curl -sSL .../install/skills/install.sh | bash -s -- [OPTIONS]
+#    or: ./install.sh [OPTIONS]
 
 set -e
 
-BASE_URL="${INTELLIKIT_RAW_URL:-https://raw.githubusercontent.com/AMDResearch/intellikit/main}"
+BASE_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main"
 TOOLS=(metrix accordo nexus)
 DRY_RUN=false
 GLOBAL=false
+TARGET="agents"
 
 print_usage() {
   echo "IntelliKit Agent Skills Installer"
   echo ""
   echo "Usage:"
-  echo "  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash [--global] [--dry-run]"
-  echo "  ./install.sh [--global] [--dry-run]"
+  echo "  curl -sSL .../install/skills/install.sh | bash -s -- [OPTIONS]"
+  echo "  ./install.sh [OPTIONS]"
   echo ""
   echo "Options:"
-  echo "  --global   Install skills into ~/.agents/skills instead of ./.agents/skills"
-  echo "  --dry-run  Show what would be downloaded without making changes"
-  echo "  --help, -h Show this help message and exit"
+  echo "  --target <name>   Where to install: agents (default), codex, cursor, claude"
+  echo "                    agents -> .agents/skills or ~/.agents/skills"
+  echo "                    codex  -> .codex/skills or ~/.codex/skills"
+  echo "                    cursor -> .cursor/skills or ~/.cursor/skills"
+  echo "                    claude -> .claude/skills or ~/.claude/skills"
+  echo "  --global          Use user-level dir (e.g. ~/.cursor/skills) instead of project-level"
+  echo "  --base-url <url>  Base URL for raw files"
+  echo "  --dry-run         Show what would be downloaded without making changes"
+  echo "  --help, -h        Show this help message and exit"
+  echo ""
+  echo "Examples:"
+  echo "  ... | bash -s -- --target cursor --dry-run"
+  echo "  ... | bash -s -- --target claude --global"
 }
 
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) DRY_RUN=true ;;
-    --global)  GLOBAL=true ;;
-    --help|-h)
-      print_usage
-      exit 0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY_RUN=true; shift ;;
+    --global)  GLOBAL=true; shift ;;
+    --help|-h) print_usage; exit 0 ;;
+    --base-url)
+      [[ -z "${2:-}" ]] && { echo "Missing value for $1" >&2; exit 1; }
+      BASE_URL="$2"; shift 2
+      ;;
+    --target)
+      [[ -z "${2:-}" ]] && { echo "Missing value for $1" >&2; exit 1; }
+      TARGET="$2"; shift 2
       ;;
     *)
-      echo "Unknown option: $arg" >&2
+      echo "Unknown option: $1" >&2
       echo "" >&2
       print_usage >&2
       exit 1
@@ -41,11 +57,20 @@ for arg in "$@"; do
   esac
 done
 
-if [[ "$GLOBAL" == true ]]; then
-  SKILLS_ROOT="${HOME}/.agents/skills"
-else
-  SKILLS_ROOT="${PWD}/.agents/skills"
-fi
+# Resolve SKILLS_ROOT from target and global
+case "$TARGET" in
+  agents|codex|cursor|claude)
+    if [[ "$GLOBAL" == true ]]; then
+      SKILLS_ROOT="${HOME}/.${TARGET}/skills"
+    else
+      SKILLS_ROOT="${PWD}/.${TARGET}/skills"
+    fi
+    ;;
+  *)
+    echo "Unknown target: $TARGET (use: agents, codex, cursor, claude)" >&2
+    exit 1
+    ;;
+esac
 
 mkdir -p "$SKILLS_ROOT"
 
