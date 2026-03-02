@@ -45,6 +45,9 @@ for arg in "$@"; do
   esac
 done
 
+# Pip requires git+ prefix for VCS installs
+[[ "$REPO_URL" != git+* ]] && REPO_URL="git+${REPO_URL}"
+
 for tool in "${TOOLS[@]}"; do
   url="${REPO_URL}@${REF}#subdirectory=${tool}"
   if [[ "$DRY_RUN" == true ]]; then
