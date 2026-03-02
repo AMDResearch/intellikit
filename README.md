@@ -171,22 +171,15 @@ Add to your JSON MCP config:
 
 Install each tool from its subdirectory. No top-level metapackage.
 
-**From a clone (recommended for development):**
+**Install all tools from Git (one command):**
 
 ```bash
-git clone https://github.com/AMDResearch/intellikit.git
-cd intellikit
-
-# Install one or more tools (editable optional)
-pip install -e ./accordo
-pip install -e ./linex
-pip install -e ./metrix
-pip install -e ./nexus
-pip install -e ./rocm_mcp
-pip install -e ./uprof_mcp
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
 ```
 
-**From Git (no clone):**
+Or from a clone: `./install/tools/install.sh`. The script runs `pip install "<repo>@main#subdirectory=<tool>"` for each tool. On systems with multiple Python versions, set `PIP_CMD` (e.g. `PIP_CMD="python3.12 -m pip" ./install/tools/install.sh`). Use `--dry-run` to print commands only. Override URL/ref with `INTELLIKIT_REPO_URL` and `INTELLIKIT_REF`.
+
+**Install individual tools from Git:**
 
 ```bash
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=accordo"
@@ -195,6 +188,16 @@ pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metr
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=rocm_mcp"
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=uprof_mcp"
+```
+
+**From a clone (editable installs from local paths):**
+
+```bash
+git clone https://github.com/AMDResearch/intellikit.git
+cd intellikit
+pip install -e ./accordo
+pip install -e ./linex
+# ... or any subset of the tools
 ```
 
 ### Agent Skills (AI agents)
