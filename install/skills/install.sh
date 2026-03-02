@@ -11,10 +11,33 @@ TOOLS=(metrix accordo nexus)
 DRY_RUN=false
 GLOBAL=false
 
+print_usage() {
+  echo "IntelliKit Agent Skills Installer"
+  echo ""
+  echo "Usage:"
+  echo "  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash [--global] [--dry-run]"
+  echo "  ./install.sh [--global] [--dry-run]"
+  echo ""
+  echo "Options:"
+  echo "  --global   Install skills into ~/.agents/skills instead of ./.agents/skills"
+  echo "  --dry-run  Show what would be downloaded without making changes"
+  echo "  --help, -h Show this help message and exit"
+}
+
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
     --global)  GLOBAL=true ;;
+    --help|-h)
+      print_usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      echo "" >&2
+      print_usage >&2
+      exit 1
+      ;;
   esac
 done
 

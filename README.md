@@ -227,10 +227,8 @@ cd intellikit
 
 Resulting layout:
 
-- **Local:** `./.agents/skills/metrix/SKILL.md`, `accordo/SKILL.md`, `nexus/SKILL.md`
-- **Global:** `~/.agents/skills/metrix/SKILL.md`, etc.
-
-Override the download URL (e.g. fork or branch): `INTELLIKIT_RAW_URL=https://raw.githubusercontent.com/you/intellikit/your-branch/main ./install/skills/install.sh`
+- **Local:** `./.agents/skills/metrix/SKILL.md`, `./.agents/skills/accordo/SKILL.md`, `./.agents/skills/nexus/SKILL.md`
+- **Global:** `~/.agents/skills/metrix/SKILL.md`, `~/.agents/skills/accordo/SKILL.md`, `~/.agents/skills/nexus/SKILL.md`
 
 ## Requirements
 

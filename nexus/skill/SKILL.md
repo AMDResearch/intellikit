@@ -17,7 +17,7 @@ Intercepts HSA packets from a running process and extracts, per kernel, assembly
 
 1. **Ensure the target runs on AMD ROCm** and uses HSA (e.g. HIP application or ROCm runtime).
 2. **Choose execution path:**
-   - If a Nexus MCP server is available, use its run/trace tool with the same behavior below.
+   - If a Nexus MCP server is available, use its tools: `list_kernels` to enumerate kernels in a trace, and `extract_kernel_code` to get assembly and HIP/source mapping (signature, files, lines). See `nexus/nexus/mcp/server.py` for tool parameters and schemas.
    - Otherwise use the Python API from the environment where Nexus is installed.
 
 ### Python API (recommended when no MCP)

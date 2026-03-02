@@ -42,7 +42,7 @@ metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency,compute.total_f
 metrix -o results.json ./my_app
 ```
 
-Options: `--profile` (quick|memory|compute), `--metrics` (comma-separated), `--time-only`, `--kernel` (substring), `--num-replays`/`-n`, `--output`/`-o`, `--top K`, `--aggregate`, `--verbose`/`--quiet`.
+Options: `--profile` (quick|memory|compute), `--metrics` (comma-separated), `--time-only`, `--kernel` (substring), `--num-replays`/`-n`, `--output`/`-o`, `--top K`, `--aggregate`, `--log`/`-l` (debug|info|warning|error), `--quiet`.
 
 ### Python API
 
