@@ -20,7 +20,9 @@ Map GPU performance metrics to your source code lines. Get cycle-level timing, s
 1. **Ensure the target runs on AMD ROCm 7.0+** with `rocprofv3` available.
 2. **Kernels must be compiled with `-g`** (debug symbols) for source mapping.
 3. **Choose execution path:**
-   - If a Linex MCP server is available, use its profile tool with the same options below.
+   - If a Linex MCP server is available, use its MCP tools:
+     - `profile_application` to run and profile a target application with the options below.
+     - `analyze_instruction_hotspots` to perform instruction-level hotspot analysis on collected profiles.
    - Otherwise use the Python API from the environment where Linex is installed.
 
 ### Python API
@@ -92,5 +94,5 @@ for line in profiler.source_lines[:1]:
 - Requires ROCm 7.0+ with `rocprofv3` support.
 - Source mapping requires kernels compiled with `-g` (debug symbols).
 - `source_lines` are automatically sorted by `total_cycles` (descending).
-- Use `kernel_filter` to profile specific kernels by name substring.
+- Use `kernel_filter` to profile specific kernels by name (regex pattern).
 - For Triton or other frameworks, ensure debug symbols are available in the compiled output.
