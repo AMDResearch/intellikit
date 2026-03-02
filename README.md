@@ -226,7 +226,7 @@ pip install -e ./linex
 
 ### Agent Skills (AI agents)
 
-Install IntelliKit skills so AI agents can discover and use Metrix, Accordo, and Nexus. Skills are installed as `SKILL.md` files under a single directory; agents that read that location get the instructions automatically.
+Install IntelliKit skills so AI agents can discover and use Metrix, Accordo, Nexus, and Linex. Skills are installed as `SKILL.md` files under a single directory; agents that read that location get the instructions automatically.
 
 **Default: local (current workspace) - agents target**
 
@@ -268,9 +268,7 @@ cd intellikit
 
 **Resulting layout:**
 
-- **Local (agents):** `./.agents/skills/metrix/SKILL.md`, `./.agents/skills/accordo/SKILL.md`, `./.agents/skills/nexus/SKILL.md`
-- **Local (cursor):** `./.cursor/skills/metrix/SKILL.md`, `./.cursor/skills/accordo/SKILL.md`, `./.cursor/skills/nexus/SKILL.md`
-- **Global (claude):** `~/.claude/skills/metrix/SKILL.md`, `~/.claude/skills/accordo/SKILL.md`, `~/.claude/skills/nexus/SKILL.md`
+Skills are installed inside the target directory (e.g., `./.agents/skills/` for local agents, `~/.cursor/skills/` for global cursor) with one subdirectory per tool: `metrix/SKILL.md`, `accordo/SKILL.md`, `nexus/SKILL.md`, `linex/SKILL.md`.
 
 ## Requirements
 
