@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # IntelliKit Agent Skills Installer
 # Downloads each tool's SKILL.md into a skills dir. Use --target to pick agent (agents/codex/cursor/claude).
-# Usage: curl -sSL .../install/skills/install.sh | bash -s -- [OPTIONS]
+# Usage: curl -sSL <install script URL> | bash -s -- [OPTIONS]
 #    or: ./install.sh [OPTIONS]
+# CLI options override env (INTELLIKIT_RAW_URL). Use args when piping so overrides reach bash.
 
 set -e
 
-BASE_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main"
+INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh"
+# Env default (--base-url overrides); use args when piping to bash so overrides apply
+BASE_URL="${INTELLIKIT_RAW_URL:-https://raw.githubusercontent.com/AMDResearch/intellikit/main}"
 TOOLS=(metrix accordo nexus)
 DRY_RUN=false
 GLOBAL=false
@@ -16,7 +19,7 @@ print_usage() {
   echo "IntelliKit Agent Skills Installer"
   echo ""
   echo "Usage:"
-  echo "  curl -sSL .../install/skills/install.sh | bash -s -- [OPTIONS]"
+  echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- [OPTIONS]"
   echo "  ./install.sh [OPTIONS]"
   echo ""
   echo "Options:"
@@ -26,13 +29,13 @@ print_usage() {
   echo "                    cursor -> .cursor/skills or ~/.cursor/skills"
   echo "                    claude -> .claude/skills or ~/.claude/skills"
   echo "  --global          Use user-level dir (e.g. ~/.cursor/skills) instead of project-level"
-  echo "  --base-url <url>  Base URL for raw files"
+  echo "  --base-url <url>  Base URL for raw files (default from INTELLIKIT_RAW_URL or main branch)"
   echo "  --dry-run         Show what would be downloaded without making changes"
   echo "  --help, -h        Show this help message and exit"
   echo ""
   echo "Examples:"
-  echo "  ... | bash -s -- --target cursor --dry-run"
-  echo "  ... | bash -s -- --target claude --global"
+  echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- --target cursor --dry-run"
+  echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- --target claude --global"
 }
 
 while [[ $# -gt 0 ]]; do

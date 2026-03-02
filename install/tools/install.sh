@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # IntelliKit Tools Installer
 # Installs all tools from Git via pip (git+https...#subdirectory=<tool>).
-# Usage: curl -sSL .../install/tools/install.sh | bash -s -- [OPTIONS]
+# Usage: curl -sSL <install script URL> | bash -s -- [OPTIONS]
 #    or: ./install.sh [OPTIONS]
-# Use --pip-cmd 'python3.12 -m pip' etc.; args work correctly when piped to bash.
+# CLI options override env (PIP_CMD, INTELLIKIT_REPO_URL, INTELLIKIT_REF). Use args when piping so overrides reach bash.
 
 set -e
 
 TOOLS=(accordo linex metrix nexus rocm_mcp uprof_mcp)
-REPO_URL="https://github.com/AMDResearch/intellikit.git"
-REF="main"
-PIP_CMD="pip"
+INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh"
+# Env defaults (CLI options override these); use args when piping to bash so overrides apply
+REPO_URL="${INTELLIKIT_REPO_URL:-https://github.com/AMDResearch/intellikit.git}"
+REF="${INTELLIKIT_REF:-main}"
+PIP_CMD="${PIP_CMD:-pip}"
 DRY_RUN=false
 
 print_usage() {
@@ -19,7 +21,7 @@ print_usage() {
   echo "Installs all tools from Git: ${TOOLS[*]}"
   echo ""
   echo "Usage:"
-  echo "  curl -sSL .../install/tools/install.sh | bash -s -- [OPTIONS]"
+  echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- [OPTIONS]"
   echo "  ./install.sh [OPTIONS]"
   echo ""
   echo "Options:"
@@ -30,8 +32,8 @@ print_usage() {
   echo "  --dry-run         Print pip commands without running them"
   echo "  --help, -h        Show this help message and exit"
   echo ""
-  echo "Example (works with pipe):"
-  echo "  curl -sSL .../install/tools/install.sh | bash -s -- --pip-cmd 'python3.12 -m pip' --dry-run"
+  echo "Example (works with pipe; use args so overrides reach bash):"
+  echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- --pip-cmd 'python3.12 -m pip' --dry-run"
 }
 
 while [[ $# -gt 0 ]]; do
