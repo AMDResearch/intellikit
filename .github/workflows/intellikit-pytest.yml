@@ -52,7 +52,7 @@ jobs:
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e accordo
-            python -m pytest accordo/tests -v --tb=short
+            python3 -m pytest accordo/tests -v --tb=short
           "
 
   pytest-metrix:
@@ -68,7 +68,7 @@ jobs:
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e metrix
-            python -m pytest metrix/tests -v --tb=short
+            python3 -m pytest metrix/tests -v --tb=short
           "
 
   pytest-nexus:
@@ -84,7 +84,7 @@ jobs:
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e nexus
-            python -m pytest nexus/tests -v --tb=short
+            python3 -m pytest nexus/tests -v --tb=short
           "
 
   pytest-linex:
@@ -100,5 +100,5 @@ jobs:
         run: |
           bash .github/scripts/container_exec.sh "
             pip install -e linex
-            python -m pytest linex/tests -v --tb=short
+            python3 -m pytest linex/tests -v --tb=short
           "

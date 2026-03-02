@@ -59,6 +59,7 @@ def _compile_hip(kernel_code: str, name: str, tmp_dir: Path) -> Path:
         capture_output=True,
         text=True,
         cwd=tmp_dir,
+        timeout=120,
     )
     if r.returncode != 0:
         raise RuntimeError(f"hipcc failed:\n{r.stderr}")

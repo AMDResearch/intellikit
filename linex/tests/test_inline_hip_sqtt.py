@@ -59,7 +59,7 @@ def _compile_hip(kernel_code: str, name: str, tmp_dir: Path, debug: bool = True)
     cmd = ["hipcc", str(src), "-o", str(bin_path), "-O2"]
     if debug:
         cmd.append("-g")
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=tmp_dir)
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=tmp_dir, timeout=120)
     if r.returncode != 0:
         raise RuntimeError(f"hipcc failed for {name}:\n{r.stderr}")
     return bin_path
@@ -74,6 +74,7 @@ def test_profile_vector_add_source_lines(kernel_filter):
         profiler = Linex()
         profiler.profile(
             command=str(bin_path),
+            output_dir=str(tmp_path / "sqtt_out"),
             kernel_filter=kernel_filter,
         )
     assert len(profiler.instructions) >= 1
@@ -95,7 +96,11 @@ def test_profile_source_line_attributes():
         tmp_path = Path(tmp_dir)
         bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path)
         profiler = Linex()
-        profiler.profile(command=str(bin_path), kernel_filter="vector_add")
+        profiler.profile(
+            command=str(bin_path),
+            output_dir=str(tmp_path / "sqtt_out"),
+            kernel_filter="vector_add",
+        )
     assert len(profiler.source_lines) >= 1
     line = profiler.source_lines[0]
     assert hasattr(line, "file")
@@ -117,7 +122,11 @@ def test_profile_instruction_data_attributes():
         tmp_path = Path(tmp_dir)
         bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path, debug=True)
         profiler = Linex()
-        profiler.profile(command=str(bin_path), kernel_filter="vector_add")
+        profiler.profile(
+            command=str(bin_path),
+            output_dir=str(tmp_path / "sqtt_out"),
+            kernel_filter="vector_add",
+        )
     assert len(profiler.instructions) >= 1
     inst = profiler.instructions[0]
     assert hasattr(inst, "isa")
@@ -138,7 +147,11 @@ def test_profile_without_debug_symbols_assembly_only():
         tmp_path = Path(tmp_dir)
         bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path, debug=False)
         profiler = Linex()
-        profiler.profile(command=str(bin_path), kernel_filter="vector_add")
+        profiler.profile(
+            command=str(bin_path),
+            output_dir=str(tmp_path / "sqtt_out"),
+            kernel_filter="vector_add",
+        )
     assert len(profiler.instructions) >= 1
     inst = profiler.instructions[0]
     assert inst.isa
@@ -173,6 +186,7 @@ def test_profile_force_cu_mask(force_cu_mask):
         profiler = Linex()
         profiler.profile(
             command=str(bin_path),
+            output_dir=str(tmp_path / "sqtt_out"),
             kernel_filter="vector_add",
             force_cu_mask=force_cu_mask,
         )

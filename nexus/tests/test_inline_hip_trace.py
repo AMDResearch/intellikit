@@ -59,6 +59,7 @@ def _compile_hip(kernel_code: str, name: str, tmp_dir: Path) -> Path:
         capture_output=True,
         text=True,
         cwd=tmp_dir,
+        timeout=120,
     )
     if r.returncode != 0:
         raise RuntimeError(f"hipcc failed:\n{r.stderr}")
@@ -112,11 +113,11 @@ def test_trace_run_with_output_path():
         out_json = tmp_path / "out.json"
         nexus = Nexus(log_level=0)
         trace = nexus.run([str(bin_path)], cwd=str(tmp_path), output=str(out_json))
-    assert len(trace) >= 1
-    if out_json.exists():
-        loaded = Nexus.load(str(out_json))
-        assert len(loaded) == len(trace)
-        assert loaded.kernel_names == trace.kernel_names
+        assert len(trace) >= 1
+        if out_json.exists():
+            loaded = Nexus.load(str(out_json))
+            assert len(loaded) == len(trace)
+            assert loaded.kernel_names == trace.kernel_names
 
 
 def test_trace_structure_and_dict_access():
