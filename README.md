@@ -169,58 +169,68 @@ Add to your JSON MCP config:
 
 ## Installation
 
-### Install All Tools
+Install each tool from its subdirectory. No top-level metapackage.
 
-```bash
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[all]"
-```
-
-This installs: `accordo`, `linex`, `metrix`, `nexus`, `rocm_mcp`, and `uprof_mcp`.
-
-### Install Individual Tools
-
-Install only what you need using extras:
-
-```bash
-# Accordo only
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[accordo]"
-
-# Linex only
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[linex]"
-
-# Metrix only
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[metrix]"
-
-# Nexus only
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[nexus]"
-
-# ROCm-MCP only
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[rocm_mcp]"
-
-# uprof-MCP only
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[uprof_mcp]"
-
-# Multiple tools
-pip install "git+https://github.com/AMDResearch/intellikit.git#egg=intellikit[nexus,metrix]"
-```
-
-### Development Installation
+**From a clone (recommended for development):**
 
 ```bash
 git clone https://github.com/AMDResearch/intellikit.git
 cd intellikit
 
-# Install all tools in editable mode
-pip install -e ".[all]"
-
-# Or install specific tools only
-pip install -e ".[accordo]"
-pip install -e ".[linex]"
-pip install -e ".[metrix]"
-pip install -e ".[nexus]"
-pip install -e ".[rocm_mcp]"
-pip install -e ".[uprof_mcp]"
+# Install one or more tools (editable optional)
+pip install -e ./accordo
+pip install -e ./linex
+pip install -e ./metrix
+pip install -e ./nexus
+pip install -e ./rocm_mcp
+pip install -e ./uprof_mcp
 ```
+
+**From Git (no clone):**
+
+```bash
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=accordo"
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=linex"
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=rocm_mcp"
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=uprof_mcp"
+```
+
+### Agent Skills (AI agents)
+
+Install IntelliKit skills so AI agents can discover and use Metrix, Accordo, and Nexus. Skills are installed as `SKILL.md` files under a single directory; agents that read that location get the instructions automatically.
+
+**Default: local (current workspace)**
+
+```bash
+# One-liner: installs into ./.agents/skills/ (current directory)
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
+```
+
+**Global (all projects)**
+
+```bash
+# Install into ~/.agents/skills/
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --global
+```
+
+**From a clone**
+
+```bash
+git clone https://github.com/AMDResearch/intellikit.git
+cd intellikit
+./install/skills/install.sh              # local: ./.agents/skills/
+./install/skills/install.sh --global     # global: ~/.agents/skills/
+./install/skills/install.sh --dry-run    # show what would be installed
+```
+
+Resulting layout:
+
+- **Local:** `./.agents/skills/metrix/SKILL.md`, `accordo/SKILL.md`, `nexus/SKILL.md`
+- **Global:** `~/.agents/skills/metrix/SKILL.md`, etc.
+
+Override the download URL (e.g. fork or branch): `INTELLIKIT_RAW_URL=https://raw.githubusercontent.com/you/intellikit/your-branch/main ./install/skills/install.sh`
 
 ## Requirements
 
