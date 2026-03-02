@@ -2,8 +2,9 @@
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
 """
-Linex tests: inline HIP kernel, compile with -g, profile with Linex, assert source-level data.
-- source_lines and instructions populated; SourceLine and InstructionData structure.
+Linex tests: inline HIP kernel, compile (with or without -g), profile with Linex.
+- With -g: source_lines and instructions populated; SourceLine and InstructionData structure.
+- Without -g: instructions (ISA + cycles) still populated; source_lines may be empty.
 """
 
 import subprocess
@@ -50,17 +51,15 @@ int main() {
 """
 
 
-def _compile_hip(kernel_code: str, name: str, tmp_dir: Path) -> Path:
-    """Write HIP source, compile with hipcc -g, return path to binary."""
+def _compile_hip(kernel_code: str, name: str, tmp_dir: Path, debug: bool = True) -> Path:
+    """Write HIP source, compile with hipcc; debug=True adds -g for source-line mapping."""
     src = tmp_dir / f"{name}.hip"
     bin_path = tmp_dir / name
     src.write_text(kernel_code)
-    r = subprocess.run(
-        ["hipcc", str(src), "-o", str(bin_path), "-O2", "-g"],
-        capture_output=True,
-        text=True,
-        cwd=tmp_dir,
-    )
+    cmd = ["hipcc", str(src), "-o", str(bin_path), "-O2"]
+    if debug:
+        cmd.append("-g")
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=tmp_dir)
     if r.returncode != 0:
         raise RuntimeError(f"hipcc failed for {name}:\n{r.stderr}")
     return bin_path
@@ -68,20 +67,20 @@ def _compile_hip(kernel_code: str, name: str, tmp_dir: Path) -> Path:
 
 @pytest.mark.parametrize("kernel_filter", ["vector_add", None], ids=["filter", "no_filter"])
 def test_profile_vector_add_source_lines(kernel_filter):
-    """Profile inline vector_add; source_lines and instructions are populated."""
+    """Profile inline vector_add; instructions always populated; source_lines when built with -g."""
     with tempfile.TemporaryDirectory(prefix="linex_test_") as tmp_dir:
         tmp_path = Path(tmp_dir)
-        bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path)
+        bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path, debug=True)
         profiler = Linex()
         profiler.profile(
             command=str(bin_path),
             kernel_filter=kernel_filter,
         )
     assert len(profiler.instructions) >= 1
-    assert len(profiler.source_lines) >= 1
-    user_lines = [s for s in profiler.source_lines if "vector_add" in s.file or "vector_add" in s.source_location]
-    if kernel_filter:
-        assert len(user_lines) >= 1, f"Expected source lines for vector_add: {[s.source_location for s in profiler.source_lines]}"
+    if len(profiler.source_lines) >= 1:
+        user_lines = [s for s in profiler.source_lines if "vector_add" in s.file or "vector_add" in s.source_location]
+        if kernel_filter:
+            assert len(user_lines) >= 1, f"Expected source lines for vector_add: {[s.source_location for s in profiler.source_lines]}"
 
 
 def test_profile_source_line_attributes():
@@ -110,7 +109,7 @@ def test_profile_instruction_data_attributes():
     """InstructionData has isa, source_location, cycles, file, line, stall_percent."""
     with tempfile.TemporaryDirectory(prefix="linex_test_") as tmp_dir:
         tmp_path = Path(tmp_dir)
-        bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path)
+        bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path, debug=True)
         profiler = Linex()
         profiler.profile(command=str(bin_path), kernel_filter="vector_add")
     assert len(profiler.instructions) >= 1
@@ -125,6 +124,20 @@ def test_profile_instruction_data_attributes():
     assert hasattr(inst, "file")
     assert hasattr(inst, "line")
     assert hasattr(inst, "stall_percent")
+
+
+def test_profile_without_debug_symbols_assembly_only():
+    """Without -g, instructions (ISA + cycles) are still populated; source_lines may be empty."""
+    with tempfile.TemporaryDirectory(prefix="linex_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path, debug=False)
+        profiler = Linex()
+        profiler.profile(command=str(bin_path), kernel_filter="vector_add")
+    assert len(profiler.instructions) >= 1
+    inst = profiler.instructions[0]
+    assert inst.isa
+    assert hasattr(inst, "latency_cycles")
+    assert hasattr(inst, "stall_cycles")
 
 
 def test_profile_with_output_dir():

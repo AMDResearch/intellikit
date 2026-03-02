@@ -129,11 +129,12 @@ export NEXUS_LOG_LEVEL=3
 export NEXUS_OUTPUT_FILE=result.json
 
 cd test/
-hipcc vector_add.hip -g  -o vector_add
+hipcc vector_add.hip -g -o vector_add   # -g needed for source line mapping in trace
 cd ..
 ./test/vector_add
 ```
 
+Without `-g` you still get assembly and HIP source in the trace; only the mapping to original source line numbers may be missing.
 
 Outputs:
 

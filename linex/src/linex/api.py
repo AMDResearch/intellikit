@@ -21,7 +21,8 @@ class InstructionData:
     Attributes:
         isa: ISA instruction text (e.g., "s_load_dwordx2 s[0:1], s[0:1], 0x0")
         instruction_index: Instruction index in the kernel
-        source_location: Source location string (e.g., "file.hip:123")
+        source_location: Source location string (e.g., "file.hip:123"). Without -g
+            this is typically "" or a placeholder (e.g. ";"), so ``file``/``line`` are "" and 0.
         code_object_id: Code object ID
         instruction_address: Instruction virtual address in GPU memory
         execution_count: Number of times this instruction was executed
@@ -50,7 +51,7 @@ class InstructionData:
 
     @property
     def line(self) -> int:
-        """Source line number parsed from source_location."""
+        """Source line number parsed from source_location. 0 when no debug info (-g)."""
         if ":" in self.source_location:
             try:
                 return int(self.source_location.rsplit(":", 1)[1])
@@ -164,6 +165,11 @@ class Linex:
     ) -> "Linex":
         """
         Profile an application and collect source-level performance data.
+
+        ISA instructions and cycle/stall metrics are always produced. Source-line
+        mapping (file:line per instruction) requires the binary to be built with
+        debug symbols (-g); without -g, ``instructions`` is still populated but
+        ``source_lines`` may be empty.
 
         Args:
             command: Command to profile (e.g., "./my_app" or "./my_app arg1 arg2")
