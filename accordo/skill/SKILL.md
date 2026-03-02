@@ -50,7 +50,7 @@ For multiple optimizations, capture the reference once and compare each optimize
 ### Snapshot and result attributes
 
 - **Snapshot:** `arrays`, `execution_time_ms`, `grid_size`, `block_size`
-- **ValidationResult:** `is_valid`, `num_arrays_validated`, `num_mismatches`, `mismatches`; use `summary()` for a human-readable report.
+- **ValidationResult:** `is_valid`, `num_arrays_validated`, `num_mismatches`, `mismatches`, `success_rate`; use `summary()` for a human-readable report.
 
 ## Workflow
 
