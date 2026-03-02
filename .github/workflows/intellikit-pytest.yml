@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Run pytest for all IntelliKit packages (accordo, metrix, nexus, linex).
+
+name: Intellikit Pytest
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build-container-image:
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Apptainer (if not available)
+        run: |
+          if ! command -v apptainer &> /dev/null; then
+            echo "Apptainer not found, installing..."
+            apt-get update && apt-get install -y software-properties-common
+            add-apt-repository -y ppa:apptainer/ppa
+            apt-get update && apt-get install -y apptainer
+          else
+            echo "Apptainer already available"
+          fi
+
+      - name: Build Intellikit container
+        run: |
+          bash .github/scripts/container_build.sh
+
+  pytest-accordo:
+    name: pytest accordo
+    needs: build-container-image
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pytest accordo
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e accordo
+            python -m pytest accordo/tests -v --tb=short
+          "
+
+  pytest-metrix:
+    name: pytest metrix
+    needs: build-container-image
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pytest metrix
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e metrix
+            python -m pytest metrix/tests -v --tb=short
+          "
+
+  pytest-nexus:
+    name: pytest nexus
+    needs: build-container-image
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pytest nexus
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e nexus
+            python -m pytest nexus/tests -v --tb=short
+          "
+
+  pytest-linex:
+    name: pytest linex
+    needs: build-container-image
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pytest linex
+        run: |
+          bash .github/scripts/container_exec.sh "
+            pip install -e linex
+            python -m pytest linex/tests -v --tb=short
+          "
