@@ -177,7 +177,31 @@ Install each tool from its subdirectory. No top-level metapackage.
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
 ```
 
-Or from a clone: `./install/tools/install.sh`. The script runs `pip install "<repo>@main#subdirectory=<tool>"` for each tool. On systems with multiple Python versions, set `PIP_CMD` (e.g. `PIP_CMD="python3.12 -m pip" ./install/tools/install.sh`). Use `--dry-run` to print commands only. Override URL/ref with `INTELLIKIT_REPO_URL` and `INTELLIKIT_REF`.
+**Options:**
+
+- **Custom pip command** (for multiple Python versions):
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash -s -- --pip-cmd pip3.12
+  # or
+  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash -s -- --pip-cmd "python3.12 -m pip"
+  ```
+
+- **Install from a specific branch/tag:**
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash -s -- --ref my-branch
+  ```
+
+- **Dry-run (preview commands):**
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash -s -- --dry-run
+  ```
+
+- **From a clone:**
+  ```bash
+  ./install/tools/install.sh --pip-cmd pip3.12 --ref main --dry-run
+  ```
+
+**Environment variables** (CLI options take precedence): `PIP_CMD`, `INTELLIKIT_REPO_URL`, `INTELLIKIT_REF`
 
 **Install individual tools from Git:**
 
@@ -204,18 +228,31 @@ pip install -e ./linex
 
 Install IntelliKit skills so AI agents can discover and use Metrix, Accordo, and Nexus. Skills are installed as `SKILL.md` files under a single directory; agents that read that location get the instructions automatically.
 
-**Default: local (current workspace)**
+**Default: local (current workspace) - agents target**
 
 ```bash
 # One-liner: installs into ./.agents/skills/ (current directory)
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
 ```
 
+**Different agent targets** (cursor, claude, codex, agents):
+
+```bash
+# Cursor
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --target cursor
+
+# Claude
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --target claude
+
+# Codex
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --target codex
+```
+
 **Global (all projects)**
 
 ```bash
-# Install into ~/.agents/skills/
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --global
+# Install into ~/.cursor/skills/ (or ~/.claude/skills/, etc.)
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --target cursor --global
 ```
 
 **From a clone**
@@ -223,15 +260,17 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 ```bash
 git clone https://github.com/AMDResearch/intellikit.git
 cd intellikit
-./install/skills/install.sh              # local: ./.agents/skills/
-./install/skills/install.sh --global     # global: ~/.agents/skills/
-./install/skills/install.sh --dry-run    # show what would be installed
+./install/skills/install.sh                    # local: ./.agents/skills/
+./install/skills/install.sh --target cursor     # local: ./.cursor/skills/
+./install/skills/install.sh --target claude --global  # global: ~/.claude/skills/
+./install/skills/install.sh --dry-run          # show what would be installed
 ```
 
-Resulting layout:
+**Resulting layout:**
 
-- **Local:** `./.agents/skills/metrix/SKILL.md`, `./.agents/skills/accordo/SKILL.md`, `./.agents/skills/nexus/SKILL.md`
-- **Global:** `~/.agents/skills/metrix/SKILL.md`, `~/.agents/skills/accordo/SKILL.md`, `~/.agents/skills/nexus/SKILL.md`
+- **Local (agents):** `./.agents/skills/metrix/SKILL.md`, `./.agents/skills/accordo/SKILL.md`, `./.agents/skills/nexus/SKILL.md`
+- **Local (cursor):** `./.cursor/skills/metrix/SKILL.md`, `./.cursor/skills/accordo/SKILL.md`, `./.cursor/skills/nexus/SKILL.md`
+- **Global (claude):** `~/.claude/skills/metrix/SKILL.md`, `~/.claude/skills/accordo/SKILL.md`, `~/.claude/skills/nexus/SKILL.md`
 
 ## Requirements
 
