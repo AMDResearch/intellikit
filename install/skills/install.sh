@@ -38,17 +38,26 @@ print_usage() {
   echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- --target claude --global"
 }
 
+require_arg() {
+  local opt="$1"
+  local val="$2"
+  if [[ -z "${val}" || "${val}" == -* ]]; then
+    echo "Missing or invalid value for ${opt}" >&2
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
     --global)  GLOBAL=true; shift ;;
     --help|-h) print_usage; exit 0 ;;
     --base-url)
-      [[ -z "${2:-}" ]] && { echo "Missing value for $1" >&2; exit 1; }
+      require_arg "$1" "${2:-}"
       BASE_URL="$2"; shift 2
       ;;
     --target)
-      [[ -z "${2:-}" ]] && { echo "Missing value for $1" >&2; exit 1; }
+      require_arg "$1" "${2:-}"
       TARGET="$2"; shift 2
       ;;
     *)
@@ -75,7 +84,9 @@ case "$TARGET" in
     ;;
 esac
 
-mkdir -p "$SKILLS_ROOT"
+if [[ "$DRY_RUN" != true ]]; then
+  mkdir -p "$SKILLS_ROOT"
+fi
 
 for tool in "${TOOLS[@]}"; do
   url="${BASE_URL}/${tool}/skill/SKILL.md"

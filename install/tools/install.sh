@@ -36,20 +36,29 @@ print_usage() {
   echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- --pip-cmd 'python3.12 -m pip' --dry-run"
 }
 
+require_arg() {
+  local opt="$1"
+  local val="$2"
+  if [[ -z "${val}" || "${val}" == -* ]]; then
+    echo "Missing or invalid value for ${opt}" >&2
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
     --help|-h) print_usage; exit 0 ;;
     --pip-cmd|-p)
-      [[ -z "${2:-}" ]] && { echo "Missing value for $1" >&2; exit 1; }
+      require_arg "$1" "${2:-}"
       PIP_CMD="$2"; shift 2
       ;;
     --repo-url)
-      [[ -z "${2:-}" ]] && { echo "Missing value for $1" >&2; exit 1; }
+      require_arg "$1" "${2:-}"
       REPO_URL="$2"; shift 2
       ;;
     --ref)
-      [[ -z "${2:-}" ]] && { echo "Missing value for $1" >&2; exit 1; }
+      require_arg "$1" "${2:-}"
       REF="$2"; shift 2
       ;;
     *)
