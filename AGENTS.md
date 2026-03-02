@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** Python >= 3.10, ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs
+**Requirements:** Python >= 3.10 (root), ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
 
 ## Build Commands
 
@@ -22,8 +22,10 @@ pip install -e accordo/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp
 pip install -e metrix/
 pip install -e linex/
 
-# Build nexus C++ component (requires CMake)
-cd nexus && mkdir -p build && cd build && cmake .. && make
+# Build nexus C++ component (scikit-build-core handles CMake automatically)
+pip install -e nexus/
+# Or build manually if needed:
+# cd nexus && mkdir -p build && cd build && cmake .. && make
 ```
 
 ## Testing
@@ -109,16 +111,17 @@ All tools expose MCP servers via the MCP SDK's FastMCP module:
 
 ### Nexus C++ Integration
 
-- C++ source in `nexus/csrc/src/`
-- Headers in `nexus/csrc/include/nexus/`
+- C++ source in `nexus/csrc/src/` (`.cpp` files)
+- Headers in `nexus/csrc/include/nexus/` (`.hpp` files: `nexus.hpp`, `log.hpp`)
 - Python bindings via shared library built with CMake
 - Requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`)
 
 ### Accordo Runtime Compilation
 
-- C++ validation code in `accordo/src/` compiled at runtime
+- C++ validation code in `accordo/src/` compiled at runtime (`.hip` and `.hpp` files)
 - Uses HSA for GPU memory interception
 - Python package in `accordo/accordo/` with validator implementation
+- Internal utilities in `accordo/_internal/` (outside main package)
 - Dependencies include external `kerneldb` library for kernel extraction
 
 ## Package Layout Variations
