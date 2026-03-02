@@ -78,15 +78,13 @@ int main() {
 }
 """
 
+
 def _reduce_source(kernel_body: str) -> str:
     """Build full HIP source: includes + kernel body + shared main()."""
     return (
         "#include <hip/hip_runtime.h>\n"
         "#include <stdio.h>\n"
-        "#include <stdlib.h>\n"
-        + kernel_body.strip()
-        + "\n"
-        + REDUCE_MAIN
+        "#include <stdlib.h>\n" + kernel_body.strip() + "\n" + REDUCE_MAIN
     )
 
 
@@ -122,10 +120,12 @@ int main() {{
 }}
 """
 
+
 def _scale_values_source(dtype: str) -> str:
     """Build scale_values HIP source for dtype ('float' or 'double')."""
     factor = "2.0f" if dtype == "float" else "2.0"
     return SCALE_VALUES_TEMPLATE.format(dtype=dtype, factor=factor)
+
 
 # -----------------------------------------------------------------------------
 # Vector add: same kernel twice (identity comparison)

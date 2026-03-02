@@ -83,7 +83,9 @@ def test_profile_vector_add_time_only(time_only, num_replays):
     assert results.total_kernels >= 1
     assert len(results.kernels) >= 1
     user_kernels = [k for k in results.kernels if "vector_add" in k.name]
-    assert len(user_kernels) >= 1, f"Expected 'vector_add' in kernel names: {[k.name for k in results.kernels]}"
+    assert len(user_kernels) >= 1, (
+        f"Expected 'vector_add' in kernel names: {[k.name for k in results.kernels]}"
+    )
     kernel = user_kernels[0]
     assert kernel.duration_us.avg >= 0
     if num_replays > 1:
@@ -108,7 +110,9 @@ def test_profile_vector_add_single_metric(metric):
         )
     assert results.total_kernels >= 1
     user_kernels = [k for k in results.kernels if "vector_add" in k.name]
-    assert len(user_kernels) >= 1, f"Expected 'vector_add' in kernel names: {[k.name for k in results.kernels]}"
+    assert len(user_kernels) >= 1, (
+        f"Expected 'vector_add' in kernel names: {[k.name for k in results.kernels]}"
+    )
     kernel = user_kernels[0]
     if metric in kernel.metrics:
         assert kernel.metrics[metric].avg >= 0

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from linex import Linex, SourceLine, InstructionData
+from linex import Linex
 
 VECTOR_ADD_HIP = """
 #include <hip/hip_runtime.h>
@@ -78,9 +78,15 @@ def test_profile_vector_add_source_lines(kernel_filter):
         )
     assert len(profiler.instructions) >= 1
     if len(profiler.source_lines) >= 1:
-        user_lines = [s for s in profiler.source_lines if "vector_add" in s.file or "vector_add" in s.source_location]
+        user_lines = [
+            s
+            for s in profiler.source_lines
+            if "vector_add" in s.file or "vector_add" in s.source_location
+        ]
         if kernel_filter:
-            assert len(user_lines) >= 1, f"Expected source lines for vector_add: {[s.source_location for s in profiler.source_lines]}"
+            assert len(user_lines) >= 1, (
+                f"Expected source lines for vector_add: {[s.source_location for s in profiler.source_lines]}"
+            )
 
 
 def test_profile_source_line_attributes():

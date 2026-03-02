@@ -76,7 +76,9 @@ def test_trace_vector_add_kernel(log_level):
     assert len(trace) >= 1
     # Find our kernel (trace may include runtime kernels)
     user_kernels = [k for k in trace if "vector_add" in k.name]
-    assert len(user_kernels) >= 1, f"Expected kernel 'vector_add' in trace, got: {[k.name for k in trace]}"
+    assert len(user_kernels) >= 1, (
+        f"Expected kernel 'vector_add' in trace, got: {[k.name for k in trace]}"
+    )
     kernel = user_kernels[0]
     assert len(kernel.assembly) >= 1
     assert len(kernel.hip) >= 1
