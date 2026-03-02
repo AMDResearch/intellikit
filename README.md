@@ -12,28 +12,17 @@ IntelliKit is a collection of profiling and analysis tools for AMD ROCm that exp
 
 ## Installation
 
-Install all tools from Git (one command):
+**Install all tools and agent skills** (one command each):
 
 ```bash
+# Tools
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
+
+# Agent skills (so AI agents can discover and use IntelliKit tools)
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
 ```
 
-**Options:**
-
-- **Custom pip command** (for multiple Python versions):
-  ```bash
-  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash -s -- --pip-cmd pip3.12
-  ```
-
-- **Install from a specific branch/tag:**
-  ```bash
-  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash -s -- --ref my-branch
-  ```
-
-- **Dry-run (preview commands):**
-  ```bash
-  curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash -s -- --dry-run
-  ```
+See [install/README.md](install/README.md) for all options (custom pip command, branch/tag, agent targets, dry-run, etc.).
 
 **Install individual tools from Git:**
 
@@ -210,21 +199,6 @@ Add to your JSON MCP config:
     }
   }
 }
-```
-
-## Agent Skills (AI agents)
-
-Install IntelliKit skills so AI agents can discover and use Metrix, Accordo, and Nexus:
-
-```bash
-# Install into ./.agents/skills/ (current directory)
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
-
-# Install for a specific agent (cursor, claude, codex)
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --target cursor
-
-# Install globally (~/.cursor/skills/, etc.)
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash -s -- --target cursor --global
 ```
 
 ## Documentation
