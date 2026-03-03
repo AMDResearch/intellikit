@@ -59,6 +59,13 @@ jobs:
 
       - name: Test ${{ matrix.install_method }} install - ${{ matrix.package }}
         run: |
+          # Determine the correct SHA to use for GitHub installs
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            GIT_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            GIT_SHA="${{ github.sha }}"
+          fi
+          
           if [ "${{ matrix.package }}" = "root" ]; then
             # Root project installation (no import test as there's no top-level module)
             if [ "${{ matrix.install_method }}" = "editable" ]; then
@@ -71,7 +78,7 @@ jobs:
               "
             elif [ "${{ matrix.install_method }}" = "github" ]; then
               bash .github/scripts/container_exec.sh "
-                pip install \"git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}\"
+                pip install 'git+https://github.com/AMDResearch/intellikit.git@${GIT_SHA}'
               "
             fi
           else
@@ -88,7 +95,7 @@ jobs:
               "
             elif [ "${{ matrix.install_method }}" = "github" ]; then
               bash .github/scripts/container_exec.sh "
-                pip install \"git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=${{ matrix.package }}\"
+                pip install 'git+https://github.com/AMDResearch/intellikit.git@${GIT_SHA}#subdirectory=${{ matrix.package }}'
                 python3 -c 'import ${{ matrix.package }}'
               "
             fi
