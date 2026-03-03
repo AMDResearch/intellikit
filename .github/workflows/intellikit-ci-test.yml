@@ -55,7 +55,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        if: matrix.install-method != 'github'
+
 
       - name: Test ${{ matrix.install-method }} install - ${{ matrix.package }}
         run: |
@@ -71,7 +71,7 @@ jobs:
             "
           elif [ "${{ matrix.install-method }}" = "github" ]; then
             bash .github/scripts/container_exec.sh "
-              pip install git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=${{ matrix.package }}
+              pip install \"git+https://github.com/AMDResearch/intellikit.git@${{ github.sha }}#subdirectory=${{ matrix.package }}\"
               python3 -c 'import ${{ matrix.package }}'
             "
           fi
