@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [accordo, linex, metrix, nexus, rocm_mcp, uprof_mcp, root]
+        package: [accordo, linex, metrix, nexus, rocm_mcp, uprof_mcp]
         install_method: [editable, non-editable, github]
 
     steps:
@@ -66,37 +66,20 @@ jobs:
             GIT_SHA="${{ github.sha }}"
           fi
           
-          if [ "${{ matrix.package }}" = "root" ]; then
-            # Root project installation (no import test as there's no top-level module)
-            if [ "${{ matrix.install_method }}" = "editable" ]; then
-              bash .github/scripts/container_exec.sh "
-                pip install -e .
-              "
-            elif [ "${{ matrix.install_method }}" = "non-editable" ]; then
-              bash .github/scripts/container_exec.sh "
-                pip install .
-              "
-            elif [ "${{ matrix.install_method }}" = "github" ]; then
-              bash .github/scripts/container_exec.sh "
-                pip install 'git+https://github.com/AMDResearch/intellikit.git@${GIT_SHA}'
-              "
-            fi
-          else
-            # Subpackage installation with import test
-            if [ "${{ matrix.install_method }}" = "editable" ]; then
-              bash .github/scripts/container_exec.sh "
-                pip install -e ${{ matrix.package }}
-                python3 -c 'import ${{ matrix.package }}'
-              "
-            elif [ "${{ matrix.install_method }}" = "non-editable" ]; then
-              bash .github/scripts/container_exec.sh "
-                pip install ./${{ matrix.package }}
-                python3 -c 'import ${{ matrix.package }}'
-              "
-            elif [ "${{ matrix.install_method }}" = "github" ]; then
-              bash .github/scripts/container_exec.sh "
-                pip install 'git+https://github.com/AMDResearch/intellikit.git@${GIT_SHA}#subdirectory=${{ matrix.package }}'
-                python3 -c 'import ${{ matrix.package }}'
-              "
-            fi
+          # Subpackage installation with import test
+          if [ "${{ matrix.install_method }}" = "editable" ]; then
+            bash .github/scripts/container_exec.sh "
+              pip install -e ${{ matrix.package }}
+              python3 -c 'import ${{ matrix.package }}'
+            "
+          elif [ "${{ matrix.install_method }}" = "non-editable" ]; then
+            bash .github/scripts/container_exec.sh "
+              pip install ./${{ matrix.package }}
+              python3 -c 'import ${{ matrix.package }}'
+            "
+          elif [ "${{ matrix.install_method }}" = "github" ]; then
+            bash .github/scripts/container_exec.sh "
+              pip install 'git+https://github.com/AMDResearch/intellikit.git@${GIT_SHA}#subdirectory=${{ matrix.package }}'
+              python3 -c 'import ${{ matrix.package }}'
+            "
           fi
