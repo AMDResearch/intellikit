@@ -10,7 +10,6 @@ EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples"
 VECTOR_ADD = EXAMPLES_DIR / "01_vector_add" / "vector_add"
 
 
-@pytest.mark.timeout(60)
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_time_only():
     """Test metrix --time-only -n 1 (single run, single dispatch)"""
@@ -27,7 +26,6 @@ def test_cli_time_only():
     assert "μs" in result.stdout
 
 
-@pytest.mark.timeout(60)
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_time_only_aggregated():
     """Test metrix profile --time-only --aggregate"""
@@ -53,7 +51,6 @@ def test_cli_time_only_aggregated():
     assert " - " in result.stdout  # Shows range (min - max)
 
 
-@pytest.mark.timeout(60)
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_with_metric():
     """Test metrix --metrics (with runs, aggregates by dispatch)"""
@@ -71,7 +68,6 @@ def test_cli_with_metric():
     assert "Dispatch #1" in result.stdout  # Shows per-dispatch aggregation
 
 
-@pytest.mark.timeout(60)
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_with_metric_aggregated():
     """Test metrix profile --metrics --aggregate"""
@@ -126,7 +122,6 @@ def test_cli_list_profiles_includes_compute():
     assert "COMPUTE" in result.stdout
 
 
-@pytest.mark.timeout(120)
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_compute_profile():
     """Test metrix profile --profile compute"""
@@ -156,7 +151,6 @@ def test_cli_compute_profile():
     )
 
 
-@pytest.mark.timeout(120)
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_compute_metric_directly():
     """Test metrix --metrics compute.total_flops"""

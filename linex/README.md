@@ -37,7 +37,16 @@ for line in profiler.source_lines[:5]:
 
 - Python >= 3.8
 - ROCm 7.0+ with `rocprofv3`
-- Kernels compiled with `-g` (debug symbols)
+
+### Compiling with and without `-g`
+
+| Build        | `instructions`   | `source_lines`   | `InstructionData.file` / `.line` |
+|-------------|------------------|------------------|-----------------------------------|
+| **With `-g`**  | Populated (ISA + cycles) | Populated (aggregated by file:line) | Real file path and line number    |
+| **Without `-g`** | Populated (ISA + cycles) | Empty            | `""` and `0`                      |
+
+- **Use `-g`** when you want **source-line mapping**: ISA instructions tied to `file:line`, and `source_lines` aggregated by source line.
+- **Omit `-g`** when you only need **assembly-level metrics**: you still get every instruction with `isa`, `latency_cycles`, `stall_cycles`, etc.; only file/line and `source_lines` are empty or zero.
 
 ## API
 
@@ -84,8 +93,8 @@ inst.stall_cycles          # Cycles spent waiting
 inst.idle_cycles           # Cycles slot was idle
 inst.execution_count       # How many times it ran
 inst.instruction_address   # Virtual address in GPU memory
-inst.file                  # Parsed from source_location
-inst.line                  # Parsed from source_location
+inst.file                  # Parsed from source_location (empty without -g)
+inst.line                  # Parsed from source_location (0 without -g)
 inst.stall_percent         # Convenience: stall_cycles / latency_cycles * 100
 ```
 

@@ -15,7 +15,7 @@ class TestMissingExecutable:
 
     def test_missing_executable_error_message(self):
         """Should provide helpful error message for missing executable"""
-        wrapper = ROCProfV3Wrapper(timeout=5)
+        wrapper = ROCProfV3Wrapper(timeout_seconds=5)
 
         # rocprofv3 wraps FileNotFoundError in RuntimeError
         with pytest.raises(RuntimeError) as exc_info:
@@ -27,7 +27,7 @@ class TestMissingExecutable:
 
     def test_wrong_path_error_message(self):
         """Should provide helpful error when path is incorrect"""
-        wrapper = ROCProfV3Wrapper(timeout=5)
+        wrapper = ROCProfV3Wrapper(timeout_seconds=5)
 
         # rocprofv3 wraps FileNotFoundError in RuntimeError
         with pytest.raises(RuntimeError) as exc_info:
@@ -66,17 +66,17 @@ class TestTimeoutHandling:
     """Test timeout handling"""
 
     def test_respects_timeout_setting(self):
-        """ROCProfV3Wrapper should respect timeout setting"""
-        wrapper = ROCProfV3Wrapper(timeout=1)
+        """ROCProfV3Wrapper should respect timeout_seconds setting"""
+        wrapper = ROCProfV3Wrapper(timeout_seconds=1)
         assert wrapper.timeout == 1
 
-        wrapper = ROCProfV3Wrapper(timeout=60)
+        wrapper = ROCProfV3Wrapper(timeout_seconds=60)
         assert wrapper.timeout == 60
 
     def test_default_timeout(self):
-        """Should have reasonable default timeout"""
+        """No timeout by default (0 or None means no timeout)"""
         wrapper = ROCProfV3Wrapper()
-        assert wrapper.timeout == 60  # Default from CLI
+        assert wrapper.timeout is None
 
 
 class TestBackendValidation:

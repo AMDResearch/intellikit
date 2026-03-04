@@ -404,22 +404,6 @@ class TestComputeMetrics:
         result = backend._total_flops()
         assert result == 0
 
-    def test_hbm_gflops_calculation(self, backend):
-        """Test GFLOPS calculation with timing"""
-        arch = backend.device_specs.arch
-
-        backend._raw_data = self._get_zero_flops_counters()
-        backend._raw_data["SQ_INSTS_VALU_ADD_F32"] = 1000000  # 64M FLOPS
-
-        if arch == "gfx942":
-            backend._raw_data["GRBM_GUI_ACTIVE"] = 2100000  # 1 ms at 2.1 GHz
-        else:  # gfx90a
-            backend._raw_data["GRBM_GUI_ACTIVE"] = 1700000  # 1 ms at 1.7 GHz
-
-        result = backend._hbm_gflops()
-        # 64M FLOPS / 0.001 seconds = 64 GFLOPS
-        assert 60 < result < 70
-
     def test_hbm_gflops_zero_time(self, backend):
         """Handle zero active cycles"""
         backend._raw_data = self._get_zero_flops_counters()

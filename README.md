@@ -74,6 +74,8 @@ for line in profiler.source_lines[:5]:
     print(f"  {line.total_cycles:,} cycles ({line.stall_percent:.1f}% stalled)")
 ```
 
+Compile kernels with `-g` for source-line mapping (`file:line`); without `-g` you still get `instructions` (ISA + cycles) but `source_lines` is empty and `inst.file`/`inst.line` are empty/0. See [linex/README.md](linex/README.md#compiling-with-and-without--g).
+
 ### [Metrix](metrix/) - Human-Readable GPU Metrics
 
 Decodes hardware counters into actionable performance insights.
