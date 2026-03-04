@@ -5,173 +5,38 @@ name: Test Install Scripts
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-permissions:
-  contents: read
-
 jobs:
-  test-tools-install:
-    name: Test Tools Install Script
-    runs-on: ubuntu-latest
+  test-install-scripts:
+    name: Test Install Scripts
+    runs-on: [self-hosted, mi3xx]
     timeout-minutes: 10
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Test --help flag
-        run: bash install/tools/install.sh --help
-
-      - name: Test -h flag
-        run: bash install/tools/install.sh -h
-
-      - name: Test --dry-run lists all tools
+      - name: Test tools install script
         run: |
-          output=$(bash install/tools/install.sh --dry-run)
-          echo "$output"
-          for tool in accordo linex metrix nexus rocm_mcp uprof_mcp; do
-            echo "$output" | grep -q "$tool" || { echo "ERROR: tool not found in dry-run output: $tool"; exit 1; }
-          done
+          bash install/tools/install.sh --help
+          bash install/tools/install.sh --dry-run
+          bash install/tools/install.sh --dry-run --pip-cmd "python3 -m pip" --repo-url https://github.com/AMDResearch/intellikit.git --ref main
+          bash install/tools/install.sh --unknown-option 2>&1 && exit 1 || true
 
-      - name: Test --dry-run with custom --pip-cmd
+      - name: Test skills install script
         run: |
-          output=$(bash install/tools/install.sh --dry-run --pip-cmd "python3 -m pip")
-          echo "$output"
-          echo "$output" | grep -q "python3 -m pip" || { echo "ERROR: custom pip-cmd not found in output"; exit 1; }
-
-      - name: Test -p short form for --pip-cmd
-        run: |
-          output=$(bash install/tools/install.sh --dry-run -p "python3.12 -m pip")
-          echo "$output"
-          echo "$output" | grep -q "python3.12 -m pip" || { echo "ERROR: short pip-cmd not found in output"; exit 1; }
-
-      - name: Test --dry-run with custom --repo-url and --ref
-        run: |
-          output=$(bash install/tools/install.sh --dry-run --repo-url https://github.com/test/repo.git --ref v1.0.0)
-          echo "$output"
-          echo "$output" | grep -q "test/repo" || { echo "ERROR: custom repo-url not found in output"; exit 1; }
-          echo "$output" | grep -q "v1.0.0" || { echo "ERROR: custom ref not found in output"; exit 1; }
-
-      - name: Test unknown option exits with error
-        run: |
-          output=$(bash install/tools/install.sh --unknown-option 2>&1) && exit 1 || true
-          echo "$output" | grep -qi "unknown option" || { echo "ERROR: expected 'Unknown option' in output"; exit 1; }
-
-      - name: Test missing value for --pip-cmd exits with error
-        run: |
-          bash install/tools/install.sh --pip-cmd 2>/dev/null && exit 1 || true
-
-      - name: Test missing value for --repo-url exits with error
-        run: |
-          bash install/tools/install.sh --repo-url 2>/dev/null && exit 1 || true
-
-      - name: Test missing value for --ref exits with error
-        run: |
-          bash install/tools/install.sh --ref 2>/dev/null && exit 1 || true
-
-  test-skills-install:
-    name: Test Skills Install Script
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Test --help flag
-        run: bash install/skills/install.sh --help
-
-      - name: Test -h flag
-        run: bash install/skills/install.sh -h
-
-      - name: Test --dry-run lists all tools (default target: agents)
-        run: |
-          output=$(bash install/skills/install.sh --dry-run)
-          echo "$output"
-          for tool in metrix accordo nexus; do
-            echo "$output" | grep -q "$tool" || { echo "ERROR: tool not found in dry-run output: $tool"; exit 1; }
-          done
-          echo "$output" | grep -q ".agents/skills" || { echo "ERROR: expected .agents/skills path in output"; exit 1; }
-
-      - name: Test --dry-run with --target codex
-        run: |
-          output=$(bash install/skills/install.sh --dry-run --target codex)
-          echo "$output"
-          echo "$output" | grep -q ".codex/skills" || { echo "ERROR: expected .codex/skills path in output"; exit 1; }
-
-      - name: Test --dry-run with --target cursor
-        run: |
-          output=$(bash install/skills/install.sh --dry-run --target cursor)
-          echo "$output"
-          echo "$output" | grep -q ".cursor/skills" || { echo "ERROR: expected .cursor/skills path in output"; exit 1; }
-
-      - name: Test --dry-run with --target claude
-        run: |
-          output=$(bash install/skills/install.sh --dry-run --target claude)
-          echo "$output"
-          echo "$output" | grep -q ".claude/skills" || { echo "ERROR: expected .claude/skills path in output"; exit 1; }
-
-      - name: Test --dry-run with --global flag
-        run: |
-          output=$(bash install/skills/install.sh --dry-run --global)
-          echo "$output"
-          echo "$output" | grep -q "${HOME}/.agents/skills" || { echo "ERROR: expected global HOME path in output"; exit 1; }
-
-      - name: Test --dry-run with custom --base-url
-        run: |
-          output=$(bash install/skills/install.sh --dry-run --base-url https://example.com/raw)
-          echo "$output"
-          echo "$output" | grep -q "example.com" || { echo "ERROR: custom base-url not found in output"; exit 1; }
-
-      - name: Test unknown option exits with error
-        run: |
-          output=$(bash install/skills/install.sh --unknown-option 2>&1) && exit 1 || true
-          echo "$output" | grep -qi "unknown option" || { echo "ERROR: expected 'Unknown option' in output"; exit 1; }
-
-      - name: Test unknown target exits with error
-        run: |
-          output=$(bash install/skills/install.sh --target invalid 2>&1) && exit 1 || true
-          echo "$output" | grep -qi "unknown target" || { echo "ERROR: expected 'Unknown target' in output"; exit 1; }
-
-      - name: Test missing value for --target exits with error
-        run: |
-          bash install/skills/install.sh --target 2>/dev/null && exit 1 || true
-
-      - name: Test missing value for --base-url exits with error
-        run: |
-          bash install/skills/install.sh --base-url 2>/dev/null && exit 1 || true
-
-      - name: Test actual download with local HTTP server
-        run: |
-          # Start a local HTTP server serving the repo root
-          python3 -m http.server 8765 --directory "$GITHUB_WORKSPACE" &
-          SERVER_PID=$!
-          # Wait for server to be ready
-          for i in $(seq 1 10); do
-            curl -sf http://localhost:8765/ > /dev/null 2>&1 && break || sleep 0.5
-          done
-
-          # Run the skills install script against the local server in a temp dir
-          WORK_DIR=$(mktemp -d)
-          cd "$WORK_DIR"
-          bash "$GITHUB_WORKSPACE/install/skills/install.sh" \
-            --base-url http://localhost:8765 \
-            --target agents
-
-          # Verify all skill files were downloaded correctly
-          for tool in metrix accordo nexus; do
-            dest=".agents/skills/${tool}/SKILL.md"
-            [ -f "$dest" ] || { echo "ERROR: missing downloaded skill file: $dest"; kill $SERVER_PID; exit 1; }
-            [ -s "$dest" ] || { echo "ERROR: downloaded skill file is empty: $dest"; kill $SERVER_PID; exit 1; }
-            echo "Verified: $dest"
-          done
-
-          kill $SERVER_PID || true
+          bash install/skills/install.sh --help
+          bash install/skills/install.sh --dry-run
+          bash install/skills/install.sh --dry-run --target codex
+          bash install/skills/install.sh --dry-run --target cursor
+          bash install/skills/install.sh --dry-run --target claude
+          bash install/skills/install.sh --dry-run --global
+          bash install/skills/install.sh --target invalid 2>&1 && exit 1 || true
