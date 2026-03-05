@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # IntelliKit Agent Skills Installer
-# Downloads each tool's SKILL.md into a skills dir. Use --target to pick agent (agents/codex/cursor/claude).
+# Downloads each tool's SKILL.md into a skills dir. Use --target to pick agent (agents/codex/cursor/claude/github).
 # Usage: curl -sSL <install script URL> | bash -s -- [OPTIONS]
 #    or: ./install.sh [OPTIONS]
 # CLI options override env (INTELLIKIT_RAW_URL). Use args when piping so overrides reach bash.
@@ -23,11 +23,12 @@ print_usage() {
   echo "  ./install.sh [OPTIONS]"
   echo ""
   echo "Options:"
-  echo "  --target <name>   Where to install: agents (default), codex, cursor, claude"
+  echo "  --target <name>   Where to install: agents (default), codex, cursor, claude, github"
   echo "                    agents -> .agents/skills or ~/.agents/skills"
   echo "                    codex  -> .codex/skills or ~/.codex/skills"
   echo "                    cursor -> .cursor/skills or ~/.cursor/skills"
   echo "                    claude -> .claude/skills or ~/.claude/skills"
+  echo "                    github -> .github/agents/skills or ~/.github/agents/skills"
   echo "  --global          Use user-level dir (e.g. ~/.cursor/skills) instead of project-level"
   echo "  --base-url <url>  Base URL for raw files (default from INTELLIKIT_RAW_URL or main branch)"
   echo "  --dry-run         Show what would be downloaded without making changes"
@@ -78,8 +79,15 @@ case "$TARGET" in
       SKILLS_ROOT="${PWD}/.${TARGET}/skills"
     fi
     ;;
+  github)
+    if [[ "$GLOBAL" == true ]]; then
+      SKILLS_ROOT="${HOME}/.github/agents/skills"
+    else
+      SKILLS_ROOT="${PWD}/.github/agents/skills"
+    fi
+    ;;
   *)
-    echo "Unknown target: $TARGET (use: agents, codex, cursor, claude)" >&2
+    echo "Unknown target: $TARGET (use: agents, codex, cursor, claude, github)" >&2
     exit 1
     ;;
 esac
