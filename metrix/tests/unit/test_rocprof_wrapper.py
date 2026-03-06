@@ -3,7 +3,6 @@ Unit tests for ROCProfiler V3 wrapper
 Testing CSV parsing and data structure handling
 """
 
-import re
 import pytest
 import tempfile
 import csv
@@ -191,7 +190,7 @@ class TestROCProfV3Wrapper:
             return ROCProfV3Wrapper(timeout_seconds=60)
 
     def test_kernel_filter_uses_kernel_include_regex(self, wrapper_no_rocm_check):
-        """kernel_filter builds --kernel-include-regex with escaped regex pattern"""
+        """kernel_filter passes the value directly to --kernel-include-regex"""
         wrapper = wrapper_no_rocm_check
         captured_cmd = []
 
@@ -216,16 +215,11 @@ class TestROCProfV3Wrapper:
             )
 
         assert "--kernel-include-regex" in captured_cmd
-        assert "--kernel-include" not in [
-            arg for arg in captured_cmd if arg == "--kernel-include"
-        ]
         idx = captured_cmd.index("--kernel-include-regex")
-        pattern = captured_cmd[idx + 1]
-        assert re.search(pattern, "prefix_my_kernel_suffix")
-        assert not re.search(pattern, "other_kernel")
+        assert captured_cmd[idx + 1] == "my_kernel"
 
-    def test_kernel_filter_escapes_special_chars(self, wrapper_no_rocm_check):
-        """kernel_filter with special regex characters is properly escaped"""
+    def test_kernel_filter_passes_value_unchanged(self, wrapper_no_rocm_check):
+        """kernel_filter with a regex pattern is passed through unmodified"""
         wrapper = wrapper_no_rocm_check
         captured_cmd = []
 
@@ -237,6 +231,7 @@ class TestROCProfV3Wrapper:
             mock_result.stderr = ""
             return mock_result
 
+        regex_pattern = "kernel_.*_v2"
         with (
             patch("subprocess.run", side_effect=fake_run),
             patch.object(wrapper, "_parse_output", return_value=[]),
@@ -246,14 +241,11 @@ class TestROCProfV3Wrapper:
                 command="true",
                 counters=[],
                 output_dir=Path(tmpdir),
-                kernel_filter="kernel(int*)",
+                kernel_filter=regex_pattern,
             )
 
         idx = captured_cmd.index("--kernel-include-regex")
-        pattern = captured_cmd[idx + 1]
-        # The parentheses and asterisk should be escaped, matching literal text
-        assert re.search(pattern, "kernel(int*)")
-        assert not re.search(pattern, "kernel_int_")
+        assert captured_cmd[idx + 1] == regex_pattern
 
     def test_parse_missing_optional_fields(self, wrapper):
         """Handle missing optional fields gracefully"""

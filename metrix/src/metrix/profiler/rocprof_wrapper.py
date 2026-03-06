@@ -3,7 +3,6 @@ ROCProfiler V3 wrapper
 Clean, robust interface - NO REGEX, proper CSV parsing!
 """
 
-import re
 import subprocess
 import tempfile
 import csv
@@ -69,7 +68,8 @@ class ROCProfV3Wrapper:
             command: Command to profile (e.g., "./benchmark")
             counters: List of counter names to collect
             output_dir: Output directory (temp dir if None)
-            kernel_filter: Optional kernel name filter
+            kernel_filter: Optional regular expression passed to rocprofv3's
+                --kernel-include-regex flag to filter kernels by name
             cwd: Optional working directory
 
         Returns:
@@ -101,10 +101,9 @@ class ROCProfV3Wrapper:
 
             prof_cmd.extend(["-d", str(output_dir), "--output-format", "csv"])
 
-            # Add kernel filter if specified (substring match via regex)
+            # Add kernel filter if specified
             if kernel_filter:
-                regex = f".*{re.escape(kernel_filter)}.*"
-                prof_cmd.extend(["--kernel-include-regex", regex])
+                prof_cmd.extend(["--kernel-include-regex", kernel_filter])
 
             # Add target command
             prof_cmd.append("--")
