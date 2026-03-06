@@ -29,8 +29,8 @@ Examples:
   # Custom metrics
   metrix profile --metrics memory.hbm_bandwidth,memory.l2_hit_rate ./my_app
 
-  # Filter specific kernels
-  metrix profile --profile memory --kernel "matmul*" ./my_app
+  # Filter specific kernels (regex)
+  metrix profile --profile memory --kernel "matmul.*" ./my_app
 
   # List available metrics
   metrix list metrics --category memory
@@ -74,7 +74,9 @@ Examples:
     )
 
     profile_parser.add_argument(
-        "--kernel", "-k", help="Filter kernels by name pattern (supports wildcards)"
+        "--kernel",
+        "-k",
+        help="Filter kernels by name using a regular expression (e.g. 'gemm.*', '.*attention.*', 'gemm|attention')",
     )
 
     profile_parser.add_argument(

@@ -163,7 +163,7 @@ def test_profile_with_preset(profile_name):
 
 
 def test_profile_kernel_filter_api():
-    """profile() accepts kernel_filter; result may be filtered by backend if supported."""
+    """profile() accepts kernel_filter and backend enforces it in time_only mode."""
     with tempfile.TemporaryDirectory(prefix="metrix_test_") as tmp_dir:
         tmp_path = Path(tmp_dir)
         bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path)
@@ -178,9 +178,11 @@ def test_profile_kernel_filter_api():
                 timeout_seconds=60,
             )
             assert results.total_kernels >= 1
-            if results.kernels:
-                for k in results.kernels:
-                    assert "vector_add" in k.name
+            assert results.kernels
+            for k in results.kernels:
+                assert "vector_add" in k.name, (
+                    f"Kernel '{k.name}' does not match filter 'vector_add'"
+                )
         except RuntimeError as e:
             if "kernel" in str(e).lower() and "unrecognized" in str(e).lower():
                 pytest.skip("Backend does not support kernel_filter")

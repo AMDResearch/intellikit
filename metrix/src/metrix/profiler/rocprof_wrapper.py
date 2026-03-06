@@ -1,8 +1,9 @@
 """
 ROCProfiler V3 wrapper
-Clean, robust interface - NO REGEX, proper CSV parsing!
+Clean, robust interface - regex-free CSV parsing (uses the csv module).
 """
 
+import re
 import subprocess
 import tempfile
 import csv
@@ -68,7 +69,14 @@ class ROCProfV3Wrapper:
             command: Command to profile (e.g., "./benchmark")
             counters: List of counter names to collect
             output_dir: Output directory (temp dir if None)
-            kernel_filter: Optional kernel name filter
+            kernel_filter: Optional regular expression to filter kernels by name.
+                Only kernels whose names match the pattern will be included in
+                profiling results. All other kernel dispatches will be ignored.
+
+                Examples:
+                  ``"^gemm.*"``        - kernels whose names start with "gemm"
+                  ``".*attention.*"``   - kernels whose names contain "attention"
+                  ``"gemm|attention"``  - kernels matching either pattern
             cwd: Optional working directory
 
         Returns:
@@ -100,9 +108,9 @@ class ROCProfV3Wrapper:
 
             prof_cmd.extend(["-d", str(output_dir), "--output-format", "csv"])
 
-            # Add kernel filter if specified (simple substring match)
+            # Add kernel filter if specified
             if kernel_filter:
-                prof_cmd.extend(["--kernel-include", kernel_filter])
+                prof_cmd.extend(["--kernel-include-regex", kernel_filter])
 
             # Add target command
             prof_cmd.append("--")
@@ -152,6 +160,22 @@ class ROCProfV3Wrapper:
             logger.debug(f"Parsing CSV files from {output_dir}")
             results = self._parse_output(output_dir)
             logger.info(f"Successfully parsed {len(results)} kernel dispatch(es)")
+
+            # Post-filter only in timing-only mode:
+            # - For counter collection, rocprofv3 already applies kernel filters to
+            #   the collected data.
+            # - For timing-only mode (kernel trace), the CSV still contains all
+            #   dispatches (e.g. __amd_rocclr_copyBuffer), so we filter here to
+            #   match the documented kernel_filter semantics.
+            if kernel_filter and not counters:
+                try:
+                    pattern = re.compile(kernel_filter)
+                except re.error as exc:
+                    raise RuntimeError(
+                        f"Invalid kernel_filter regular expression '{kernel_filter}': {exc}"
+                    ) from exc
+                results = [r for r in results if pattern.search(r.kernel_name)]
+                logger.info(f"After kernel filter '{kernel_filter}': {len(results)} dispatch(es)")
 
             return results
 

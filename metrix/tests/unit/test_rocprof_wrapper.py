@@ -7,6 +7,7 @@ import pytest
 import tempfile
 import csv
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 from metrix.profiler.rocprof_wrapper import ROCProfV3Wrapper, ProfileResult
 
 
@@ -182,6 +183,114 @@ class TestROCProfV3Wrapper:
             assert results[1].kernel_name == "kernel_2"
             assert results[0].counters["TCC_HIT_sum"] == 100.0
             assert results[1].counters["TCC_HIT_sum"] == 200.0
+
+    @pytest.fixture
+    def wrapper_no_rocm_check(self):
+        with patch.object(ROCProfV3Wrapper, "_check_rocprofv3"):
+            return ROCProfV3Wrapper(timeout_seconds=60)
+
+    def test_kernel_filter_uses_kernel_include_regex(self, wrapper_no_rocm_check):
+        """kernel_filter passes the value directly to --kernel-include-regex"""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command="true",
+                counters=[],
+                output_dir=Path(tmpdir),
+                kernel_filter="my_kernel",
+            )
+
+        assert "--kernel-include-regex" in captured_cmd
+        idx = captured_cmd.index("--kernel-include-regex")
+        assert captured_cmd[idx + 1] == "my_kernel"
+
+    def test_kernel_filter_passes_value_unchanged(self, wrapper_no_rocm_check):
+        """kernel_filter with a regex pattern is passed through unmodified"""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        regex_pattern = "kernel_.*_v2"
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command="true",
+                counters=[],
+                output_dir=Path(tmpdir),
+                kernel_filter=regex_pattern,
+            )
+
+        idx = captured_cmd.index("--kernel-include-regex")
+        assert captured_cmd[idx + 1] == regex_pattern
+
+    def test_kernel_filter_post_filter_timing_only(self, wrapper_no_rocm_check):
+        """In timing-only mode, post-filter drops results that do not match kernel_filter."""
+        wrapper = wrapper_no_rocm_check
+        matching = ProfileResult(
+            dispatch_id=1,
+            kernel_name="my_kernel(float*, int)",
+            gpu_id=0,
+            duration_ns=1000,
+            grid_size=(256, 1, 1),
+            workgroup_size=(64, 1, 1),
+            counters={},
+        )
+        non_matching = ProfileResult(
+            dispatch_id=2,
+            kernel_name="__amd_rocclr_copyBuffer",
+            gpu_id=0,
+            duration_ns=500,
+            grid_size=(512, 1, 1),
+            workgroup_size=(512, 1, 1),
+            counters={},
+        )
+        parsed = [non_matching, matching, non_matching]
+
+        def fake_run(cmd, **kwargs):
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = ""
+            m.stderr = ""
+            return m
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=parsed),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            results = wrapper.profile(
+                command="true",
+                counters=[],
+                output_dir=Path(tmpdir),
+                kernel_filter="my_kernel",
+            )
+
+        assert len(results) == 1
+        assert results[0].kernel_name == "my_kernel(float*, int)"
 
     def test_parse_missing_optional_fields(self, wrapper):
         """Handle missing optional fields gracefully"""
