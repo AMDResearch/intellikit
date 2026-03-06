@@ -161,9 +161,13 @@ class ROCProfV3Wrapper:
             results = self._parse_output(output_dir)
             logger.info(f"Successfully parsed {len(results)} kernel dispatch(es)")
 
-            # Post-filter by kernel name regex (rocprofv3's --kernel-include-regex may not
-            # filter all dispatch types, e.g. trace mode includes HIP runtime kernels)
-            if kernel_filter:
+            # Post-filter only in timing-only mode:
+            # - For counter collection, rocprofv3 already applies kernel filters to
+            #   the collected data.
+            # - For timing-only mode (kernel trace), the CSV still contains all
+            #   dispatches (e.g. __amd_rocclr_copyBuffer), so we filter here to
+            #   match the documented kernel_filter semantics.
+            if kernel_filter and not counters:
                 pattern = re.compile(kernel_filter)
                 results = [r for r in results if pattern.search(r.kernel_name)]
                 logger.info(f"After kernel filter '{kernel_filter}': {len(results)} dispatch(es)")
