@@ -247,7 +247,9 @@ class CounterBackend(ABC):
             metrics: List of metric names to compute
             num_replays: Number of times to replay/run the command
             aggregate_by_kernel: If True, merge dispatches with same kernel name
-            kernel_filter: Regex pattern to filter kernels at rocprofv3 level
+            kernel_filter: Regular expression to filter kernels by name.
+                Only kernels whose names match the pattern will be included
+                in profiling results.
             cwd: Working directory for command execution
             timeout_seconds: Timeout in seconds for profiling (default: 0, None for no timeout)
 
@@ -386,7 +388,7 @@ class CounterBackend(ABC):
         Args:
             command: Command to profile
             counters: List of hardware counter names to collect
-            kernel_filter: Optional regex pattern to filter kernels
+            kernel_filter: Optional regular expression to filter kernels by name
             cwd: Optional working directory for command execution
             timeout_seconds: Timeout in seconds for profiling (default: 0, zero or None for no timeout)
 

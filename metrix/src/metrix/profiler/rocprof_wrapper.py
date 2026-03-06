@@ -68,8 +68,14 @@ class ROCProfV3Wrapper:
             command: Command to profile (e.g., "./benchmark")
             counters: List of counter names to collect
             output_dir: Output directory (temp dir if None)
-            kernel_filter: Optional regular expression passed to rocprofv3's
-                --kernel-include-regex flag to filter kernels by name
+            kernel_filter: Optional regular expression to filter kernels by name.
+                Only kernels whose names match the pattern will be included in
+                profiling results. All other kernel dispatches will be ignored.
+
+                Examples:
+                  ``"gemm.*"``         - kernels whose names start with "gemm"
+                  ``".*attention.*"``   - kernels whose names contain "attention"
+                  ``"gemm|attention"``  - kernels matching either pattern
             cwd: Optional working directory
 
         Returns:

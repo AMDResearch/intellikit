@@ -87,7 +87,15 @@ class Metrix:
             command: Command to profile (e.g., "./my_app" or "./my_app arg1 arg2")
             metrics: List of metrics to collect (e.g., ["memory.l2_hit_rate"])
             profile: Use a preset profile ("quick", "memory", etc.)
-            kernel_filter: Kernel name substring to filter
+            kernel_filter: Regular expression to filter kernels by name.
+                Only kernels whose names match the provided regular expression will be
+                included in profiling results. All other kernel dispatches will be ignored
+                by the profiler.
+
+                Examples:
+                  ``"gemm.*"``         - kernels whose names start with "gemm"
+                  ``".*attention.*"``   - kernels whose names contain "attention"
+                  ``"gemm|attention"``  - kernels matching either pattern
             time_only: Only collect timing, no hardware counters
             num_replays: Number of times to replay/run the command (default: 1)
             aggregate_by_kernel: Aggregate dispatches by kernel name (default: True)

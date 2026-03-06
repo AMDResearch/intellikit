@@ -86,7 +86,7 @@ def profile_command(args):
         logger.info(f"Filter: {args.kernel}")
     logger.info(f"{'=' * 80}")
 
-    # Build kernel filter (simple substring)
+    # Build kernel filter (regular expression, passed through to profiler)
     kernel_filter = args.kernel if args.kernel else None
 
     # Profile using backend (handles multi-replay & aggregation internally!)
