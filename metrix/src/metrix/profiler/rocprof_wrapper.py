@@ -1,6 +1,6 @@
 """
 ROCProfiler V3 wrapper
-Clean, robust interface - NO REGEX, proper CSV parsing!
+Clean, robust interface - regex-free CSV parsing (uses the csv module).
 """
 
 import re
@@ -168,7 +168,12 @@ class ROCProfV3Wrapper:
             #   dispatches (e.g. __amd_rocclr_copyBuffer), so we filter here to
             #   match the documented kernel_filter semantics.
             if kernel_filter and not counters:
-                pattern = re.compile(kernel_filter)
+                try:
+                    pattern = re.compile(kernel_filter)
+                except re.error as exc:
+                    raise RuntimeError(
+                        f"Invalid kernel_filter regular expression '{kernel_filter}': {exc}"
+                    ) from exc
                 results = [r for r in results if pattern.search(r.kernel_name)]
                 logger.info(f"After kernel filter '{kernel_filter}': {len(results)} dispatch(es)")
 
