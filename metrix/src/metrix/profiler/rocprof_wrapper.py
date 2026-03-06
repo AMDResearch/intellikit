@@ -74,7 +74,7 @@ class ROCProfV3Wrapper:
                 profiling results. All other kernel dispatches will be ignored.
 
                 Examples:
-                  ``"gemm.*"``         - kernels whose names start with "gemm"
+                  ``"^gemm.*"``        - kernels whose names start with "gemm"
                   ``".*attention.*"``   - kernels whose names contain "attention"
                   ``"gemm|attention"``  - kernels matching either pattern
             cwd: Optional working directory

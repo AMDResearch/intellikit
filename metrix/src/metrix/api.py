@@ -93,7 +93,7 @@ class Metrix:
                 by the profiler.
 
                 Examples:
-                  ``"gemm.*"``         - kernels whose names start with "gemm"
+                  ``"^gemm.*"``        - kernels whose names start with "gemm"
                   ``".*attention.*"``   - kernels whose names contain "attention"
                   ``"gemm|attention"``  - kernels matching either pattern
             time_only: Only collect timing, no hardware counters
