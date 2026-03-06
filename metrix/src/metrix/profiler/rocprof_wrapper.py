@@ -3,6 +3,7 @@ ROCProfiler V3 wrapper
 Clean, robust interface - NO REGEX, proper CSV parsing!
 """
 
+import re
 import subprocess
 import tempfile
 import csv
@@ -159,6 +160,13 @@ class ROCProfV3Wrapper:
             logger.debug(f"Parsing CSV files from {output_dir}")
             results = self._parse_output(output_dir)
             logger.info(f"Successfully parsed {len(results)} kernel dispatch(es)")
+
+            # Post-filter by kernel name regex (rocprofv3's --kernel-include-regex may not
+            # filter all dispatch types, e.g. trace mode includes HIP runtime kernels)
+            if kernel_filter:
+                pattern = re.compile(kernel_filter)
+                results = [r for r in results if pattern.search(r.kernel_name)]
+                logger.info(f"After kernel filter '{kernel_filter}': {len(results)} dispatch(es)")
 
             return results
 
