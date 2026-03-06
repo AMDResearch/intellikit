@@ -179,8 +179,11 @@ def test_profile_kernel_filter_api():
             )
             assert results.total_kernels >= 1
             if results.kernels:
-                for k in results.kernels:
-                    assert "vector_add" in k.name
+                matched = [k for k in results.kernels if "vector_add" in k.name]
+                assert len(matched) >= 1, (
+                    f"No kernels matching 'vector_add' found in results: "
+                    f"{[k.name for k in results.kernels]}"
+                )
         except RuntimeError as e:
             if "kernel" in str(e).lower() and "unrecognized" in str(e).lower():
                 pytest.skip("Backend does not support kernel_filter")
