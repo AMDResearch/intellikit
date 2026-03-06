@@ -3,6 +3,7 @@ ROCProfiler V3 wrapper
 Clean, robust interface - NO REGEX, proper CSV parsing!
 """
 
+import re
 import subprocess
 import tempfile
 import csv
@@ -100,9 +101,10 @@ class ROCProfV3Wrapper:
 
             prof_cmd.extend(["-d", str(output_dir), "--output-format", "csv"])
 
-            # Add kernel filter if specified (simple substring match)
+            # Add kernel filter if specified (substring match via regex)
             if kernel_filter:
-                prof_cmd.extend(["--kernel-include", kernel_filter])
+                regex = f".*{re.escape(kernel_filter)}.*"
+                prof_cmd.extend(["--kernel-include-regex", regex])
 
             # Add target command
             prof_cmd.append("--")
