@@ -31,3 +31,7 @@ vector_add_template
 
 # Apptainer images
 *.sif
+
+
+# Resources
+resources/

@@ -74,7 +74,9 @@ Examples:
     )
 
     profile_parser.add_argument(
-        "--kernel", "-k", help="Filter kernels by name using a regular expression (e.g. 'gemm.*', '.*attention.*', 'gemm|attention')"
+        "--kernel",
+        "-k",
+        help="Filter kernels by name using a regular expression (e.g. 'gemm.*', '.*attention.*', 'gemm|attention')",
     )
 
     profile_parser.add_argument(
