@@ -289,6 +289,7 @@ Each tool has its own detailed documentation:
 - [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
 - [ROCm-MCP Documentation](rocm_mcp/README.md) + [Examples](rocm_mcp/examples/)
 - [uprof-MCP Documentation](uprof_mcp/README.md) + [Examples](uprof_mcp/examples/)
+- [Dependencies](docs/dependencies.md) – per-tool dependency reference
 
 ## Example Workflow
 
