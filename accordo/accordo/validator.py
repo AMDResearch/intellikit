@@ -183,13 +183,22 @@ class Accordo:
         logging.info("Generating kernel metadata...")
         self.metadata_path = generate_kernel_metadata(arg_types)
 
+        # Prefer libaccordo.so in the package dir (pip install puts it there)
+        package_dir = Path(__file__).resolve().parent
+        installed_lib = package_dir / "libaccordo.so"
+        if not force_rebuild and installed_lib.exists():
+            self.accordo_path = None
+            self._lib_path = installed_lib.resolve()
+            logging.info(f"Using installed library: {self._lib_path}")
+            return
+
         if accordo_path is None:
             accordo_dir = Path(__file__).resolve().parent.parent
             if (accordo_dir / "build").exists() or (accordo_dir / "CMakeLists.txt").exists():
                 accordo_path = accordo_dir
             else:
                 raise RuntimeError(
-                    f"Could not find Accordo build directory. Expected at {accordo_dir}. "
+                    f"Could not find Accordo build directory or libaccordo.so in {package_dir}. "
                     "Please build Accordo first or specify accordo_path explicitly."
                 )
 

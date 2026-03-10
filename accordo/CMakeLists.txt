@@ -108,5 +108,18 @@ set_target_properties(accordo
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Install the library into the Python package directory (next to accordo/__init__.py).
+# When building via scikit-build-core, SKBUILD_PLATLIB_DIR is set; install there so
+# the .so is in site-packages/accordo/ after pip install.
+if(DEFINED SKBUILD_PLATLIB_DIR)
+  set(ACCORDO_PKG_DEST "${SKBUILD_PLATLIB_DIR}/accordo")
+else()
+  set(ACCORDO_PKG_DEST "accordo")
+endif()
+install(TARGETS accordo
+    LIBRARY DESTINATION ${ACCORDO_PKG_DEST}
+    RUNTIME DESTINATION ${ACCORDO_PKG_DEST}
+)
+
 # sources
 add_subdirectory(src)
