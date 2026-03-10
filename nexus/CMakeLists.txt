@@ -114,10 +114,18 @@ set_target_properties(nexus
         RUNTIME_OUTPUT_DIRECTORY    ${PROJECT_BINARY_DIR}/bin
 )
 
-# Install the library to the Python package
+# Install the library into the Python package directory so it sits next to
+# nexus/__init__.py in site-packages. When building via scikit-build-core,
+# SKBUILD_PLATLIB_DIR is set to the wheel's platlib (site-packages); installing
+# to ${SKBUILD_PLATLIB_DIR}/nexus ensures the .so is copied into the package.
+if(DEFINED SKBUILD_PLATLIB_DIR)
+  set(NEXUS_PKG_DEST "${SKBUILD_PLATLIB_DIR}/nexus")
+else()
+  set(NEXUS_PKG_DEST "nexus")
+endif()
 install(TARGETS nexus
-    LIBRARY DESTINATION nexus
-    RUNTIME DESTINATION nexus
+    LIBRARY DESTINATION ${NEXUS_PKG_DEST}
+    RUNTIME DESTINATION ${NEXUS_PKG_DEST}
 )
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -126,11 +134,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(csrc/src)
 
 # Install kernelDB library (dependency) to the nexus package
-# This ensures kernelDB is bundled with nexus at runtime
 if(TARGET kernelDB64)
     install(TARGETS kernelDB64
-        LIBRARY DESTINATION nexus
-        RUNTIME DESTINATION nexus
+        LIBRARY DESTINATION ${NEXUS_PKG_DEST}
+        RUNTIME DESTINATION ${NEXUS_PKG_DEST}
     )
 endif()
 
