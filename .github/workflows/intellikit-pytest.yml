@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 #
-# Run pytest for all IntelliKit packages (accordo, metrix, nexus, linex).
+# Run pytest for IntelliKit packages (accordo, metrix, nexus, linex).
+# Matrix: package × install_method (editable / non-editable).
+# Non-editable exercises installed .so in package dir and would catch install bugs.
 
 name: Intellikit Pytest
 
@@ -39,66 +41,28 @@ jobs:
         run: |
           bash .github/scripts/container_build.sh
 
-  pytest-accordo:
-    name: pytest accordo
+  pytest:
+    name: pytest ${{ matrix.install_method }} - ${{ matrix.package }}
     needs: build-container-image
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [accordo, linex, metrix, nexus]
+        install_method: [editable, non-editable]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Pytest accordo
+      - name: Pytest ${{ matrix.install_method }} - ${{ matrix.package }}
         run: |
           bash .github/scripts/container_exec.sh "
-            pip install -e accordo
-            python3 -m pytest accordo/tests -v --tb=short
-          "
-
-  pytest-metrix:
-    name: pytest metrix
-    needs: build-container-image
-    runs-on: [self-hosted, mi3xx]
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Pytest metrix
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e metrix
-            python3 -m pytest metrix/tests -v --tb=short
-          "
-
-  pytest-nexus:
-    name: pytest nexus
-    needs: build-container-image
-    runs-on: [self-hosted, mi3xx]
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Pytest nexus
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e nexus
-            python3 -m pytest nexus/tests -v --tb=short
-          "
-
-  pytest-linex:
-    name: pytest linex
-    needs: build-container-image
-    runs-on: [self-hosted, mi3xx]
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Pytest linex
-        run: |
-          bash .github/scripts/container_exec.sh "
-            pip install -e linex
-            python3 -m pytest linex/tests -v --tb=short
+            if [ '${{ matrix.install_method }}' = 'editable' ]; then
+              pip install -e ${{ matrix.package }}
+            else
+              pip install ./${{ matrix.package }}
+            fi
+            python3 -m pytest ${{ matrix.package }}/tests -v --tb=short
           "
