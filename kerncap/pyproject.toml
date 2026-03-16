@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
+
 [build-system]
 requires = ["scikit-build-core>=0.5", "setuptools-scm>=8"]
 build-backend = "scikit_build_core.build"
@@ -7,23 +10,31 @@ name = "kerncap"
 dynamic = ["version"]
 description = "Kernel extraction and isolation tool for HIP and Triton applications on AMD GPUs"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.20",
     "jinja2>=3.0",
     "click>=8.0",
     "libclang>=18.1",
+    "mcp[cli]",
 ]
+
+[project.urls]
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/kerncap"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/kerncap"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/kerncap/README.md"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+    "ruff",
     "docker>=6.0",
 ]
 
 [project.scripts]
 kerncap = "kerncap.cli:main"
+kerncap-mcp = "kerncap.mcp.server:main"
 
 [tool.scikit-build]
 cmake.build-type = "Release"
@@ -34,8 +45,20 @@ wheel.install-dir = "kerncap"
 CMAKE_INSTALL_LIBDIR = "lib"
 CMAKE_INSTALL_BINDIR = "bin"
 
-[tool.setuptools-scm]
+# ---- setuptools-scm versioning ----
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-date"
 fallback_version = "0.1.0"
+root = ".."
+
+# ---- Ruff configuration ----
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
