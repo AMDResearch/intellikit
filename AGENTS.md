@@ -15,8 +15,8 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 uv sync
 
 # Or using pip - install individual tools (from repo root)
-# Note: root pyproject.toml only includes accordo, linex, metrix, nexus as dependencies
-pip install -e accordo/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
+# Note: root pyproject.toml includes accordo, kerncap, linex, metrix, nexus as dependencies
+pip install -e accordo/ -e kerncap/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
 
 # Install individual tools
 pip install -e metrix/
@@ -26,6 +26,9 @@ pip install -e linex/
 pip install -e nexus/
 # Or build manually if needed:
 # cd nexus && mkdir -p build && cd build && cmake .. && make
+
+# Build kerncap (scikit-build-core builds libkerncap.so + kerncap-replay)
+pip install -e kerncap/
 ```
 
 ## Testing
@@ -33,6 +36,7 @@ pip install -e nexus/
 Test structure varies by tool:
 
 - **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (unit, integration, e2e, slow)
+- **kerncap**: `tests/unit/` and `tests/integration/` with pytest markers (docker, gpu)
 - **rocm_mcp**: `tests/` directory
 - Other tools have `examples/` directories for usage demonstrations
 
@@ -48,6 +52,9 @@ pytest -m unit      # Fast unit tests
 pytest -m integration  # Requires GPU/rocprof
 pytest -m e2e      # End-to-end tests (require GPU and benchmarks)
 pytest -m slow     # Slow tests (> 5s)
+
+# Run kerncap unit tests (no GPU required)
+cd kerncap && pytest tests/unit/
 
 # Run rocm_mcp tests
 cd rocm_mcp && pytest tests/
@@ -73,6 +80,7 @@ Each tool is a standalone Python package with its own `pyproject.toml`:
 | Tool | Build System | Description |
 | ------ | -------------- | ------------- |
 | **accordo** | scikit-build-core (CMake) | GPU kernel validation, C++ compiled at runtime |
+| **kerncap** | scikit-build-core (CMake) | Kernel extraction and isolation, C++ HSA interception |
 | **linex** | setuptools | Source-level SQTT profiling (`src/` layout) |
 | **metrix** | setuptools | Hardware counter profiling (`src/` layout) |
 | **nexus** | scikit-build-core (CMake) | HSA packet interception, C++ shared library |
@@ -107,7 +115,7 @@ All tools expose MCP servers via the MCP SDK's FastMCP module:
 
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
-- MCP servers: `accordo-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
 
 ### Nexus C++ Integration
 
@@ -115,6 +123,15 @@ All tools expose MCP servers via the MCP SDK's FastMCP module:
 - Headers in `nexus/csrc/include/nexus/` (`.hpp` files: `nexus.hpp`, `log.hpp`)
 - Python bindings via shared library built with CMake
 - Requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`)
+
+### Kerncap C++ Integration
+
+- C++ source in `kerncap/src/` (`.hip`, `.cpp` files)
+- Headers in `kerncap/src/` (`.hpp` files: `kerncap.hpp`, `kerncap_log.hpp`)
+- `libkerncap.so`: HSA tool library loaded via `HSA_TOOLS_LIB` for kernel capture
+- `kerncap-replay`: VA-faithful HSA kernel replay binary
+- Vendored nlohmann/json in `kerncap/vendor/`
+- Built with scikit-build-core (CMake + HIP language support)
 
 ### Accordo Runtime Compilation
 
@@ -135,6 +152,7 @@ Not all tools follow the same directory structure:
 | **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` |
 | **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` |
 | **accordo** | flat layout | `accordo/accordo/` |
+| **kerncap** | flat layout | `kerncap/kerncap/` |
 | **nexus** | flat layout | `nexus/nexus/` |
 
 This affects import paths and where to find source code.
@@ -144,7 +162,7 @@ This affects import paths and where to find source code.
 - **uv**: Preferred for development (lockfile: `uv.lock`)
 - **pip**: Supported for individual tool installation
 - **External dependencies**: Some tools depend on external repos (e.g., `accordo` requires `kerneldb` from GitHub)
-- **C++ dependencies**: `nexus` requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`)
+- **C++ dependencies**: `nexus` requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`); `kerncap` requires `hipcc`, `cmake`, and HSA headers (standard ROCm)
 
 ## CI/CD and Development Environment
 
@@ -175,6 +193,7 @@ All MCP servers are defined in each tool's `pyproject.toml` under `[project.scri
 ```toml
 [project.scripts]
 accordo-mcp = "accordo.mcp.server:main"
+kerncap-mcp = "kerncap.mcp.server:main"
 linex-mcp = "linex.mcp.server:main"
 metrix-mcp = "metrix.mcp.server:main"
 nexus-mcp = "nexus.mcp.server:main"
@@ -207,6 +226,10 @@ Add to your Claude Desktop or other MCP client config:
     "metrix-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/metrix", "metrix-mcp"]
+    },
+    "kerncap-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/kerncap", "kerncap-mcp"]
     },
     "hip-compiler-mcp": {
       "command": "uv",
@@ -261,6 +284,13 @@ cmake ..
 make
 cd ../..
 pip install -e nexus/
+```
+
+**Kerncap:**
+
+```bash
+# scikit-build-core builds libkerncap.so + kerncap-replay automatically
+pip install -e kerncap/
 ```
 
 **Accordo:**
