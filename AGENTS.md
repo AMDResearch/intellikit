@@ -209,17 +209,42 @@ rocminfo-mcp = "rocm_mcp.sysinfo.rocminfo_mcp:main"
 uprof-profiler-mcp = "uprof_mcp.uprof_profiler_mcp:main"
 ```
 
+### MCP Transport Options
+
+All MCP servers support two transport modes via CLI arguments:
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--transport` | `stdio` | Transport type: `stdio` or `http` |
+| `--host` | `127.0.0.1` | HTTP server host (only for http transport) |
+| `--port` | `8000` | HTTP server port (only for http transport) |
+| `--path` | (varies) | HTTP endpoint path (only for http transport) |
+
+Default HTTP paths per server:
+
+| Server | Default Path |
+|--------|--------------|
+| `linex-mcp` | `/linex` |
+| `metrix-mcp` | `/metrix` |
+| `nexus-mcp` | `/nexus` |
+| `uprof-profiler-mcp` | `/uprof_mcp` |
+| `hip-compiler-mcp` | `/rocm_mcp/hip_compiler` |
+
 ### Testing MCP Servers Locally
 
 ```bash
 # Install the tool first
 pip install -e metrix/
 
-# Run MCP server directly (will use stdio transport)
+# Run MCP server with stdio transport (default)
 metrix-mcp
+
+# Run MCP server with streamable-http transport
+metrix-mcp --transport http --port 8001
 
 # Or via uv
 cd metrix && uv run metrix-mcp
+cd metrix && uv run metrix-mcp --transport http --port 8001
 ```
 
 ### MCP Configuration Example
