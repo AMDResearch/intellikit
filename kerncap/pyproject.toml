@@ -1,0 +1,45 @@
+[build-system]
+requires = ["scikit-build-core>=0.5", "setuptools-scm>=8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "kerncap"
+dynamic = ["version"]
+description = "Kernel extraction and isolation tool for HIP and Triton applications on AMD GPUs"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.20",
+    "jinja2>=3.0",
+    "click>=8.0",
+    "libclang>=18.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "docker>=6.0",
+]
+
+[project.scripts]
+kerncap = "kerncap.cli:main"
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = ["kerncap"]
+wheel.install-dir = "kerncap"
+
+[tool.scikit-build.cmake.define]
+CMAKE_INSTALL_LIBDIR = "lib"
+CMAKE_INSTALL_BINDIR = "bin"
+
+[tool.setuptools-scm]
+fallback_version = "0.1.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "docker: marks tests that require Docker (deselect with '-m \"not docker\"')",
+    "gpu: marks tests that require an AMD GPU",
+]
