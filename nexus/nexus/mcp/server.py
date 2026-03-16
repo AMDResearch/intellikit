@@ -4,9 +4,10 @@
 
 """MCP Server for Nexus - HSA Packet Source Code Extractor."""
 
+import argparse
 from typing import List
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from nexus import Nexus
 
@@ -96,7 +97,35 @@ def list_kernels(command: List[str]) -> dict:
 
 def main() -> None:
     """Run the MCP server."""
-    mcp.run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http"],
+        default="stdio",
+        help="Transport to use",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--path",
+        default="/nexus",
+        help="Path to serve the HTTP server on (only used if transport is http)",
+    )
+    args = parser.parse_args()
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+    elif args.transport == "http":
+        mcp.run(transport="streamable-http", host=args.host, port=args.port, path=args.path)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,17 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 
 **Requirements:** Python >= 3.10 (root), ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
 
+## Tool Descriptions
+
+| Tool | Purpose | Key Use Case |
+| ------ | --------- | -------------- |
+| **accordo** | Kernel validation | Verify optimized GPU kernels match reference implementations |
+| **linex** | Source-line profiling | Map cycle-level timing and stall analysis to source code lines |
+| **metrix** | Hardware counter metrics | Profile GPU kernels with human-readable performance insights |
+| **nexus** | HSA packet interception | Capture GPU kernel launches and memory operations |
+| **rocm_mcp** | ROCm MCP servers | LLM-accessible HIP compilation, docs, and system info |
+| **uprof_mcp** | uProf MCP server | LLM-accessible AMD uProf profiling |
+
 ## Build Commands
 
 ```bash
@@ -30,27 +41,31 @@ pip install -e nexus/
 
 ## Testing
 
-Test structure varies by tool:
+All main tools now have `tests/` directories with pytest-based test suites:
 
 - **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (unit, integration, e2e, slow)
+- **accordo**: `tests/` directory
+- **nexus**: `tests/` directory
+- **linex**: `tests/` directory
 - **rocm_mcp**: `tests/` directory
-- Other tools have `examples/` directories for usage demonstrations
+
+All tools also have `examples/` directories for usage demonstrations.
 
 ```bash
-# Run metrix tests (has most comprehensive test suite)
+# Run tests for individual tools
 cd metrix && pytest
+cd accordo && pytest
+cd nexus && pytest
+cd linex && pytest
 
 # Run specific test file
 pytest metrix/tests/unit/test_api.py
 
-# Run by marker (defined in metrix/pytest.ini)
+# Run metrix tests by marker (defined in metrix/pytest.ini)
 pytest -m unit      # Fast unit tests
 pytest -m integration  # Requires GPU/rocprof
 pytest -m e2e      # End-to-end tests (require GPU and benchmarks)
 pytest -m slow     # Slow tests (> 5s)
-
-# Run rocm_mcp tests
-cd rocm_mcp && pytest tests/
 ```
 
 ## Linting
@@ -121,23 +136,23 @@ All tools expose MCP servers via the MCP SDK's FastMCP module:
 - C++ validation code in `accordo/src/` compiled at runtime (`.hip` and `.hpp` files)
 - Uses HSA for GPU memory interception
 - Python package in `accordo/accordo/` with validator implementation
-- Internal utilities in `accordo/_internal/` (outside main package)
-- Dependencies include external `kerneldb` library for kernel extraction
+- Internal utilities in `accordo/accordo/_internal/` (inside main package) for IPC and other internals
+- Dependencies include external `kerneldb` library for kernel extraction (pinned to specific commit in pyproject.toml)
 
 ## Package Layout Variations
 
 Not all tools follow the same directory structure:
 
-| Tool | Layout | Package Location |
-|------|--------|------------------|
-| **metrix** | `src/` layout | `metrix/src/metrix/` |
-| **linex** | `src/` layout | `linex/src/linex/` |
-| **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` |
-| **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` |
-| **accordo** | flat layout | `accordo/accordo/` |
-| **nexus** | flat layout | `nexus/nexus/` |
+| Tool | Layout | Package Location | C++ Source | Tests | Skills |
+|------|--------|------------------|------------|-------|--------|
+| **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skill/` |
+| **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skill/` |
+| **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A |
+| **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | `uprof_mcp/tests/` | N/A |
+| **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` |
+| **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` |
 
-This affects import paths and where to find source code.
+This affects import paths and where to find source code. Each main tool (accordo, linex, metrix, nexus) has a `skill/` directory containing `SKILL.md` files for AI agent integration.
 
 ## Dependency Management
 
@@ -152,8 +167,11 @@ This affects import paths and where to find source code.
 
 - **Runners**: Self-hosted with MI300+ GPUs
 - **Container**: Uses Apptainer for containerized testing
-- **Python versions**: Tests run on 3.10, 3.11, and 3.12
-- **Installation testing**: Each tool is installed individually to verify isolated installation works
+- **Installation testing** (`intellikit-ci-test.yml`): Tests three installation methods for each tool:
+  - Editable install: `pip install -e <tool>/`
+  - Non-editable install: `pip install ./<tool>/`
+  - GitHub install: `pip install 'git+https://github.com/AMDResearch/intellikit.git@<sha>#subdirectory=<tool>'`
+- **Pytest testing** (`intellikit-pytest.yml`): Runs `pytest` for accordo, metrix, nexus, and linex
 
 ### Linting Enforcement
 
@@ -165,6 +183,13 @@ This affects import paths and where to find source code.
 
 - `.github/scripts/container_build.sh`: Builds Apptainer container
 - `.github/scripts/container_exec.sh`: Executes commands inside container
+
+### Install Scripts
+
+The repository includes install scripts for both tools and agent skills:
+
+- `install/tools/install.sh`: Installs all IntelliKit tools from GitHub (supports editable/non-editable, custom pip commands, specific branches/tags)
+- `install/skills/install.sh`: Installs agent skills (SKILL.md files) for AI agents (supports multiple targets: agents, codex, cursor, claude, github; global or local installation)
 
 ## MCP Server Development
 
@@ -184,17 +209,42 @@ rocminfo-mcp = "rocm_mcp.sysinfo.rocminfo_mcp:main"
 uprof-profiler-mcp = "uprof_mcp.uprof_profiler_mcp:main"
 ```
 
+### MCP Transport Options
+
+All MCP servers support two transport modes via CLI arguments:
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--transport` | `stdio` | Transport type: `stdio` or `http` |
+| `--host` | `127.0.0.1` | HTTP server host (only for http transport) |
+| `--port` | `8000` | HTTP server port (only for http transport) |
+| `--path` | (varies) | HTTP endpoint path (only for http transport) |
+
+Default HTTP paths per server:
+
+| Server | Default Path |
+|--------|--------------|
+| `linex-mcp` | `/linex` |
+| `metrix-mcp` | `/metrix` |
+| `nexus-mcp` | `/nexus` |
+| `uprof-profiler-mcp` | `/uprof_mcp` |
+| `hip-compiler-mcp` | `/rocm_mcp/hip_compiler` |
+
 ### Testing MCP Servers Locally
 
 ```bash
 # Install the tool first
 pip install -e metrix/
 
-# Run MCP server directly (will use stdio transport)
+# Run MCP server with stdio transport (default)
 metrix-mcp
+
+# Run MCP server with streamable-http transport
+metrix-mcp --transport http --port 8001
 
 # Or via uv
 cd metrix && uv run metrix-mcp
+cd metrix && uv run metrix-mcp --transport http --port 8001
 ```
 
 ### MCP Configuration Example
@@ -278,6 +328,29 @@ Integration tests require GPU and ROCm:
 cd metrix
 pytest -m integration  # Requires GPU/rocprof
 pytest -m unit         # No GPU required
+
+# Run all tests for a specific tool
+cd accordo && pytest -v
+cd linex && pytest -v
+cd nexus && pytest -v
+```
+
+### Working with Agent Skills
+
+Each main tool has a `skill/` directory with `SKILL.md` files for AI agent integration:
+
+```bash
+# Skills are located at:
+accordo/skill/SKILL.md
+linex/skill/SKILL.md
+metrix/skill/SKILL.md
+nexus/skill/SKILL.md
+
+# Install skills for AI agents using the install script
+./install/skills/install.sh                    # local: ./.agents/skills/
+./install/skills/install.sh --target cursor     # local: ./.cursor/skills/
+./install/skills/install.sh --target claude --global  # global: ~/.claude/skills/
+./install/skills/install.sh --target github     # local: ./.github/agents/skills/
 ```
 
 ## Key Design Principles for AI Agents
@@ -289,6 +362,7 @@ This project is built for LLM consumption:
 - Clean, human-readable APIs (not raw hardware counters)
 - MCP servers for all tools
 - Examples in every tool's `examples/` directory
+- Agent skills in `skill/SKILL.md` files for AI agent discovery
 - Comprehensive docstrings and type hints
 
 ### No Mapping Tables
