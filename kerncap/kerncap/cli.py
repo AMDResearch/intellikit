@@ -117,181 +117,24 @@ def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines):
 
     KERNEL_NAME is the kernel name (or substring) to capture.
     """
-    import shlex
-    from kerncap.capturer import run_capture
-    from kerncap.source_finder import detect_language
+    from kerncap.extract import run_extract
 
-    cmd_list = shlex.split(cmd)
-    output_dir = output or f"./isolated/{kernel_name}"
-
-    capture_dir = output_dir + "/capture"
-
-    detected_lang = language
-    if detected_lang is None and source_dir:
-        detected_lang = detect_language(kernel_name, source_dir)
-        if detected_lang == "unknown":
-            detected_lang = None
-
-    # Step 1: Capture
-    click.echo(f"Capturing kernel '{kernel_name}' ...")
     try:
-        run_capture(
+        result = run_extract(
             kernel_name=kernel_name,
-            cmd=cmd_list,
-            output_dir=capture_dir,
+            cmd=cmd,
+            source_dir=source_dir,
+            output=output,
+            language=language,
             dispatch=dispatch,
-            language=detected_lang,
+            defines=list(defines) if defines else None,
         )
     except Exception as e:
-        click.echo(f"Capture failed: {e}", err=True)
+        click.echo(f"Extract failed: {e}", err=True)
         sys.exit(1)
-    click.echo(f"  Capture complete -> {capture_dir}")
 
-    _extract(
-        kernel_name, capture_dir, output_dir, source_dir,
-        detected_lang, defines,
-    )
-
+    click.echo(f"  Generated: {', '.join(result.generated_files)}")
     click.echo("\nDone.")
-
-
-def _extract(kernel_name, capture_dir, output_dir, source_dir,
-             language, defines):
-    """Extract pipeline — routes to Triton or HSACO reproducer."""
-    import json
-    import os
-
-    dispatch_path = os.path.join(capture_dir, "dispatch.json")
-    meta_path = os.path.join(capture_dir, "metadata.json")
-
-    if os.path.isfile(dispatch_path):
-        with open(dispatch_path, "r") as f:
-            metadata = json.load(f)
-    elif os.path.isfile(meta_path):
-        with open(meta_path, "r") as f:
-            metadata = json.load(f)
-    else:
-        raise FileNotFoundError(
-            f"No dispatch.json or metadata.json found in {capture_dir}"
-        )
-
-    effective_lang = language or metadata.get("language")
-
-    if effective_lang == "triton":
-        _extract_triton(kernel_name, capture_dir, output_dir, source_dir,
-                        language)
-    else:
-        _extract_hsaco(kernel_name, capture_dir, output_dir, source_dir,
-                       language, defines, metadata)
-
-
-def _extract_triton(kernel_name, capture_dir, output_dir, source_dir,
-                    language):
-    """Triton extract pipeline — generates a Python reproducer."""
-    import os
-    from kerncap.reproducer import generate_triton_reproducer
-
-    kernel_src = None
-    if source_dir:
-        from kerncap.source_finder import find_kernel_source
-
-        click.echo(f"Locating kernel source in {source_dir} ...")
-        kernel_src = find_kernel_source(
-            kernel_name=kernel_name,
-            source_dir=source_dir,
-            language=language,
-        )
-        if kernel_src:
-            click.echo(f"  Found: {kernel_src.main_file} ({kernel_src.language})")
-        else:
-            logger.warning("Kernel source not found.")
-
-    if not kernel_src:
-        click.echo("  Error: Triton reproducer requires located kernel source "
-                   "(use --source-dir).", err=True)
-        sys.exit(1)
-
-    click.echo("Generating Triton reproducer ...")
-    generate_triton_reproducer(
-        capture_dir=capture_dir,
-        kernel_source=kernel_src,
-        output_dir=output_dir,
-    )
-    click.echo(f"  Reproducer -> {output_dir}")
-
-    parts = ["reproducer.py"]
-    kernel_dir = os.path.dirname(kernel_src.main_file)
-    pkg_init = os.path.join(kernel_dir, "__init__.py")
-    if os.path.isfile(pkg_init):
-        parts.append(f"{os.path.basename(kernel_dir)}/")
-    else:
-        parts.append("kernel source files")
-    parts.append("capture/")
-    click.echo(f"  Generated: {', '.join(parts)}")
-
-
-def _extract_hsaco(kernel_name, capture_dir, output_dir, source_dir,
-                   language, defines, metadata):
-    """HIP/HSACO extract pipeline — generates capture dir + Makefile."""
-    import os
-    from kerncap.reproducer import generate_hsaco_reproducer
-
-    isa_name = metadata.get("isa_name", "")
-    if isa_name and "--" in isa_name:
-        gpu_arch = isa_name.rsplit("--", 1)[-1]
-    elif isa_name and isa_name.startswith("gfx"):
-        gpu_arch = isa_name
-    else:
-        gpu_arch = metadata.get("gpu_arch", "gfx90a")
-
-    hsaco_path = os.path.join(capture_dir, "kernel.hsaco")
-    if not os.path.isfile(hsaco_path):
-        logger.warning("No kernel.hsaco in capture directory. "
-                       "Replay will not work without a .hsaco.")
-
-    kernel_src = None
-    mangled_name = metadata.get("mangled_name", "")
-
-    if source_dir:
-        from kerncap.source_finder import find_kernel_source
-
-        click.echo(f"Locating kernel source in {source_dir} ...")
-        kernel_src = find_kernel_source(
-            kernel_name=kernel_name,
-            source_dir=source_dir,
-            language=language,
-            extra_defines=list(defines) if defines else None,
-            mangled_name=mangled_name,
-        )
-        if kernel_src:
-            click.echo(f"  Found: {kernel_src.main_file} ({kernel_src.language})")
-            if kernel_src.translation_unit:
-                click.echo(f"  Translation unit: {kernel_src.translation_unit}")
-            if not kernel_src.compile_command:
-                logger.warning(
-                    "No compile command found (compile_commands.json "
-                    "missing or has no entry for this file). "
-                    "The 'make recompile' target will not be available."
-                )
-        else:
-            logger.warning("Kernel source not found.")
-
-    click.echo("Generating reproducer ...")
-    generate_hsaco_reproducer(
-        capture_dir=capture_dir,
-        output_dir=output_dir,
-        kernel_source=kernel_src,
-        metadata=metadata,
-    )
-    click.echo(f"  Reproducer -> {output_dir}")
-
-    parts = ["capture/", "Makefile"]
-    if os.path.isfile(os.path.join(output_dir, "capture", "kernel.hsaco")):
-        parts.append("kernel.hsaco")
-    if kernel_src:
-        parts.append("kernel_variant.cpp")
-        parts.append("vfs.yaml")
-    click.echo(f"  Generated: {', '.join(parts)}")
 
 
 @main.command()
