@@ -7,7 +7,7 @@
 
 set -e
 
-TOOLS=(accordo linex metrix nexus rocm_mcp uprof_mcp)
+TOOLS=(accordo kerncap linex metrix nexus rocm_mcp uprof_mcp)
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh"
 # Env defaults (CLI options override these); use args when piping to bash so overrides apply
 REPO_URL="${INTELLIKIT_REPO_URL:-https://github.com/AMDResearch/intellikit.git}"
