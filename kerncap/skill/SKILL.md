@@ -19,7 +19,7 @@ Test local kerncap changes end-to-end by extracting and validating a kernel from
 
 | Item | Path |
 |------|------|
-| kerncap source | `$WORK/dev/kerncap` |
+| kerncap source | `kerncap/` (relative to IntelliKit repo root) |
 | Output directory | `/tmp/kerncap-test/<kernel_name>` |
 
 ## Environment Setup
@@ -41,7 +41,7 @@ If `conda_env` is not provided, proceed with the current environment as-is.
 Ensure the correct environment is active (if applicable), then uninstall and reinstall to pick up local changes:
 
 ```bash
-pip uninstall kerncap -y && pip install $WORK/dev/kerncap
+pip uninstall kerncap -y && pip install kerncap/
 ```
 
 ### Step 2: Profile to identify target kernel
