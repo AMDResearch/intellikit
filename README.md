@@ -71,10 +71,12 @@ kc = Kerncap()
 profile = kc.profile(["./my_app", "--args"])
 for kernel in profile[:5]:
     print(f"{kernel.name}: {kernel.total_duration_ns / 1e6:.1f} ms ({kernel.percentage:.1f}%)")
+top_kernel = profile[0]
+print(f"\nExtracting top kernel: {top_kernel.name}")
 
 # Extract into a standalone reproducer
 result = kc.extract(
-    "my_kernel",
+    kernel_name=top_kernel.name,
     cmd="./my_app --args",
     source_dir="./src",
     output="./isolated/my_kernel",
