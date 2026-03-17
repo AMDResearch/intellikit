@@ -323,7 +323,7 @@ Skills are installed inside the target directory (e.g., `./.agents/skills/` for 
 Each tool has its own detailed documentation:
 
 - [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
-- [Kerncap Documentation](kerncap/README.md)
+- [Kerncap Documentation](kerncap/README.md) + [Examples](kerncap/examples/)
 - [Linex Documentation](linex/README.md) + [Examples](linex/examples/)
 - [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
 - [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
