@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -325,6 +326,55 @@ class TestDirectTranslationUnit:
         assert "mmq_instance.cu" in result.translation_unit
 
 
+def _make_ldd_output(project_lib_path: str) -> str:
+    """Build a fake ``ldd`` stdout with one project-local lib and common system libs."""
+    return (
+        f"\tlibggml.so.0 => {project_lib_path} (0x00007f0000000000)\n"
+        "\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007efff0000000)\n"
+        "\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007efff1000000)\n"
+        "\tlibpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007efff2000000)\n"
+        "\tlibdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007efff3000000)\n"
+        "\tlibrt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007efff4000000)\n"
+        "\tlibstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007efff5000000)\n"
+    )
+
+
+@pytest.fixture()
+def fake_ldd_project(tmp_path):
+    """Fixture that creates a fake project tree and patches ``ldd`` output.
+
+    Yields a dict with:
+      - ``binary``: path to a dummy (empty) executable file
+      - ``source``: path to the fake project source directory
+      - ``lib_file``: path to the fake project-local shared library
+    """
+    source = tmp_path / "myproject"
+    source.mkdir()
+    build = source / "build"
+    build.mkdir()
+
+    binary = build / "my-app"
+    binary.write_bytes(b"")
+
+    lib_dir = build / "lib"
+    lib_dir.mkdir()
+    lib_file = lib_dir / "libggml.so.0"
+    lib_file.write_bytes(b"")
+
+    ldd_out = _make_ldd_output(str(lib_file))
+
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = ldd_out
+
+    with patch("subprocess.run", return_value=mock_result):
+        yield {
+            "binary": str(binary),
+            "source": str(source),
+            "lib_file": str(lib_file),
+        }
+
+
 class TestLinkLibraryDetection:
     """Tests for shared library auto-detection via ldd."""
 
@@ -341,25 +391,56 @@ class TestLinkLibraryDetection:
         assert paths == []
         assert libs == []
 
-    def test_detects_project_local_libs(self):
-        """When a real binary is available, project-local libs are detected."""
-        binary = "/work1/amd/colramos/dev/llama.cpp/build/bin/llama-cli"
-        source = "/work1/amd/colramos/dev/llama.cpp"
-        if not os.path.isfile(binary):
-            pytest.skip("llama.cpp binary not available")
-        paths, libs = _detect_link_libraries(binary, source)
+    def test_detects_project_local_libs(self, fake_ldd_project):
+        """Project-local libs appear in the returned paths and names."""
+        paths, libs = _detect_link_libraries(
+            fake_ldd_project["binary"],
+            fake_ldd_project["source"],
+        )
         assert len(paths) > 0
         assert any("ggml" in lib for lib in libs)
 
-    def test_filters_system_libs(self):
-        """System libraries (libc, libm, etc.) should not be included."""
-        binary = "/work1/amd/colramos/dev/llama.cpp/build/bin/llama-cli"
-        source = "/work1/amd/colramos/dev/llama.cpp"
-        if not os.path.isfile(binary):
-            pytest.skip("llama.cpp binary not available")
-        _, libs = _detect_link_libraries(binary, source)
+    def test_filters_system_libs(self, fake_ldd_project):
+        """System libraries (libc, libm, etc.) must not appear in the result."""
+        _, libs = _detect_link_libraries(
+            fake_ldd_project["binary"],
+            fake_ldd_project["source"],
+        )
         for lib in libs:
             assert lib not in ("c", "m", "pthread", "dl", "rt", "stdc++")
+
+    def test_ldd_failure_returns_empty(self, tmp_path):
+        """Non-zero ldd exit code produces empty results."""
+        binary = tmp_path / "app"
+        binary.write_bytes(b"")
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            paths, libs = _detect_link_libraries(str(binary), str(tmp_path))
+        assert paths == []
+        assert libs == []
+
+    def test_ldd_exception_returns_empty(self, tmp_path):
+        """OSError / timeout from ldd produces empty results gracefully."""
+        binary = tmp_path / "app"
+        binary.write_bytes(b"")
+
+        with patch("subprocess.run", side_effect=OSError("ldd not found")):
+            paths, libs = _detect_link_libraries(str(binary), str(tmp_path))
+        assert paths == []
+        assert libs == []
+
+    def test_lib_path_returned(self, fake_ldd_project):
+        """The directory containing the project-local lib is included in paths."""
+        lib_dir = str(Path(fake_ldd_project["lib_file"]).parent)
+        paths, _ = _detect_link_libraries(
+            fake_ldd_project["binary"],
+            fake_ldd_project["source"],
+        )
+        assert any(os.path.abspath(p) == os.path.abspath(lib_dir) for p in paths)
 
 
 class TestCompileDefines:
