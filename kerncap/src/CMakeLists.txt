@@ -1,6 +1,4 @@
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
-
-find_package(HSA REQUIRED)
+find_package(hsa-runtime64 REQUIRED)
 find_package(hip REQUIRED)
 
 # Vendored header-only dependencies
@@ -20,12 +18,13 @@ set_target_properties(kerncap PROPERTIES
 target_include_directories(kerncap PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${VENDOR_DIR}"
-    "${HSA_INCLUDE_DIRS}"
 )
 
 target_link_libraries(kerncap PRIVATE
-    hsa::hsa
+    hsa-runtime64::hsa-runtime64
 )
+
+target_compile_definitions(kerncap PRIVATE AMD_INTERNAL_BUILD)
 
 target_compile_options(kerncap PRIVATE
     -Wall -Wextra
@@ -46,14 +45,15 @@ set_target_properties(kerncap-replay PROPERTIES
 )
 
 target_include_directories(kerncap-replay PRIVATE
-    "${HSA_INCLUDE_DIRS}"
     "${VENDOR_DIR}"
 )
 
 target_link_libraries(kerncap-replay PRIVATE
-    hsa::hsa
+    hsa-runtime64::hsa-runtime64
     hip::host
 )
+
+target_compile_definitions(kerncap-replay PRIVATE AMD_INTERNAL_BUILD)
 
 # Allow unresolved symbols from hsa-runtime64's transitive dependencies
 # (drm, elf, numa) which are resolved at runtime but may not be in the
