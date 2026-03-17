@@ -4,6 +4,7 @@ Takes captured kernel data and located source, generates a self-contained
 project that uses kerncap-replay for VA-faithful kernel replay.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -130,36 +131,15 @@ def generate_hsaco_reproducer(
 
                 dest_name = basename
                 if dest_name in used_names:
-                    # Collision: rename both the earlier entry and this one
                     stem, ext = os.path.splitext(basename)
-                    counter = 1
-
-                    # Rename the previously copied file if it hasn't been
-                    # disambiguated yet (its dest_name still equals basename)
-                    prev_abs = used_names[dest_name]
-                    if prev_abs is not None:
-                        prev_new = f"{stem}_{counter}{ext}"
-                        while prev_new in used_names:
-                            counter += 1
-                            prev_new = f"{stem}_{counter}{ext}"
-                        prev_dest = os.path.join(deps_dir, dest_name)
-                        prev_new_dest = os.path.join(deps_dir, prev_new)
-                        os.rename(prev_dest, prev_new_dest)
-                        logger.warning(
-                            "Dependency name collision: renamed deps/%s -> deps/%s (from %s)",
-                            dest_name,
-                            prev_new,
-                            prev_abs,
-                        )
-                        used_names[prev_new] = prev_abs
-                        used_names[dest_name] = None  # sentinel: slot taken, file moved
-
-                        counter += 1
-
-                    dest_name = f"{stem}_{counter}{ext}"
-                    while dest_name in used_names:
-                        counter += 1
-                        dest_name = f"{stem}_{counter}{ext}"
+                    src_dir = os.path.dirname(dep_abs)
+                    dir_name = os.path.basename(src_dir) or "root"
+                    safe_prefix = dir_name.replace(os.sep, "_")
+                    candidate = f"{safe_prefix}__{basename}"
+                    if candidate in used_names and used_names[candidate] != dep_abs:
+                        hash_digest = hashlib.sha1(dep_abs.encode("utf-8")).hexdigest()[:8]
+                        candidate = f"{stem}_{hash_digest}{ext}"
+                    dest_name = candidate
                     logger.warning(
                         "Dependency name collision: storing deps/%s as deps/%s",
                         basename,
