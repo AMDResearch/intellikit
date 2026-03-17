@@ -354,7 +354,13 @@ def run_triton_capture(
             if "python" in os.path.basename(tok):
                 python_bin = tok
                 continue
-        if python_bin is not None and not tok.startswith("-"):
+        else:
+            # After we've found the Python binary, explicitly reject
+            # unsupported invocation styles like `python -m` and `python -c`.
+            if tok in ("-m", "-c"):
+                raise ValueError(
+                    f"Triton capture does not support Python invocation styles like `{tok}`"
+                )
             script_idx = i
             break
 
