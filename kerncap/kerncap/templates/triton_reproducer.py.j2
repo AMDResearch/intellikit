@@ -78,7 +78,7 @@ def main():
 {% elif arg.type == "int" %}
     {{ arg.name }} = {{ arg.value }}
 {% else %}
-    {{ arg.name }} = {{ arg.value }}
+    {{ arg.name }} = {{ arg.value | tojson }}
 {% endif %}
 {% endfor %}
 
@@ -93,7 +93,7 @@ def main():
 {% endfor %}
 {% if autotune_config %}
 {% for key, value in autotune_config.get('kwargs', {}).items() %}
-        {{ key }}={{ value }},
+        {{ key }}={{ value | tojson }},
 {% endfor %}
 {% if autotune_config.get('num_warps') is not none %}
         num_warps={{ autotune_config['num_warps'] }},
