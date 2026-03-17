@@ -71,12 +71,8 @@ def _has_rocprof() -> bool:
 skip_no_gpu = pytest.mark.skipif(
     not _has_amd_gpu(), reason="No AMD GPU detected (/dev/kfd missing)"
 )
-skip_no_docker = pytest.mark.skipif(
-    not _has_docker(), reason="Docker not available"
-)
-skip_no_rocprof = pytest.mark.skipif(
-    not _has_rocprof(), reason="rocprofv3 not available on PATH"
-)
+skip_no_docker = pytest.mark.skipif(not _has_docker(), reason="Docker not available")
+skip_no_rocprof = pytest.mark.skipif(not _has_rocprof(), reason="rocprofv3 not available on PATH")
 
 
 @pytest.fixture

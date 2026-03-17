@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class KernelStat:
     """Statistics for a single kernel from profiling."""
+
     name: str
     calls: int
     total_duration_ns: int
@@ -64,8 +65,10 @@ def run_profile(
             rocprof,
             "--kernel-trace",
             "--stats",
-            "--output-format", "csv",
-            "--output-directory", tmpdir,
+            "--output-format",
+            "csv",
+            "--output-directory",
+            tmpdir,
             "--",
         ] + cmd
 
@@ -86,8 +89,7 @@ def run_profile(
 
         if proc.returncode != 0:
             logger.warning(
-                "rocprofv3 exited with code %d but produced output; "
-                "continuing.",
+                "rocprofv3 exited with code %d but produced output; continuing.",
                 proc.returncode,
             )
 
@@ -119,11 +121,7 @@ def _find_stats_csv(base_dir: str) -> Optional[str]:
 
 def _list_tree(base_dir: str) -> List[str]:
     """Return a flat list of relative paths under base_dir for diagnostics."""
-    return [
-        str(p.relative_to(base_dir))
-        for p in Path(base_dir).rglob("*")
-        if p.is_file()
-    ]
+    return [str(p.relative_to(base_dir)) for p in Path(base_dir).rglob("*") if p.is_file()]
 
 
 def parse_kernel_trace_stats(csv_path: str) -> List[KernelStat]:
@@ -157,10 +155,7 @@ def parse_kernel_trace_stats(csv_path: str) -> List[KernelStat]:
     col_stddev = norm_map.get("stddev")
 
     if not col_name:
-        raise ValueError(
-            f"Could not find kernel name column in {csv_path}. "
-            f"Columns: {fieldnames}"
-        )
+        raise ValueError(f"Could not find kernel name column in {csv_path}. Columns: {fieldnames}")
 
     kernels = []
     for row in reader:
@@ -170,24 +165,24 @@ def parse_kernel_trace_stats(csv_path: str) -> List[KernelStat]:
 
         calls = int(row.get(col_calls, 0)) if col_calls else 0
         total = int(row.get(col_total, 0)) if col_total else 0
-        avg = int(float(row.get(col_avg, 0))) if col_avg else (
-            total // calls if calls > 0 else 0
-        )
+        avg = int(float(row.get(col_avg, 0))) if col_avg else (total // calls if calls > 0 else 0)
         pct = float(row.get(col_pct, 0)) if col_pct else 0.0
         min_ns = int(row.get(col_min, 0)) if col_min else 0
         max_ns = int(row.get(col_max, 0)) if col_max else 0
         stddev = float(row.get(col_stddev, 0)) if col_stddev else 0.0
 
-        kernels.append(KernelStat(
-            name=name,
-            calls=calls,
-            total_duration_ns=total,
-            avg_duration_ns=avg,
-            percentage=pct,
-            min_duration_ns=min_ns,
-            max_duration_ns=max_ns,
-            stddev_ns=stddev,
-        ))
+        kernels.append(
+            KernelStat(
+                name=name,
+                calls=calls,
+                total_duration_ns=total,
+                avg_duration_ns=avg,
+                percentage=pct,
+                min_duration_ns=min_ns,
+                max_duration_ns=max_ns,
+                stddev_ns=stddev,
+            )
+        )
 
     kernels.sort(key=lambda k: k.total_duration_ns, reverse=True)
     return kernels
@@ -196,6 +191,7 @@ def parse_kernel_trace_stats(csv_path: str) -> List[KernelStat]:
 def _write_profile_json(kernels: List[KernelStat], path: str) -> None:
     """Write profiling results as JSON."""
     import json
+
     data = {
         "kernels": [
             {

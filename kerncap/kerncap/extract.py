@@ -92,8 +92,12 @@ def run_extract(
     logger.info("Capture complete -> %s", capture_dir)
 
     return _generate_reproducer(
-        kernel_name, capture_dir, output_dir, source_dir,
-        detected_lang, defines,
+        kernel_name,
+        capture_dir,
+        output_dir,
+        source_dir,
+        detected_lang,
+        defines,
     )
 
 
@@ -116,19 +120,26 @@ def _generate_reproducer(
         with open(meta_path) as f:
             metadata = json.load(f)
     else:
-        raise FileNotFoundError(
-            f"No dispatch.json or metadata.json found in {capture_dir}"
-        )
+        raise FileNotFoundError(f"No dispatch.json or metadata.json found in {capture_dir}")
 
     effective_lang = language or metadata.get("language")
 
     if effective_lang == "triton":
         return _generate_triton(
-            kernel_name, capture_dir, output_dir, source_dir, language,
+            kernel_name,
+            capture_dir,
+            output_dir,
+            source_dir,
+            language,
         )
     return _generate_hsaco(
-        kernel_name, capture_dir, output_dir, source_dir,
-        language, defines, metadata,
+        kernel_name,
+        capture_dir,
+        output_dir,
+        source_dir,
+        language,
+        defines,
+        metadata,
     )
 
 
@@ -157,9 +168,7 @@ def _generate_triton(
             logger.warning("Kernel source not found.")
 
     if not kernel_src:
-        raise RuntimeError(
-            "Triton reproducer requires located kernel source (use source_dir)."
-        )
+        raise RuntimeError("Triton reproducer requires located kernel source (use source_dir).")
 
     logger.info("Generating Triton reproducer ...")
     generate_triton_reproducer(
@@ -194,8 +203,7 @@ def _generate_hsaco(
     hsaco_path = os.path.join(capture_dir, "kernel.hsaco")
     if not os.path.isfile(hsaco_path):
         logger.warning(
-            "No kernel.hsaco in capture directory. "
-            "Replay will not work without a .hsaco."
+            "No kernel.hsaco in capture directory. Replay will not work without a .hsaco."
         )
 
     kernel_src = None

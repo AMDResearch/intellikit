@@ -360,13 +360,10 @@ def run_triton_capture(
 
     if python_bin is None or script_idx is None:
         raise ValueError(
-            f"Triton capture requires a 'python <script>' command, got: "
-            f"{' '.join(cmd)}"
+            f"Triton capture requires a 'python <script>' command, got: {' '.join(cmd)}"
         )
 
-    hook_fd, hook_path = tempfile.mkstemp(
-        suffix=".py", prefix="kerncap_triton_hook_"
-    )
+    hook_fd, hook_path = tempfile.mkstemp(suffix=".py", prefix="kerncap_triton_hook_")
     try:
         with os.fdopen(hook_fd, "w") as f:
             f.write(_CAPTURE_HOOK)
@@ -374,9 +371,9 @@ def run_triton_capture(
         # python [flags] hook.py  original_script.py [script_args ...]
         modified_cmd = (
             [python_bin]
-            + cmd[1:script_idx]       # any python flags (-u, etc.)
+            + cmd[1:script_idx]  # any python flags (-u, etc.)
             + [hook_path]
-            + cmd[script_idx:]         # original script + its args
+            + cmd[script_idx:]  # original script + its args
         )
 
         env = os.environ.copy()
@@ -394,9 +391,7 @@ def run_triton_capture(
                 text=True,
             )
         except subprocess.TimeoutExpired:
-            raise TimeoutError(
-                f"Application did not complete within {timeout}s"
-            )
+            raise TimeoutError(f"Application did not complete within {timeout}s")
 
         meta_file = os.path.join(output_dir, "metadata.json")
         if not os.path.exists(meta_file):

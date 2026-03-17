@@ -101,7 +101,8 @@ def vector_add_app(tmp_path):
     binary = tmp_path / "vector_add"
     result = subprocess.run(
         ["hipcc", "-O2", "-g", "-o", str(binary), str(src)],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         pytest.fail(f"hipcc failed:\n{result.stderr}")
@@ -124,8 +125,9 @@ class TestVectorAddE2E:
 
         # The vector_add kernel should be present
         names = [k.name for k in kernels]
-        assert any("vector_add" in n for n in names), \
+        assert any("vector_add" in n for n in names), (
             f"vector_add not found in kernel list: {names}"
+        )
 
     def test_capture(self, vector_add_app, tmp_path):
         """Capture the vector_add kernel dispatch."""
@@ -205,7 +207,8 @@ class TestVectorAddE2E:
         # 4. Generate reproducer (HSACO-based)
         repro_dir = str(tmp_path / "reproducer")
         generate_hsaco_reproducer(
-            capture_dir, repro_dir,
+            capture_dir,
+            repro_dir,
             kernel_source=kernel_src,
         )
 

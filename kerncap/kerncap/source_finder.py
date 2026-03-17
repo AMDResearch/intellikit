@@ -20,18 +20,19 @@ _logger = logging.getLogger(__name__)
 @dataclass
 class KernelSource:
     """Describes located kernel source code and its dependencies."""
-    language: str                          # "hip" or "triton"
+
+    language: str  # "hip" or "triton"
     kernel_name: str
-    main_file: str                         # primary file containing the kernel
-    source_files: List[str]                # all files needed
+    main_file: str  # primary file containing the kernel
+    source_files: List[str]  # all files needed
     include_paths: List[str] = field(default_factory=list)
     link_libraries: List[str] = field(default_factory=list)
     link_paths: List[str] = field(default_factory=list)
     compile_defines: List[str] = field(default_factory=list)
-    kernel_function: str = ""              # the actual function/class name
-    translation_unit: str = ""             # .cu file that compiles the kernel
-    compile_command: str = ""              # full compile command from compile_commands.json
-    compile_dir: str = ""                  # directory the compile command was run from
+    kernel_function: str = ""  # the actual function/class name
+    translation_unit: str = ""  # .cu file that compiles the kernel
+    compile_command: str = ""  # full compile command from compile_commands.json
+    compile_dir: str = ""  # directory the compile command was run from
 
 
 def detect_language(
@@ -82,6 +83,7 @@ def detect_language(
 # Triton source finder
 # ---------------------------------------------------------------------------
 
+
 def _find_triton_kernel(
     kernel_name: str,
     source_dir: str,
@@ -113,10 +115,8 @@ def _find_triton_kernel(
                     # Check decorators for @triton.jit or @triton.autotune
                     for dec in node.decorator_list:
                         dec_name = _get_decorator_name(dec)
-                        if dec_name in ("triton.jit", "triton.autotune",
-                                        "jit", "autotune"):
-                            if (kernel_name in node.name or
-                                    node.name in kernel_name):
+                        if dec_name in ("triton.jit", "triton.autotune", "jit", "autotune"):
+                            if kernel_name in node.name or node.name in kernel_name:
                                 matches.append((fpath, node.name))
 
     if not matches:
@@ -216,9 +216,7 @@ def _trace_triton_deps(main_file: str, source_dir: str) -> List[str]:
                         deps.append(candidate)
                     break
                 # Check for __init__.py in package
-                candidate_pkg = os.path.join(
-                    source_dir, *parts[:i], "__init__.py"
-                )
+                candidate_pkg = os.path.join(source_dir, *parts[:i], "__init__.py")
                 if os.path.isfile(candidate_pkg):
                     abs_path = os.path.abspath(candidate_pkg)
                     if abs_path not in visited:
@@ -233,6 +231,7 @@ def _trace_triton_deps(main_file: str, source_dir: str) -> List[str]:
 # HIP source finder
 # ---------------------------------------------------------------------------
 
+
 def _find_hip_kernel(
     kernel_name: str,
     source_dir: str,
@@ -243,8 +242,7 @@ def _find_hip_kernel(
     search_files: List[str] = []
     for root, _, files in os.walk(source_dir):
         for fname in files:
-            if fname.endswith((".hip", ".cpp", ".cu", ".cxx", ".cc",
-                                      ".hpp", ".h", ".cuh")):
+            if fname.endswith((".hip", ".cpp", ".cu", ".cxx", ".cc", ".hpp", ".h", ".cuh")):
                 fpath = os.path.join(root, fname)
                 if fpath not in search_files:
                     search_files.append(fpath)
@@ -256,9 +254,7 @@ def _find_hip_kernel(
     # This prevents a driver file that merely *references* the kernel name
     # (e.g. via a host wrapper like ggml_cuda_mul_mat_vec_q) from shadowing
     # the file that actually *defines* the __global__ function.
-    global_pattern = re.compile(
-        rf"__global__\s+\w+\s+{re.escape(base_name)}\s*[\(<]"
-    )
+    global_pattern = re.compile(rf"__global__\s+\w+\s+{re.escape(base_name)}\s*[\(<]")
     main_file = None
     fallback_file = None
 
@@ -295,7 +291,9 @@ def _find_hip_kernel(
     if not _has_kernel_definition(base_name, all_sources):
         abs_collected = {os.path.abspath(f) for f in all_sources}
         def_file = _find_definition_file(
-            base_name, search_files, abs_collected,
+            base_name,
+            search_files,
+            abs_collected,
         )
         if def_file:
             def_includes = _trace_hip_includes(def_file, source_dir)
@@ -310,16 +308,20 @@ def _find_hip_kernel(
             all_sources = merged
 
     compile_defines = _detect_compile_defines(
-        all_sources, None, extra_defines,
+        all_sources,
+        None,
+        extra_defines,
     )
     link_paths, link_libraries = _detect_link_libraries(
-        None, source_dir,
+        None,
+        source_dir,
     )
 
     # Find the .cu translation unit that actually compiles the kernel
     cc_path = _find_compile_commands_from_source_dir(source_dir)
     tu_path, compile_cmd, compile_dir = _find_translation_unit(
-        main_file, source_dir,
+        main_file,
+        source_dir,
         mangled_name=mangled_name,
         compile_commands_path=cc_path,
     )
@@ -328,9 +330,11 @@ def _find_hip_kernel(
     # which are more accurate than heuristic detection.
     if compile_cmd:
         import shlex
+
         cc_defines = _extract_defines_from_command(compile_cmd, [])
         cc_includes = _extract_includes_from_command(
-            compile_cmd, [],
+            compile_cmd,
+            [],
             working_dir=compile_dir,
         )
         if cc_defines:
@@ -338,12 +342,10 @@ def _find_hip_kernel(
             for d in cc_defines:
                 k, _, v = d.partition("=")
                 merged_defs[k] = v or None
-            for d in (extra_defines or []):
+            for d in extra_defines or []:
                 k, _, v = d.partition("=")
                 merged_defs[k] = v or None
-            compile_defines = [
-                f"{k}={v}" if v else k for k, v in merged_defs.items()
-            ]
+            compile_defines = [f"{k}={v}" if v else k for k, v in merged_defs.items()]
         if cc_includes:
             include_paths = cc_includes
 
@@ -370,9 +372,7 @@ def _has_kernel_definition(base_name: str, source_files: List[str]) -> bool:
     """Check whether any file in *source_files* contains a ``__global__``
     function definition matching *base_name*.
     """
-    pattern = re.compile(
-        rf"__global__\s+\w+\s+{re.escape(base_name)}\s*[\(<]"
-    )
+    pattern = re.compile(rf"__global__\s+\w+\s+{re.escape(base_name)}\s*[\(<]")
     for fpath in source_files:
         try:
             with open(fpath, "r") as f:
@@ -392,9 +392,7 @@ def _find_definition_file(
     """Search *search_files* for the ``__global__`` definition of
     *base_name*, skipping any paths already in *exclude*.
     """
-    pattern = re.compile(
-        rf"__global__\s+\w+\s+{re.escape(base_name)}\s*[\(<]"
-    )
+    pattern = re.compile(rf"__global__\s+\w+\s+{re.escape(base_name)}\s*[\(<]")
     for fpath in search_files:
         if os.path.abspath(fpath) in exclude:
             continue
@@ -425,23 +423,23 @@ def _extract_base_name(demangled_name: str) -> str:
     angle_depth = 0
     paren_start = -1
     for i, ch in enumerate(name):
-        if ch == '<':
+        if ch == "<":
             angle_depth += 1
-        elif ch == '>':
+        elif ch == ">":
             angle_depth -= 1
-        elif ch == '(' and angle_depth == 0:
+        elif ch == "(" and angle_depth == 0:
             paren_start = i
             break
     if paren_start >= 0:
         name = name[:paren_start]
 
     # Remove template args — strip balanced <...> from the end
-    while name.endswith('>'):
+    while name.endswith(">"):
         depth = 0
         for i in range(len(name) - 1, -1, -1):
-            if name[i] == '>':
+            if name[i] == ">":
                 depth += 1
-            elif name[i] == '<':
+            elif name[i] == "<":
                 depth -= 1
                 if depth == 0:
                     name = name[:i]
@@ -449,15 +447,15 @@ def _extract_base_name(demangled_name: str) -> str:
 
     # Handle unbalanced template brackets (e.g. truncated profiler output
     # like "mul_mat_vec_q<(ggml_type)39" with no closing >)
-    if '<' in name:
+    if "<" in name:
         depth = 0
         for ch in name:
-            if ch == '<':
+            if ch == "<":
                 depth += 1
-            elif ch == '>':
+            elif ch == ">":
                 depth -= 1
         if depth > 0:
-            name = name[:name.index('<')]
+            name = name[: name.index("<")]
 
     name = name.strip()
 
@@ -537,7 +535,7 @@ def _detect_include_paths(source_dir: str) -> List[str]:
             pass
 
     for root, dirs, _ in os.walk(source_dir):
-        depth = root[len(source_dir):].count(os.sep)
+        depth = root[len(source_dir) :].count(os.sep)
         if depth >= 3:
             dirs.clear()
             continue
@@ -613,9 +611,7 @@ def _find_translation_unit(
     kernel_header_abs = os.path.abspath(kernel_header)
 
     candidates: List[Tuple[str, str, str]] = []  # (tu_path, compile_command, compile_dir)
-    include_pattern = re.compile(
-        rf'#include\s+"[^"]*{re.escape(header_basename)}\s*"'
-    )
+    include_pattern = re.compile(rf'#include\s+"[^"]*{re.escape(header_basename)}\s*"')
 
     # --- Phase 0: direct match --------------------------------------------
     # When the kernel is defined in a .cu/.hip/.cpp file (not a header),
@@ -632,9 +628,7 @@ def _find_translation_unit(
             for entry in entries:
                 entry_file = entry.get("file", "")
                 if not os.path.isabs(entry_file):
-                    entry_file = os.path.join(
-                        entry.get("directory", ""), entry_file
-                    )
+                    entry_file = os.path.join(entry.get("directory", ""), entry_file)
                 if os.path.abspath(entry_file) == kernel_header_abs:
                     cmd = entry.get("command", "")
                     if not cmd:
@@ -648,9 +642,7 @@ def _find_translation_unit(
         for entry in entries:
             entry_file = entry.get("file", "")
             if not os.path.isabs(entry_file):
-                entry_file = os.path.join(
-                    entry.get("directory", ""), entry_file
-                )
+                entry_file = os.path.join(entry.get("directory", ""), entry_file)
             entry_abs = os.path.abspath(entry_file)
 
             if not entry_abs.endswith((".cu", ".hip", ".cpp")):
@@ -700,7 +692,9 @@ def _find_translation_unit(
     # parameters.
     if mangled_name and compile_commands_path:
         nm_match = _match_tu_via_object_symbols(
-            mangled_name, candidates, compile_commands_path,
+            mangled_name,
+            candidates,
+            compile_commands_path,
         )
         if nm_match:
             return nm_match
@@ -708,9 +702,7 @@ def _find_translation_unit(
     # Fallback: smallest file by size (focused instantiation files are
     # typically ~3 lines, monolithic TUs are thousands).
     candidates.sort(key=lambda c: os.path.getsize(c[0]))
-    _logger.debug(
-        "Falling back to smallest TU: %s", candidates[0][0]
-    )
+    _logger.debug("Falling back to smallest TU: %s", candidates[0][0])
     return candidates[0]
 
 
@@ -740,7 +732,8 @@ def _match_tu_via_object_symbols(
         entry_file = entry.get("file", "")
         if not os.path.isabs(entry_file):
             entry_file = os.path.join(
-                entry.get("directory", ""), entry_file,
+                entry.get("directory", ""),
+                entry_file,
             )
         entry_abs = os.path.abspath(entry_file)
 
@@ -763,7 +756,9 @@ def _match_tu_via_object_symbols(
         try:
             proc = subprocess.run(
                 ["nm", obj_path],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if proc.returncode != 0:
                 continue
@@ -773,7 +768,8 @@ def _match_tu_via_object_symbols(
         if mangled_name in proc.stdout:
             _logger.debug(
                 "Matched translation unit %s via nm on %s",
-                tu_path, obj_path,
+                tu_path,
+                obj_path,
             )
             return tu_path, cmd, comp_dir
 
@@ -826,7 +822,9 @@ def _detect_link_libraries(
     try:
         proc = subprocess.run(
             ["ldd", binary_path],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if proc.returncode != 0:
             return [], []
@@ -836,7 +834,7 @@ def _detect_link_libraries(
     abs_binary_dir = os.path.abspath(os.path.dirname(binary_path))
     abs_source_dir = os.path.abspath(source_dir)
 
-    lib_dirs: Dict[str, None] = {}   # ordered set
+    lib_dirs: Dict[str, None] = {}  # ordered set
     lib_names: List[str] = []
 
     for line in proc.stdout.splitlines():
@@ -915,7 +913,7 @@ def _detect_compile_defines(
     if not defines:
         defines.update(_defines_from_source_scan(source_files))
 
-    for d in (extra_defines or []):
+    for d in extra_defines or []:
         k, _, v = d.partition("=")
         defines[k] = v or None
 
@@ -948,8 +946,7 @@ def _defines_from_compile_commands(
             entry_file = os.path.join(entry.get("directory", ""), entry_file)
         entry_abs = os.path.abspath(entry_file)
 
-        if (entry_abs in source_abspaths
-                or os.path.basename(entry_file) in source_basenames):
+        if entry_abs in source_abspaths or os.path.basename(entry_file) in source_basenames:
             return _extract_defines_from_command(
                 entry.get("command", ""),
                 entry.get("arguments", []),
@@ -1024,8 +1021,7 @@ def _includes_from_compile_commands(
             entry_file = os.path.join(entry.get("directory", ""), entry_file)
         entry_abs = os.path.abspath(entry_file)
 
-        if (entry_abs in source_abspaths
-                or os.path.basename(entry_file) in source_basenames):
+        if entry_abs in source_abspaths or os.path.basename(entry_file) in source_basenames:
             return _extract_includes_from_command(
                 entry.get("command", ""),
                 entry.get("arguments", []),
@@ -1092,11 +1088,10 @@ def _defines_from_source_scan(source_files: List[str]) -> Dict[str, Optional[str
     return found
 
 
-
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def find_kernel_source(
     kernel_name: str,
@@ -1134,12 +1129,18 @@ def find_kernel_source(
         return _find_triton_kernel(kernel_name, source_dir)
     elif language == "hip":
         return _find_hip_kernel(
-            kernel_name, source_dir, extra_defines, mangled_name,
+            kernel_name,
+            source_dir,
+            extra_defines,
+            mangled_name,
         )
     else:
         result = _find_triton_kernel(kernel_name, source_dir)
         if result:
             return result
         return _find_hip_kernel(
-            kernel_name, source_dir, extra_defines, mangled_name,
+            kernel_name,
+            source_dir,
+            extra_defines,
+            mangled_name,
         )

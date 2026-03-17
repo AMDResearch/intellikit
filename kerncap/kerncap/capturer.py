@@ -49,6 +49,7 @@ def run_capture(
     """
     if language == "triton":
         from kerncap.triton_capture import run_triton_capture
+
         return run_triton_capture(
             kernel_name=kernel_name,
             cmd=cmd,
@@ -79,9 +80,7 @@ def run_capture(
             text=True,
         )
     except subprocess.TimeoutExpired:
-        raise TimeoutError(
-            f"Application did not complete within {timeout}s"
-        )
+        raise TimeoutError(f"Application did not complete within {timeout}s")
 
     dispatch_file = os.path.join(output_dir, "dispatch.json")
     meta_file = os.path.join(output_dir, "metadata.json")

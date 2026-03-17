@@ -245,7 +245,8 @@ def mini_pipeline_app(tmp_path):
     binary = tmp_path / "mini_pipeline"
     result = subprocess.run(
         ["hipcc", "-O2", "-g", "-o", str(binary), str(src)],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         pytest.fail(f"hipcc failed:\n{result.stderr}")
@@ -268,8 +269,7 @@ class TestMiniPipelineMultiKernel:
 
         found = {k.name for k in kernels}
         for name in ALL_KERNEL_NAMES:
-            assert any(name in f for f in found), \
-                f"{name} not found in profiled kernels: {found}"
+            assert any(name in f for f in found), f"{name} not found in profiled kernels: {found}"
 
     def test_capture_vector_scale(self, mini_pipeline_app, tmp_path):
         """Capture a kernel that is NOT the first one defined in the file."""
@@ -372,7 +372,8 @@ class TestMiniPipelineMultiKernel:
 
         repro_dir = str(tmp_path / "reproducer")
         generate_hsaco_reproducer(
-            capture_dir, repro_dir,
+            capture_dir,
+            repro_dir,
             kernel_source=kernel_src,
         )
 
@@ -412,7 +413,8 @@ class TestMiniPipelineMultiKernel:
 
         repro_dir = str(tmp_path / "reproducer")
         generate_hsaco_reproducer(
-            capture_dir, repro_dir,
+            capture_dir,
+            repro_dir,
             kernel_source=kernel_src,
         )
 

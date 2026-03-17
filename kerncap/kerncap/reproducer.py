@@ -69,9 +69,7 @@ def generate_hsaco_reproducer(
             with open(meta_path, "r") as f:
                 metadata = json.load(f)
         else:
-            raise FileNotFoundError(
-                f"No dispatch.json or metadata.json in {capture_dir}"
-            )
+            raise FileNotFoundError(f"No dispatch.json or metadata.json in {capture_dir}")
 
     # Copy capture data
     capture_dest = os.path.join(output_dir, "capture")
@@ -94,7 +92,9 @@ def generate_hsaco_reproducer(
     # Generate Makefile
     makefile_path = os.path.join(output_dir, "Makefile")
     _write_replay_makefile(
-        makefile_path, kernel_name, gpu_arch,
+        makefile_path,
+        kernel_name,
+        gpu_arch,
         kernel_source=kernel_source,
     )
 
@@ -115,7 +115,8 @@ def generate_hsaco_reproducer(
         # Copy dependency headers into deps/ so the reproducer is
         # self-contained for inspection and editing.
         dep_files = [
-            f for f in kernel_source.source_files
+            f
+            for f in kernel_source.source_files
             if os.path.abspath(f) != os.path.abspath(kernel_source.main_file)
         ]
         if dep_files:
@@ -146,7 +147,9 @@ def generate_hsaco_reproducer(
                         os.rename(prev_dest, prev_new_dest)
                         logger.warning(
                             "Dependency name collision: renamed deps/%s -> deps/%s (from %s)",
-                            dest_name, prev_new, prev_abs,
+                            dest_name,
+                            prev_new,
+                            prev_abs,
                         )
                         used_names[prev_new] = prev_abs
                         used_names[dest_name] = None  # sentinel: slot taken, file moved
@@ -159,7 +162,8 @@ def generate_hsaco_reproducer(
                         dest_name = f"{stem}_{counter}{ext}"
                     logger.warning(
                         "Dependency name collision: storing deps/%s as deps/%s",
-                        basename, dest_name,
+                        basename,
+                        dest_name,
                     )
 
                 used_names[dest_name] = dep_abs
@@ -168,9 +172,7 @@ def generate_hsaco_reproducer(
                 shutil.copy2(dep_abs, dest_path)
 
                 dep_dir = os.path.dirname(dep_abs)
-                vfs_map.setdefault(dep_dir, []).append(
-                    (basename, os.path.abspath(dest_path))
-                )
+                vfs_map.setdefault(dep_dir, []).append((basename, os.path.abspath(dest_path)))
                 logger.debug("Copied dependency %s -> deps/%s", basename, dest_name)
 
         vfs_roots = []
@@ -179,11 +181,13 @@ def generate_hsaco_reproducer(
                 {"type": "file", "name": name, "external-contents": local}
                 for name, local in entries
             ]
-            vfs_roots.append({
-                "type": "directory",
-                "name": dir_path,
-                "contents": contents,
-            })
+            vfs_roots.append(
+                {
+                    "type": "directory",
+                    "name": dir_path,
+                    "contents": contents,
+                }
+            )
 
         vfs_content = {"version": 0, "roots": vfs_roots}
         vfs_path = os.path.join(output_dir, "vfs.yaml")
@@ -202,12 +206,13 @@ def _write_replay_makefile(
     """Write a Makefile that uses kerncap-replay."""
     try:
         from kerncap import _get_replay_path
+
         replay_default = _get_replay_path()
     except (ImportError, FileNotFoundError):
         replay_default = "kerncap-replay"
 
     has_compilable = kernel_source is not None and bool(kernel_source.compile_command)
-    
+
     phony_targets = ["run", "replay", "validate"]
     if has_compilable:
         phony_targets.extend(["recompile", "run-variant", "validate-variant"])
@@ -237,6 +242,7 @@ def _write_replay_makefile(
 
     if has_compilable:
         import shlex
+
         tokens = shlex.split(kernel_source.compile_command)
         new_tokens = []
         skip_next = False
@@ -252,31 +258,34 @@ def _write_replay_makefile(
             if tok.startswith("-o") and len(tok) > 2:
                 continue
             new_tokens.append(tok)
-        
+
         clean_cmd = " ".join(shlex.quote(t) for t in new_tokens)
         compile_dir = kernel_source.compile_dir
 
-        lines.extend([
-            "# Recompile the edited kernel_variant.cpp into a new HSACO via Clang VFS overlay.",
-            "# The VFS overlay tricks the compiler into using the edited file in place of the original.",
-            "# --no-gpu-bundle-output produces a raw code object, so no unbundling is needed.",
-            "recompile: kernel_variant.cpp vfs.yaml",
-            f"\t@echo \"Recompiling optimized HSACO via VFS overlay...\"",
-            f"\tcd {shlex.quote(compile_dir)} && \\",
-            f"\t{clean_cmd} -ivfsoverlay $(PWD)/vfs.yaml --cuda-device-only --no-gpu-bundle-output -o $(PWD)/optimized.hsaco",
-            "",
-            "# Replay with the recompiled HSACO",
-            "run-variant: optimized.hsaco",
-            "\t$(REPLAY) $(CAPTURE_DIR) --hsaco optimized.hsaco",
-            "",
-            "# Dump post-execution output for the recompiled HSACO",
-            "validate-variant: optimized.hsaco",
-            "\t$(REPLAY) $(CAPTURE_DIR) --hsaco optimized.hsaco --dump-output",
-            "",
-        ])
+        lines.extend(
+            [
+                "# Recompile the edited kernel_variant.cpp into a new HSACO via Clang VFS overlay.",
+                "# The VFS overlay tricks the compiler into using the edited file in place of the original.",
+                "# --no-gpu-bundle-output produces a raw code object, so no unbundling is needed.",
+                "recompile: kernel_variant.cpp vfs.yaml",
+                '\t@echo "Recompiling optimized HSACO via VFS overlay..."',
+                f"\tcd {shlex.quote(compile_dir)} && \\",
+                f"\t{clean_cmd} -ivfsoverlay $(PWD)/vfs.yaml --cuda-device-only --no-gpu-bundle-output -o $(PWD)/optimized.hsaco",
+                "",
+                "# Replay with the recompiled HSACO",
+                "run-variant: optimized.hsaco",
+                "\t$(REPLAY) $(CAPTURE_DIR) --hsaco optimized.hsaco",
+                "",
+                "# Dump post-execution output for the recompiled HSACO",
+                "validate-variant: optimized.hsaco",
+                "\t$(REPLAY) $(CAPTURE_DIR) --hsaco optimized.hsaco --dump-output",
+                "",
+            ]
+        )
 
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
+
 
 def generate_triton_reproducer(
     capture_dir: str,

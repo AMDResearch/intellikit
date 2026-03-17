@@ -53,9 +53,15 @@ def _make_capture_dir(tmp_path, metadata_file=None, metadata_dict=None):
     # Minimal memory regions
     regions = {
         "regions": [
-            {"base": 140730000000000, "size": 4096,
-             "is_pool": True, "is_vmem": False,
-             "contains_kernarg": False, "handle": 0, "access": 0}
+            {
+                "base": 140730000000000,
+                "size": 4096,
+                "is_pool": True,
+                "is_vmem": False,
+                "contains_kernarg": False,
+                "handle": 0,
+                "access": 0,
+            }
         ]
     }
     (cap / "memory_regions.json").write_text(json.dumps(regions))
@@ -114,7 +120,8 @@ class TestHsacoReproducer:
         output = str(tmp_path / "repro")
 
         generate_hsaco_reproducer(
-            capture_dir, output,
+            capture_dir,
+            output,
             kernel_source=ks,
         )
 
@@ -127,7 +134,7 @@ class TestHsacoReproducer:
         src_root.mkdir()
         main_kernel = src_root / "kernel.hip"
         main_kernel.write_text("__global__ void k() {}\n")
-        
+
         ks = KernelSource(
             language="hip",
             kernel_name="k",
@@ -136,11 +143,12 @@ class TestHsacoReproducer:
             compile_command="hipcc -c kernel.hip -o kernel.o",
             compile_dir=str(src_root),
         )
-        
+
         output = str(tmp_path / "repro")
 
         generate_hsaco_reproducer(
-            capture_dir, output,
+            capture_dir,
+            output,
             kernel_source=ks,
         )
 

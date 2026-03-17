@@ -36,16 +36,28 @@ def mock_reproducer(tmp_path):
         "lds_size": 0,
         "args": [
             {
-                "index": 0, "name": "input", "type": "const float*",
-                "size": 8, "offset": 0, "is_pointer": True,
-                "is_const": True, "is_output": False,
-                "buffer_size": n * 4, "file": "arg_0.bin",
+                "index": 0,
+                "name": "input",
+                "type": "const float*",
+                "size": 8,
+                "offset": 0,
+                "is_pointer": True,
+                "is_const": True,
+                "is_output": False,
+                "buffer_size": n * 4,
+                "file": "arg_0.bin",
             },
             {
-                "index": 1, "name": "output", "type": "float*",
-                "size": 8, "offset": 8, "is_pointer": True,
-                "is_const": False, "is_output": True,
-                "buffer_size": n * 4, "file": "arg_1.bin",
+                "index": 1,
+                "name": "output",
+                "type": "float*",
+                "size": 8,
+                "offset": 8,
+                "is_pointer": True,
+                "is_const": False,
+                "is_output": True,
+                "buffer_size": n * 4,
+                "file": "arg_1.bin",
             },
         ],
     }
@@ -102,8 +114,14 @@ class TestCompareOutputs:
 
         meta = {
             "args": [
-                {"index": 0, "type": "const float*", "is_pointer": True,
-                 "is_const": True, "is_output": False, "file": "arg_0.bin"},
+                {
+                    "index": 0,
+                    "type": "const float*",
+                    "is_pointer": True,
+                    "is_const": True,
+                    "is_output": False,
+                    "file": "arg_0.bin",
+                },
             ],
         }
         (capture / "metadata.json").write_text(json.dumps(meta))
@@ -126,10 +144,16 @@ class TestNaNHandling:
         meta = {
             "args": [
                 {
-                    "index": 0, "name": "out", "type": "float*",
-                    "size": 8, "offset": 0, "is_pointer": True,
-                    "is_const": False, "is_output": True,
-                    "buffer_size": n * 4, "file": "arg_0.bin",
+                    "index": 0,
+                    "name": "out",
+                    "type": "float*",
+                    "size": 8,
+                    "offset": 0,
+                    "is_pointer": True,
+                    "is_const": False,
+                    "is_output": True,
+                    "buffer_size": n * 4,
+                    "file": "arg_0.bin",
                 },
             ],
         }
@@ -159,10 +183,16 @@ class TestNaNHandling:
         meta = {
             "args": [
                 {
-                    "index": 0, "name": "out", "type": "float*",
-                    "size": 8, "offset": 0, "is_pointer": True,
-                    "is_const": False, "is_output": True,
-                    "buffer_size": n * 4, "file": "arg_0.bin",
+                    "index": 0,
+                    "name": "out",
+                    "type": "float*",
+                    "size": 8,
+                    "offset": 0,
+                    "is_pointer": True,
+                    "is_const": False,
+                    "is_output": True,
+                    "buffer_size": n * 4,
+                    "file": "arg_0.bin",
                 },
             ],
         }
@@ -188,16 +218,28 @@ class TestNaNHandling:
         meta = {
             "args": [
                 {
-                    "index": 0, "name": "a", "type": "float*",
-                    "size": 8, "offset": 0, "is_pointer": True,
-                    "is_const": False, "is_output": True,
-                    "buffer_size": n * 4, "file": "arg_0.bin",
+                    "index": 0,
+                    "name": "a",
+                    "type": "float*",
+                    "size": 8,
+                    "offset": 0,
+                    "is_pointer": True,
+                    "is_const": False,
+                    "is_output": True,
+                    "buffer_size": n * 4,
+                    "file": "arg_0.bin",
                 },
                 {
-                    "index": 1, "name": "b", "type": "float*",
-                    "size": 8, "offset": 8, "is_pointer": True,
-                    "is_const": False, "is_output": True,
-                    "buffer_size": n * 4, "file": "arg_1.bin",
+                    "index": 1,
+                    "name": "b",
+                    "type": "float*",
+                    "size": 8,
+                    "offset": 8,
+                    "is_pointer": True,
+                    "is_const": False,
+                    "is_output": True,
+                    "buffer_size": n * 4,
+                    "file": "arg_1.bin",
                 },
             ],
         }
@@ -215,6 +257,7 @@ class TestNaNHandling:
         result = _compare_outputs(str(repro), meta, atol=1e-6, rtol=1e-5, details=[])
         assert not result.passed
         import math
+
         assert math.isnan(result.max_error)
 
 
@@ -245,15 +288,23 @@ def _make_va_capture(tmp_path):
     capture.mkdir(parents=True)
     memory.mkdir()
 
-    (capture / "dispatch.json").write_text(json.dumps({
-        "mangled_name": "_Z11test_kernelPfS_i",
-        "demangled_name": "test_kernel",
-        "grid": [256, 1, 1],
-        "block": [256, 1, 1],
-    }))
-    (capture / "memory_regions.json").write_text(json.dumps({
-        "regions": [{"base": 0x1000, "size": 4096}],
-    }))
+    (capture / "dispatch.json").write_text(
+        json.dumps(
+            {
+                "mangled_name": "_Z11test_kernelPfS_i",
+                "demangled_name": "test_kernel",
+                "grid": [256, 1, 1],
+                "block": [256, 1, 1],
+            }
+        )
+    )
+    (capture / "memory_regions.json").write_text(
+        json.dumps(
+            {
+                "regions": [{"base": 0x1000, "size": 4096}],
+            }
+        )
+    )
 
     data = np.arange(1024, dtype=np.uint8)
     data.tofile(str(memory / "region_1000.bin"))
@@ -309,6 +360,7 @@ class TestValidateReplayVariant:
         region_data = np.arange(1024, dtype=np.uint8)
 
         call_count = [0]
+
         def side_effect(cmd, **kwargs):
             call_count[0] += 1
             output_dir.mkdir(exist_ok=True)
@@ -318,7 +370,10 @@ class TestValidateReplayVariant:
         mock_run.side_effect = side_effect
 
         result = _validate_replay(
-            str(repro), atol=1e-6, rtol=1e-5, hsaco="/tmp/variant.hsaco",
+            str(repro),
+            atol=1e-6,
+            rtol=1e-5,
+            hsaco="/tmp/variant.hsaco",
         )
         assert result.passed
         assert call_count[0] == 2
@@ -331,21 +386,23 @@ class TestValidateReplayVariant:
         output_dir = capture / "output"
 
         call_count = [0]
+
         def side_effect(cmd, **kwargs):
             call_count[0] += 1
             output_dir.mkdir(exist_ok=True)
             if call_count[0] == 1:
-                np.zeros(1024, dtype=np.uint8).tofile(
-                    str(output_dir / "region_1000.bin"))
+                np.zeros(1024, dtype=np.uint8).tofile(str(output_dir / "region_1000.bin"))
             else:
-                np.ones(1024, dtype=np.uint8).tofile(
-                    str(output_dir / "region_1000.bin"))
+                np.ones(1024, dtype=np.uint8).tofile(str(output_dir / "region_1000.bin"))
             return _mock_replay_success()
 
         mock_run.side_effect = side_effect
 
         result = _validate_replay(
-            str(repro), atol=1e-6, rtol=1e-5, hsaco="/tmp/variant.hsaco",
+            str(repro),
+            atol=1e-6,
+            rtol=1e-5,
+            hsaco="/tmp/variant.hsaco",
         )
         assert not result.passed
         assert any("FAIL" in d for d in result.details)
@@ -358,21 +415,23 @@ class TestValidateReplayVariant:
         output_dir = capture / "output"
 
         call_count = [0]
+
         def side_effect(cmd, **kwargs):
             call_count[0] += 1
             output_dir.mkdir(exist_ok=True)
             if call_count[0] == 1:
-                np.zeros(1024, dtype=np.uint8).tofile(
-                    str(output_dir / "region_1000.bin"))
+                np.zeros(1024, dtype=np.uint8).tofile(str(output_dir / "region_1000.bin"))
             else:
-                np.zeros(512, dtype=np.uint8).tofile(
-                    str(output_dir / "region_1000.bin"))
+                np.zeros(512, dtype=np.uint8).tofile(str(output_dir / "region_1000.bin"))
             return _mock_replay_success()
 
         mock_run.side_effect = side_effect
 
         result = _validate_replay(
-            str(repro), atol=1e-6, rtol=1e-5, hsaco="/tmp/variant.hsaco",
+            str(repro),
+            atol=1e-6,
+            rtol=1e-5,
+            hsaco="/tmp/variant.hsaco",
         )
         assert not result.passed
         assert any("SIZE MISMATCH" in d for d in result.details)
@@ -385,7 +444,10 @@ class TestValidateReplayVariant:
         mock_run.return_value = _mock_replay_failure()
 
         result = _validate_replay(
-            str(repro), atol=1e-6, rtol=1e-5, hsaco="/tmp/variant.hsaco",
+            str(repro),
+            atol=1e-6,
+            rtol=1e-5,
+            hsaco="/tmp/variant.hsaco",
         )
         assert not result.passed
         assert any("Replay failed" in d for d in result.details)

@@ -50,7 +50,10 @@ class TestExtractBaseName:
         assert _extract_base_name("void vector_add(float*, float*, int)") == "vector_add"
 
     def test_template(self):
-        assert _extract_base_name("void matmul_kernel<float>(float*, float*, float*, int)") == "matmul_kernel"
+        assert (
+            _extract_base_name("void matmul_kernel<float>(float*, float*, float*, int)")
+            == "matmul_kernel"
+        )
 
     def test_namespaced(self):
         assert _extract_base_name("void ck::GridwiseGemm<float>::Run()") == "Run"
@@ -62,10 +65,16 @@ class TestExtractBaseName:
         assert _extract_base_name("mul_mat_vec_q<(ggml_type)39") == "mul_mat_vec_q"
 
     def test_unbalanced_template_truncated_profiler(self):
-        assert _extract_base_name("void mul_mat_vec_q<(ggml_type)39, 1, true, false") == "mul_mat_vec_q"
+        assert (
+            _extract_base_name("void mul_mat_vec_q<(ggml_type)39, 1, true, false")
+            == "mul_mat_vec_q"
+        )
 
     def test_unbalanced_template_with_void_prefix(self):
-        assert _extract_base_name("void mul_mat_q<(ggml_type)39, 128, true>(char const*, int") == "mul_mat_q"
+        assert (
+            _extract_base_name("void mul_mat_q<(ggml_type)39, 128, true>(char const*, int")
+            == "mul_mat_q"
+        )
 
     def test_balanced_template_still_works(self):
         assert _extract_base_name("mul_mat_vec_q<(ggml_type)39, 1, true, false>") == "mul_mat_vec_q"
@@ -198,15 +207,15 @@ class TestMultiTranslationUnit:
         corrects it by finding the actual definition file."""
         driver = tmp_path / "driver.cu"
         driver.write_text(
-            '__global__ void unrelated_kernel(int x) {}\n'
-            'void host_launch_my_kernel();\n'
-            'void call_my_kernel() { host_launch_my_kernel(); }\n'
+            "__global__ void unrelated_kernel(int x) {}\n"
+            "void host_launch_my_kernel();\n"
+            "void call_my_kernel() { host_launch_my_kernel(); }\n"
         )
         impl = tmp_path / "impl.cu"
         impl.write_text(
-            '__global__ void my_kernel(float* a, int n) {\n'
-            '    int i = threadIdx.x; if (i < n) a[i] = 0;\n'
-            '}\n'
+            "__global__ void my_kernel(float* a, int n) {\n"
+            "    int i = threadIdx.x; if (i < n) a[i] = 0;\n"
+            "}\n"
         )
         result = find_kernel_source(
             "my_kernel",
@@ -230,18 +239,24 @@ class TestDirectTranslationUnit:
         be recognised as its own translation unit with a compile command."""
         kernel = tmp_path / "mmvq.cu"
         kernel.write_text(
-            '__global__ void mul_mat_vec_q(float* a, int n) {\n'
-            '    int i = threadIdx.x; if (i < n) a[i] *= 2.0f;\n'
-            '}\n'
+            "__global__ void mul_mat_vec_q(float* a, int n) {\n"
+            "    int i = threadIdx.x; if (i < n) a[i] *= 2.0f;\n"
+            "}\n"
         )
         build_dir = tmp_path / "build"
         build_dir.mkdir()
         cc = build_dir / "compile_commands.json"
-        cc.write_text(json.dumps([{
-            "directory": str(build_dir),
-            "command": f"/opt/rocm/llvm/bin/clang -DFOO -x hip {kernel} -c -o mmvq.o",
-            "file": str(kernel),
-        }]))
+        cc.write_text(
+            json.dumps(
+                [
+                    {
+                        "directory": str(build_dir),
+                        "command": f"/opt/rocm/llvm/bin/clang -DFOO -x hip {kernel} -c -o mmvq.o",
+                        "file": str(kernel),
+                    }
+                ]
+            )
+        )
 
         result = find_kernel_source(
             "mul_mat_vec_q",
@@ -259,9 +274,9 @@ class TestDirectTranslationUnit:
         """Without compile_commands.json, a .cu file has no compile command."""
         kernel = tmp_path / "mmvq.cu"
         kernel.write_text(
-            '__global__ void mul_mat_vec_q(float* a, int n) {\n'
-            '    int i = threadIdx.x; if (i < n) a[i] *= 2.0f;\n'
-            '}\n'
+            "__global__ void mul_mat_vec_q(float* a, int n) {\n"
+            "    int i = threadIdx.x; if (i < n) a[i] *= 2.0f;\n"
+            "}\n"
         )
 
         result = find_kernel_source(
@@ -278,9 +293,9 @@ class TestDirectTranslationUnit:
         should find the .cu file that #includes it instead."""
         header = tmp_path / "mmq.cuh"
         header.write_text(
-            '__global__ void mul_mat_q(float* a, int n) {\n'
-            '    int i = threadIdx.x; if (i < n) a[i] *= 2.0f;\n'
-            '}\n'
+            "__global__ void mul_mat_q(float* a, int n) {\n"
+            "    int i = threadIdx.x; if (i < n) a[i] *= 2.0f;\n"
+            "}\n"
         )
         tu = tmp_path / "mmq_instance.cu"
         tu.write_text('#include "mmq.cuh"\n')
@@ -288,11 +303,17 @@ class TestDirectTranslationUnit:
         build_dir = tmp_path / "build"
         build_dir.mkdir()
         cc = build_dir / "compile_commands.json"
-        cc.write_text(json.dumps([{
-            "directory": str(build_dir),
-            "command": f"/opt/rocm/llvm/bin/clang -x hip {tu} -c -o mmq.o",
-            "file": str(tu),
-        }]))
+        cc.write_text(
+            json.dumps(
+                [
+                    {
+                        "directory": str(build_dir),
+                        "command": f"/opt/rocm/llvm/bin/clang -x hip {tu} -c -o mmq.o",
+                        "file": str(tu),
+                    }
+                ]
+            )
+        )
 
         result = find_kernel_source(
             "mul_mat_q",
@@ -314,7 +335,8 @@ class TestLinkLibraryDetection:
 
     def test_nonexistent_binary_returns_empty(self, tmp_path):
         paths, libs = _detect_link_libraries(
-            str(tmp_path / "nonexistent"), str(tmp_path),
+            str(tmp_path / "nonexistent"),
+            str(tmp_path),
         )
         assert paths == []
         assert libs == []
@@ -346,37 +368,37 @@ class TestCompileDefines:
     def test_source_scan_finds_ifdef(self, tmp_path):
         """Detect defines from #ifdef guards with HIP substring."""
         src = tmp_path / "common.cuh"
-        src.write_text('#ifdef GGML_USE_HIP\nint x;\n#endif\n')
+        src.write_text("#ifdef GGML_USE_HIP\nint x;\n#endif\n")
         result = _defines_from_source_scan([str(src)])
         assert "GGML_USE_HIP" in result
 
     def test_source_scan_finds_if_defined(self, tmp_path):
         """Detect defines from #if defined() guards."""
         src = tmp_path / "common.cuh"
-        src.write_text('#if defined(USE_ROCM)\nint x;\n#endif\n')
+        src.write_text("#if defined(USE_ROCM)\nint x;\n#endif\n")
         result = _defines_from_source_scan([str(src)])
         assert "USE_ROCM" in result
 
     def test_source_scan_finds_amd_substring(self, tmp_path):
         """Detect defines containing AMD substring."""
         src = tmp_path / "foo.h"
-        src.write_text('#if defined(__HIP_PLATFORM_AMD__)\nint x;\n#endif\n')
+        src.write_text("#if defined(__HIP_PLATFORM_AMD__)\nint x;\n#endif\n")
         result = _defines_from_source_scan([str(src)])
         assert "__HIP_PLATFORM_AMD__" in result
 
     def test_source_scan_ignores_non_hip_guards(self, tmp_path):
         """Non-HIP/ROCM/AMD guards should be ignored."""
         src = tmp_path / "foo.h"
-        src.write_text('#ifdef DEBUG\nint x;\n#endif\n')
+        src.write_text("#ifdef DEBUG\nint x;\n#endif\n")
         result = _defines_from_source_scan([str(src)])
         assert len(result) == 0
 
     def test_source_scan_multiple_files(self, tmp_path):
         """Detect defines across multiple source files."""
         f1 = tmp_path / "a.h"
-        f1.write_text('#ifdef GGML_USE_HIP\nint x;\n#endif\n')
+        f1.write_text("#ifdef GGML_USE_HIP\nint x;\n#endif\n")
         f2 = tmp_path / "b.h"
-        f2.write_text('#if defined(USE_ROCM)\nint y;\n#endif\n')
+        f2.write_text("#if defined(USE_ROCM)\nint y;\n#endif\n")
         result = _defines_from_source_scan([str(f1), str(f2)])
         assert "GGML_USE_HIP" in result
         assert "USE_ROCM" in result
@@ -386,13 +408,20 @@ class TestCompileDefines:
         src = tmp_path / "kernel.hip"
         src.write_text("__global__ void foo() {}\n")
         cc = tmp_path / "compile_commands.json"
-        cc.write_text(json.dumps([{
-            "directory": str(tmp_path),
-            "command": f"hipcc -DGGML_USE_HIP -DFOO=1 -o kernel.o {src}",
-            "file": str(src),
-        }]))
+        cc.write_text(
+            json.dumps(
+                [
+                    {
+                        "directory": str(tmp_path),
+                        "command": f"hipcc -DGGML_USE_HIP -DFOO=1 -o kernel.o {src}",
+                        "file": str(src),
+                    }
+                ]
+            )
+        )
         result = _detect_compile_defines(
-            [str(src)], binary_path=str(tmp_path / "libfoo.so"),
+            [str(src)],
+            binary_path=str(tmp_path / "libfoo.so"),
         )
         assert "GGML_USE_HIP" in result
         assert "FOO=1" in result
@@ -400,9 +429,10 @@ class TestCompileDefines:
     def test_extra_defines_merged(self, tmp_path):
         """User-supplied extra_defines are merged in."""
         src = tmp_path / "foo.h"
-        src.write_text('#ifdef GGML_USE_HIP\nint x;\n#endif\n')
+        src.write_text("#ifdef GGML_USE_HIP\nint x;\n#endif\n")
         result = _detect_compile_defines(
-            [str(src)], extra_defines=["MY_CUSTOM_DEF"],
+            [str(src)],
+            extra_defines=["MY_CUSTOM_DEF"],
         )
         assert "GGML_USE_HIP" in result
         assert "MY_CUSTOM_DEF" in result

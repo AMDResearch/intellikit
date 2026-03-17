@@ -25,13 +25,11 @@ class _CliFormatter(logging.Formatter):
         msg = record.getMessage()
 
         if record.levelno >= logging.ERROR:
-            prefix = (f"{self._RED}ERROR{self._RESET}"
-                      if self._use_color else "ERROR")
+            prefix = f"{self._RED}ERROR{self._RESET}" if self._use_color else "ERROR"
             return f"\n  {prefix}: {msg}"
 
         if record.levelno >= logging.WARNING:
-            prefix = (f"{self._YELLOW}WARNING{self._RESET}"
-                      if self._use_color else "WARNING")
+            prefix = f"{self._YELLOW}WARNING{self._RESET}" if self._use_color else "WARNING"
             return f"\n  {prefix}: {msg}"
 
         if record.levelno >= logging.INFO:
@@ -52,8 +50,9 @@ def _setup_logging(level: int) -> None:
 
 @click.group()
 @click.version_option(package_name="kerncap")
-@click.option("-v", "--verbose", is_flag=True, default=False,
-              help="Enable verbose (DEBUG) logging.")
+@click.option(
+    "-v", "--verbose", is_flag=True, default=False, help="Enable verbose (DEBUG) logging."
+)
 def main(verbose):
     """kerncap — Kernel extraction and isolation tool for HIP and Triton on AMD GPUs."""
     _setup_logging(logging.DEBUG if verbose else logging.INFO)
@@ -83,10 +82,7 @@ def profile(cmd, output):
         return
 
     # Print ranked kernel table
-    click.echo(
-        f"\n{'Rank':<6}{'Kernel':<60}{'Calls':<8}"
-        f"{'Total (ms)':<14}{'Avg (us)':<12}{'%':<8}"
-    )
+    click.echo(f"\n{'Rank':<6}{'Kernel':<60}{'Calls':<8}{'Total (ms)':<14}{'Avg (us)':<12}{'%':<8}")
     click.echo("-" * 108)
     for i, k in enumerate(kernels[:20], 1):
         total_ms = k.total_duration_ns / 1e6
@@ -105,13 +101,23 @@ def profile(cmd, output):
 @click.option("--cmd", required=True, help="Application command to run for capture.")
 @click.option("--source-dir", default=None, help="Source directory to search.")
 @click.option("--output", "-o", default=None, help="Output directory for reproducer.")
-@click.option("--language", type=click.Choice(["hip", "triton"]),
-              default=None, help="Kernel language (auto-detected if omitted).")
-@click.option("--dispatch", default=-1, type=int,
-              help="Dispatch index to capture (-1 = first match).")
-@click.option("--defines", "-D", multiple=True, default=(),
-              help="Extra preprocessor defines for reproducer (e.g. -D GGML_USE_HIP). "
-                   "May be specified multiple times.")
+@click.option(
+    "--language",
+    type=click.Choice(["hip", "triton"]),
+    default=None,
+    help="Kernel language (auto-detected if omitted).",
+)
+@click.option(
+    "--dispatch", default=-1, type=int, help="Dispatch index to capture (-1 = first match)."
+)
+@click.option(
+    "--defines",
+    "-D",
+    multiple=True,
+    default=(),
+    help="Extra preprocessor defines for reproducer (e.g. -D GGML_USE_HIP). "
+    "May be specified multiple times.",
+)
 def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines):
     """Extract a kernel into a standalone reproducer.
 
@@ -139,16 +145,26 @@ def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines):
 
 @main.command()
 @click.argument("reproducer_dir")
-@click.option("--hsaco", default=None, type=click.Path(exists=True),
-              help="Override HSACO file (use recompiled .hsaco).")
-@click.option("--iterations", "-n", default=1, type=int,
-              help="Number of kernel iterations.")
-@click.option("--json", "json_output", is_flag=True, default=False,
-              help="Output results as JSON.")
-@click.option("--dump-output", is_flag=True, default=False,
-              help="Dump post-execution memory regions for validation.")
-@click.option("--hip-launch", is_flag=True, default=False,
-              help="Use HIP runtime for kernel launch (fixes rocprofv3 conflicts).")
+@click.option(
+    "--hsaco",
+    default=None,
+    type=click.Path(exists=True),
+    help="Override HSACO file (use recompiled .hsaco).",
+)
+@click.option("--iterations", "-n", default=1, type=int, help="Number of kernel iterations.")
+@click.option("--json", "json_output", is_flag=True, default=False, help="Output results as JSON.")
+@click.option(
+    "--dump-output",
+    is_flag=True,
+    default=False,
+    help="Dump post-execution memory regions for validation.",
+)
+@click.option(
+    "--hip-launch",
+    is_flag=True,
+    default=False,
+    help="Use HIP runtime for kernel launch (fixes rocprofv3 conflicts).",
+)
 def replay(reproducer_dir, hsaco, iterations, json_output, dump_output, hip_launch):
     """Replay a captured kernel using VA-faithful HSA dispatch.
 
@@ -180,6 +196,7 @@ def replay(reproducer_dir, hsaco, iterations, json_output, dump_output, hip_laun
         cmd.append("--hip-launch")
 
     import subprocess
+
     proc = subprocess.run(cmd, capture_output=not json_output, text=True)
 
     if not json_output and proc.stdout:
@@ -192,12 +209,16 @@ def replay(reproducer_dir, hsaco, iterations, json_output, dump_output, hip_laun
 
 @main.command()
 @click.argument("reproducer_dir")
-@click.option("--tolerance", "-t", default=1e-6, type=float,
-              help="Absolute tolerance for output comparison.")
-@click.option("--rtol", default=1e-5, type=float,
-              help="Relative tolerance for output comparison.")
-@click.option("--hsaco", default=None, type=click.Path(exists=True),
-              help="Override HSACO file (validate a recompiled variant).")
+@click.option(
+    "--tolerance", "-t", default=1e-6, type=float, help="Absolute tolerance for output comparison."
+)
+@click.option("--rtol", default=1e-5, type=float, help="Relative tolerance for output comparison.")
+@click.option(
+    "--hsaco",
+    default=None,
+    type=click.Path(exists=True),
+    help="Override HSACO file (validate a recompiled variant).",
+)
 def validate(reproducer_dir, tolerance, rtol, hsaco):
     """Validate a reproducer by comparing outputs to captured reference.
 
@@ -224,6 +245,7 @@ def validate(reproducer_dir, tolerance, rtol, hsaco):
         click.echo(f"  {detail}")
 
     import math
+
     is_smoke_test = any("smoke test" in d for d in result.details)
     if result.passed:
         if is_smoke_test:

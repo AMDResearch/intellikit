@@ -28,7 +28,8 @@ class TestKerncapProfile:
         result = kc.profile(["./app", "--flag"])
 
         mock_run_profile.assert_called_once_with(
-            ["./app", "--flag"], output_path=None,
+            ["./app", "--flag"],
+            output_path=None,
         )
         assert result == stats
         assert result[0].name == "my_kernel"
@@ -41,7 +42,8 @@ class TestKerncapProfile:
         kc.profile(["./app"], output_path="/tmp/profile.json")
 
         mock_run_profile.assert_called_once_with(
-            ["./app"], output_path="/tmp/profile.json",
+            ["./app"],
+            output_path="/tmp/profile.json",
         )
 
     @patch("kerncap.profiler.run_profile")
@@ -153,7 +155,9 @@ class TestKerncapValidate:
     @patch("kerncap.validator.validate_reproducer")
     def test_validate_with_hsaco(self, mock_validate):
         mock_validate.return_value = ValidationResult(
-            passed=True, details=[], max_error=0.0,
+            passed=True,
+            details=[],
+            max_error=0.0,
         )
 
         kc = Kerncap()
@@ -193,7 +197,8 @@ class TestKerncapReplay:
     def test_replay_basic(self, mock_subprocess, mock_replay_path, tmp_path):
         mock_replay_path.return_value = "/usr/bin/kerncap-replay"
         mock_subprocess.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0,
+            args=[],
+            returncode=0,
             stdout="Kernel dispatched successfully\nAverage GPU time: 42.5 us\n",
             stderr="",
         )
@@ -215,7 +220,10 @@ class TestKerncapReplay:
     def test_replay_with_options(self, mock_subprocess, mock_replay_path, tmp_path):
         mock_replay_path.return_value = "/usr/bin/kerncap-replay"
         mock_subprocess.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
 
         capture_dir = tmp_path / "repro" / "capture"
@@ -243,7 +251,8 @@ class TestKerncapReplay:
     def test_replay_no_timing(self, mock_subprocess, mock_replay_path, tmp_path):
         mock_replay_path.return_value = "/usr/bin/kerncap-replay"
         mock_subprocess.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0,
+            args=[],
+            returncode=0,
             stdout="Kernel dispatched successfully\n",
             stderr="",
         )
@@ -260,8 +269,10 @@ class TestKerncapReplay:
     def test_replay_failure(self, mock_subprocess, mock_replay_path, tmp_path):
         mock_replay_path.return_value = "/usr/bin/kerncap-replay"
         mock_subprocess.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1,
-            stdout="", stderr="HSA error: invalid argument",
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="HSA error: invalid argument",
         )
 
         capture_dir = tmp_path / "repro" / "capture"

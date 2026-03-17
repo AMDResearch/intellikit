@@ -137,7 +137,8 @@ def batched_scale_app(tmp_path):
     binary = tmp_path / "batched_scale"
     result = subprocess.run(
         ["hipcc", "-O2", "-g", "-o", str(binary), str(src)],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         pytest.fail(f"hipcc failed:\n{result.stderr}")
@@ -170,8 +171,7 @@ class TestBatchedScaleEmbeddedPointers:
         meta_path = os.path.join(output_dir, "dispatch.json")
         if not os.path.exists(meta_path):
             meta_path = os.path.join(output_dir, "metadata.json")
-        assert os.path.exists(meta_path), \
-            f"Expected dispatch.json or metadata.json in {output_dir}"
+        assert os.path.exists(meta_path), f"Expected dispatch.json or metadata.json in {output_dir}"
 
         with open(meta_path) as f:
             meta = json.load(f)
@@ -229,7 +229,8 @@ class TestBatchedScaleEmbeddedPointers:
 
         repro_dir = str(tmp_path / "reproducer")
         generate_hsaco_reproducer(
-            capture_dir, repro_dir,
+            capture_dir,
+            repro_dir,
             kernel_source=kernel_src,
         )
 

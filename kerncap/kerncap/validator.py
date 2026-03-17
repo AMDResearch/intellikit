@@ -27,6 +27,7 @@ import numpy as np
 @dataclass
 class ValidationResult:
     """Result of validating a reproducer."""
+
     passed: bool
     details: List[str]
     max_error: float = 0.0
@@ -117,7 +118,10 @@ def _validate_replay(
 
     if hsaco:
         return _validate_replay_variant(
-            replay_bin, capture_dir, hsaco, details,
+            replay_bin,
+            capture_dir,
+            hsaco,
+            details,
         )
     return _validate_replay_baseline(replay_bin, capture_dir, details)
 
@@ -142,9 +146,7 @@ def _run_replay(
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        details.append(
-            f"Replay failed (exit {proc.returncode}):\n{proc.stderr}"
-        )
+        details.append(f"Replay failed (exit {proc.returncode}):\n{proc.stderr}")
         return None
 
     timing_line = ""
@@ -172,9 +174,7 @@ def _validate_replay_baseline(
     if proc is None:
         return ValidationResult(passed=False, details=details)
 
-    details.append(
-        "Baseline replay OK (smoke test — no variant HSACO to compare against)"
-    )
+    details.append("Baseline replay OK (smoke test — no variant HSACO to compare against)")
     return ValidationResult(passed=True, details=details)
 
 
@@ -192,7 +192,10 @@ def _validate_replay_variant(
     """
     # --- baseline replay ---
     baseline_proc = _run_replay(
-        replay_bin, capture_dir, details, dump_output=True,
+        replay_bin,
+        capture_dir,
+        details,
+        dump_output=True,
     )
     if baseline_proc is None:
         return ValidationResult(passed=False, details=details)
@@ -210,8 +213,11 @@ def _validate_replay_variant(
         details.append("")
         details.append(f"Variant HSACO: {hsaco}")
         variant_proc = _run_replay(
-            replay_bin, capture_dir, details,
-            hsaco=hsaco, dump_output=True,
+            replay_bin,
+            capture_dir,
+            details,
+            hsaco=hsaco,
+            dump_output=True,
         )
         if variant_proc is None:
             return ValidationResult(passed=False, details=details)
@@ -230,12 +236,10 @@ def _compare_replay_outputs(
 ) -> ValidationResult:
     """Byte-exact comparison of two replay output directories."""
     baseline_files = sorted(
-        f for f in os.listdir(baseline_dir)
-        if f.startswith("region_") and f.endswith(".bin")
+        f for f in os.listdir(baseline_dir) if f.startswith("region_") and f.endswith(".bin")
     )
     variant_files = sorted(
-        f for f in os.listdir(variant_dir)
-        if f.startswith("region_") and f.endswith(".bin")
+        f for f in os.listdir(variant_dir) if f.startswith("region_") and f.endswith(".bin")
     )
 
     if not baseline_files:
@@ -257,10 +261,12 @@ def _compare_replay_outputs(
 
     for region_file in sorted(matched):
         base_data = np.fromfile(
-            os.path.join(baseline_dir, region_file), dtype=np.uint8,
+            os.path.join(baseline_dir, region_file),
+            dtype=np.uint8,
         )
         var_data = np.fromfile(
-            os.path.join(variant_dir, region_file), dtype=np.uint8,
+            os.path.join(variant_dir, region_file),
+            dtype=np.uint8,
         )
 
         if base_data.size != var_data.size:
@@ -301,7 +307,8 @@ def _validate_hsaco(
     # Build the harness (and optionally the .hsaco from kernel.hip)
     build_proc = subprocess.run(
         ["make", "-C", reproducer_dir, "all"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if build_proc.returncode != 0:
         return ValidationResult(
@@ -322,14 +329,13 @@ def _validate_hsaco(
     run_proc = subprocess.run(
         ["./harness", "kernel.hsaco"],
         cwd=reproducer_dir,
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if run_proc.returncode != 0:
         return ValidationResult(
             passed=False,
-            details=details + [
-                f"Run failed (exit {run_proc.returncode}):\n{run_proc.stderr}"
-            ],
+            details=details + [f"Run failed (exit {run_proc.returncode}):\n{run_proc.stderr}"],
         )
     details.append(f"Run: OK\n{run_proc.stdout.strip()}")
 
@@ -348,7 +354,8 @@ def _validate_hip(
     # Build
     build_proc = subprocess.run(
         ["make", "-C", reproducer_dir, "all"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if build_proc.returncode != 0:
         return ValidationResult(
@@ -361,7 +368,8 @@ def _validate_hip(
     run_proc = subprocess.run(
         ["./reproducer"],
         cwd=reproducer_dir,
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if run_proc.returncode != 0:
         return ValidationResult(
@@ -385,7 +393,8 @@ def _validate_triton(
     run_proc = subprocess.run(
         ["python3", "reproducer.py"],
         cwd=reproducer_dir,
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if run_proc.returncode != 0:
         return ValidationResult(
@@ -446,9 +455,7 @@ def _compare_outputs(
         out_data = np.fromfile(out_path, dtype=dtype)
 
         if ref_data.shape != out_data.shape:
-            details.append(
-                f"  arg_{idx}: SHAPE MISMATCH ref={ref_data.shape} out={out_data.shape}"
-            )
+            details.append(f"  arg_{idx}: SHAPE MISMATCH ref={ref_data.shape} out={out_data.shape}")
             all_passed = False
             continue
 
@@ -477,13 +484,12 @@ def _compare_outputs(
         status = "PASS" if close and nan_count == 0 else "FAIL"
         if nan_count > 0:
             details.append(
-                f"  arg_{idx}: {status} ({nan_count:,} NaN element(s) in diff "
-                f"out of {diff.size:,})"
+                f"  arg_{idx}: {status} ({nan_count:,} NaN element(s) in diff out of {diff.size:,})"
             )
             details.append(
-                f"           Note: NaN values typically indicate uninitialized "
-                f"device memory, half-precision overflow, or buffer size "
-                f"misinterpretation (wrong dtype)."
+                "           Note: NaN values typically indicate uninitialized "
+                "device memory, half-precision overflow, or buffer size "
+                "misinterpretation (wrong dtype)."
             )
         else:
             details.append(f"  arg_{idx}: {status} (max_error={error:.2e}, atol={atol})")
@@ -534,7 +540,7 @@ def _infer_numpy_dtype_from_torch(torch_dtype_str: str) -> np.dtype:
         "torch.float16": np.float16,
         "torch.float32": np.float32,
         "torch.float64": np.float64,
-        "torch.bfloat16": np.uint16,   # raw bits; no native numpy bf16
+        "torch.bfloat16": np.uint16,  # raw bits; no native numpy bf16
         "torch.int8": np.int8,
         "torch.int16": np.int16,
         "torch.int32": np.int32,

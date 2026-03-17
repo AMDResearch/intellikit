@@ -54,16 +54,16 @@ def extract_hsaco_from_binary(
         try:
             proc = subprocess.run(
                 ["roc-obj-extract", "-o", tmpdir, binary_path],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             logger.warning("roc-obj-extract failed: %s", e)
             return False
 
         if proc.returncode != 0:
-            logger.warning(
-                "roc-obj-extract exit %d: %s", proc.returncode, proc.stderr
-            )
+            logger.warning("roc-obj-extract exit %d: %s", proc.returncode, proc.stderr)
             return False
 
         # Find .co files — prefer ones matching the target arch
@@ -78,7 +78,9 @@ def extract_hsaco_from_binary(
 
         # Search for the code object containing our kernel symbol
         best = _find_matching_code_object(
-            co_files, kernel_symbol, gpu_arch,
+            co_files,
+            kernel_symbol,
+            gpu_arch,
         )
         if best:
             shutil.copy2(best, output_path)
@@ -116,14 +118,16 @@ def _find_matching_code_object(
     # Sort: arch-matching files first
     co_files_sorted = sorted(
         co_files,
-        key=lambda f: (0 if gpu_arch in os.path.basename(f) else 1),
+        key=lambda f: 0 if gpu_arch in os.path.basename(f) else 1,
     )
 
     for co in co_files_sorted:
         try:
             proc = subprocess.run(
                 [nm_cmd, co],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if proc.returncode == 0 and kernel_symbol in proc.stdout:
                 return co

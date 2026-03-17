@@ -39,11 +39,13 @@ class TestRunExtract:
     @patch("kerncap.extract.run_capture")
     def test_cmd_as_list(self, mock_capture, mock_generate):
         mock_generate.return_value = ExtractResult(
-            output_dir="/tmp/out", capture_dir="/tmp/out/capture",
+            output_dir="/tmp/out",
+            capture_dir="/tmp/out/capture",
         )
 
         run_extract(
-            kernel_name="kern", cmd=["./app", "--flag"],
+            kernel_name="kern",
+            cmd=["./app", "--flag"],
         )
 
         assert mock_capture.call_args.kwargs["cmd"] == ["./app", "--flag"]
@@ -52,7 +54,8 @@ class TestRunExtract:
     @patch("kerncap.extract.run_capture")
     def test_default_output_dir(self, mock_capture, mock_generate):
         mock_generate.return_value = ExtractResult(
-            output_dir="./isolated/kern", capture_dir="./isolated/kern/capture",
+            output_dir="./isolated/kern",
+            capture_dir="./isolated/kern/capture",
         )
 
         run_extract(kernel_name="kern", cmd=["./app"])
@@ -64,7 +67,8 @@ class TestRunExtract:
     @patch("kerncap.extract.run_capture")
     def test_custom_output_dir(self, mock_capture, mock_generate):
         mock_generate.return_value = ExtractResult(
-            output_dir="/tmp/custom", capture_dir="/tmp/custom/capture",
+            output_dir="/tmp/custom",
+            capture_dir="/tmp/custom/capture",
         )
 
         run_extract(kernel_name="kern", cmd=["./app"], output="/tmp/custom")
@@ -75,7 +79,8 @@ class TestRunExtract:
     @patch("kerncap.extract.run_capture")
     def test_dispatch_forwarded(self, mock_capture, mock_generate):
         mock_generate.return_value = ExtractResult(
-            output_dir="/tmp/out", capture_dir="/tmp/out/capture",
+            output_dir="/tmp/out",
+            capture_dir="/tmp/out/capture",
         )
 
         run_extract(kernel_name="kern", cmd=["./app"], dispatch=5)
@@ -86,11 +91,15 @@ class TestRunExtract:
     @patch("kerncap.extract.run_capture")
     @patch("kerncap.extract.detect_language")
     def test_unknown_language_falls_back_to_none(
-        self, mock_detect, mock_capture, mock_generate,
+        self,
+        mock_detect,
+        mock_capture,
+        mock_generate,
     ):
         mock_detect.return_value = "unknown"
         mock_generate.return_value = ExtractResult(
-            output_dir="/tmp/out", capture_dir="/tmp/out/capture",
+            output_dir="/tmp/out",
+            capture_dir="/tmp/out/capture",
         )
 
         run_extract(kernel_name="kern", cmd=["./app"], source_dir="./src")
@@ -101,12 +110,15 @@ class TestRunExtract:
     @patch("kerncap.extract.run_capture")
     def test_explicit_language_skips_detection(self, mock_capture, mock_generate):
         mock_generate.return_value = ExtractResult(
-            output_dir="/tmp/out", capture_dir="/tmp/out/capture",
+            output_dir="/tmp/out",
+            capture_dir="/tmp/out/capture",
         )
 
         run_extract(
-            kernel_name="kern", cmd=["./app"],
-            source_dir="./src", language="triton",
+            kernel_name="kern",
+            cmd=["./app"],
+            source_dir="./src",
+            language="triton",
         )
 
         assert mock_capture.call_args.kwargs["language"] == "triton"
@@ -128,7 +140,12 @@ class TestGenerateReproducer:
 
         with pytest.raises(FileNotFoundError, match="No dispatch.json"):
             _generate_reproducer(
-                "kern", capture_dir, str(tmp_path), None, None, [],
+                "kern",
+                capture_dir,
+                str(tmp_path),
+                None,
+                None,
+                [],
             )
 
     @patch("kerncap.extract._generate_triton")
@@ -140,13 +157,19 @@ class TestGenerateReproducer:
         )
 
         expected = ExtractResult(
-            output_dir=str(tmp_path), capture_dir=str(capture_dir),
+            output_dir=str(tmp_path),
+            capture_dir=str(capture_dir),
             language="triton",
         )
         mock_triton.return_value = expected
 
         result = _generate_reproducer(
-            "kern", str(capture_dir), str(tmp_path), "./src", None, [],
+            "kern",
+            str(capture_dir),
+            str(tmp_path),
+            "./src",
+            None,
+            [],
         )
 
         mock_triton.assert_called_once()
@@ -156,18 +179,22 @@ class TestGenerateReproducer:
     def test_routes_to_hsaco_by_default(self, mock_hsaco, tmp_path):
         capture_dir = tmp_path / "capture"
         capture_dir.mkdir()
-        (capture_dir / "dispatch.json").write_text(
-            json.dumps({"kernel_name": "kern"})
-        )
+        (capture_dir / "dispatch.json").write_text(json.dumps({"kernel_name": "kern"}))
 
         expected = ExtractResult(
-            output_dir=str(tmp_path), capture_dir=str(capture_dir),
+            output_dir=str(tmp_path),
+            capture_dir=str(capture_dir),
             language="hip",
         )
         mock_hsaco.return_value = expected
 
         result = _generate_reproducer(
-            "kern", str(capture_dir), str(tmp_path), None, None, [],
+            "kern",
+            str(capture_dir),
+            str(tmp_path),
+            None,
+            None,
+            [],
         )
 
         mock_hsaco.assert_called_once()
@@ -181,12 +208,18 @@ class TestGenerateReproducer:
         )
 
         mock_triton.return_value = ExtractResult(
-            output_dir=str(tmp_path), capture_dir=str(capture_dir),
+            output_dir=str(tmp_path),
+            capture_dir=str(capture_dir),
             language="triton",
         )
 
         _generate_reproducer(
-            "kern", str(capture_dir), str(tmp_path), "./src", "triton", [],
+            "kern",
+            str(capture_dir),
+            str(tmp_path),
+            "./src",
+            "triton",
+            [],
         )
 
         mock_triton.assert_called_once()
@@ -195,16 +228,20 @@ class TestGenerateReproducer:
     def test_reads_metadata_json_fallback(self, mock_hsaco, tmp_path):
         capture_dir = tmp_path / "capture"
         capture_dir.mkdir()
-        (capture_dir / "metadata.json").write_text(
-            json.dumps({"kernel_name": "kern"})
-        )
+        (capture_dir / "metadata.json").write_text(json.dumps({"kernel_name": "kern"}))
 
         mock_hsaco.return_value = ExtractResult(
-            output_dir=str(tmp_path), capture_dir=str(capture_dir),
+            output_dir=str(tmp_path),
+            capture_dir=str(capture_dir),
         )
 
         _generate_reproducer(
-            "kern", str(capture_dir), str(tmp_path), None, None, [],
+            "kern",
+            str(capture_dir),
+            str(tmp_path),
+            None,
+            None,
+            [],
         )
 
         mock_hsaco.assert_called_once()

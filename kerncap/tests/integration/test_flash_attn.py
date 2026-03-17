@@ -117,19 +117,33 @@ class TestFlashAttentionTriton:
         # Run in Docker; stream output so you can see progress (e.g. pip, build)
         result = run_streaming(
             [
-                "docker", "run", "--rm", "--init",
-                "--device=/dev/kfd", "--device=/dev/dri",
-                "--security-opt", "seccomp=unconfined",
-                "--ipc=host", "--network=host", "--group-add", "video", "--cap-add=SYS_PTRACE",
-                "--privileged=true", "--shm-size=128GB",
-                "-v", f"{kerncap_src}:/workspace/kerncap:ro",
-                "-v", f"{str(tmp_path)}:/workspace/test",
+                "docker",
+                "run",
+                "--rm",
+                "--init",
+                "--device=/dev/kfd",
+                "--device=/dev/dri",
+                "--security-opt",
+                "seccomp=unconfined",
+                "--ipc=host",
+                "--network=host",
+                "--group-add",
+                "video",
+                "--cap-add=SYS_PTRACE",
+                "--privileged=true",
+                "--shm-size=128GB",
+                "-v",
+                f"{kerncap_src}:/workspace/kerncap:ro",
+                "-v",
+                f"{str(tmp_path)}:/workspace/test",
                 CONTAINER_IMAGE,
-                "python3", "/workspace/test/run_test.py",
+                "python3",
+                "/workspace/test/run_test.py",
             ],
             timeout=1200,  # flash-attn builds from source in-container; first run can be 15–20+ min
         )
 
-        assert result.returncode == 0, \
+        assert result.returncode == 0, (
             f"Container test failed (exit {result.returncode}):\n{result.stderr}"
+        )
         assert "PASS" in result.stdout
