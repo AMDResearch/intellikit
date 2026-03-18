@@ -229,6 +229,8 @@ Default HTTP paths per server:
 | `nexus-mcp` | `/nexus` |
 | `uprof-profiler-mcp` | `/uprof_mcp` |
 | `hip-compiler-mcp` | `/rocm_mcp/hip_compiler` |
+| `hip-docs-mcp` | `/rocm_mcp/hip_docs` |
+| `rocminfo-mcp` | `/rocm_mcp/rocminfo` |
 
 ### Testing MCP Servers Locally
 
