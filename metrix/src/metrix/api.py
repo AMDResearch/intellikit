@@ -27,6 +27,14 @@ class KernelResults:
     name: str
     duration_us: Statistics
     metrics: Dict[str, Statistics]
+    dispatch_count: int = 1
+
+    @property
+    def avg_time_us(self) -> float:
+        """Average per-dispatch kernel duration in microseconds."""
+        if self.duration_us is None:
+            return 0.0
+        return self.duration_us.avg / max(self.dispatch_count, 1)
 
 
 @dataclass
@@ -187,9 +195,17 @@ class Metrix:
                 except Exception as e:
                     logger.warning(f"Failed to compute {metric} for {dispatch_key}: {e}")
 
+            # Extract per-run dispatch count (set by _merge_dispatches)
+            dispatch_count = self.backend._aggregated[dispatch_key].get("_num_dispatches", 1)
+            if not isinstance(dispatch_count, (int, float)):
+                dispatch_count = 1
+
             # Create clean result object
             kernel_result = KernelResults(
-                name=dispatch_key, duration_us=duration, metrics=computed_metrics
+                name=dispatch_key,
+                duration_us=duration,
+                metrics=computed_metrics,
+                dispatch_count=int(dispatch_count),
             )
             kernel_results.append(kernel_result)
 
