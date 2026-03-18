@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import csv
 import os
+import yaml
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -23,6 +24,7 @@ class ROCProfV3Wrapper:
     - Robust CSV parsing (using csv module, NOT regex)
     - Proper error handling
     - Multi-pass profiling when counter limit is exceeded
+    - Uses --input with YAML
     """
 
     # Maximum counters per pass (conservative limit for gfx942/MI300)
@@ -51,6 +53,21 @@ class ROCProfV3Wrapper:
         except subprocess.TimeoutExpired:
             raise RuntimeError("rocprofv3 --help timed out after 5 seconds")
 
+    @staticmethod
+    def _needs_extra_counters(counter_defs_file: Path) -> bool:
+        """Check if counter_defs defines hardware-level counters (block+event)
+        that require --extra-counters for rocprofv3 to recognize them."""
+        try:
+            with open(counter_defs_file, "r") as f:
+                data = yaml.safe_load(f)
+            for counter in data.get("rocprofiler-sdk", {}).get("counters", []):
+                for defn in counter.get("definitions", []):
+                    if "block" in defn and "event" in defn:
+                        return True
+            return False
+        except Exception:
+            return False
+
     def profile(
         self,
         command: str,
@@ -58,6 +75,9 @@ class ROCProfV3Wrapper:
         output_dir: Optional[Path] = None,
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
+        kernel_iteration_range: Optional[str] = None,
+        extra_counters_path: Optional[Path] = None,
+        arch: Optional[str] = None,
     ) -> List[ProfileResult]:
         """
         Profile a command with specified counters (single pass).
@@ -78,6 +98,9 @@ class ROCProfV3Wrapper:
                   ``".*attention.*"``   - kernels whose names contain "attention"
                   ``"gemm|attention"``  - kernels matching either pattern
             cwd: Optional working directory
+            kernel_iteration_range: Optional iteration range (e.g., "[1,5]" to profile iterations 1-5)
+            extra_counters_path: Path to YAML with custom counter definitions (rocprofiler-sdk: section)
+            arch: GPU architecture (e.g., "gfx1201") to filter counter definitions
 
         Returns:
             List of ProfileResult objects, one per dispatch
@@ -96,17 +119,47 @@ class ROCProfV3Wrapper:
             output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
+            # Find or use provided custom counter definitions
+            counter_defs_file = extra_counters_path
+            if counter_defs_file is None:
+                backends_dir = Path(__file__).resolve().parent.parent / "backends"
+                if backends_dir.exists():
+                    counter_defs_files = list(backends_dir.glob("counter_defs*.yaml"))
+                else:
+                    counter_defs_files = []
+
+                if counter_defs_files:
+                    counter_defs_file = counter_defs_files[0]
+                    logger.debug(f"Using custom counter definitions: {counter_defs_file.name}")
+
+            # Create rocprofv3 input YAML file (jobs section + rocprofiler-sdk section)
+            input_yaml = self._create_input_yaml(
+                counters,
+                output_dir,
+                kernel_filter,
+                kernel_iteration_range,
+                counter_defs_file,
+                arch=arch,
+            )
+
             # Build rocprofv3 command
             prof_cmd = ["rocprofv3"]
 
-            if counters:
-                # Counter collection mode
-                prof_cmd.extend(["--pmc", ",".join(counters)])
-            else:
-                # Timing-only mode: use kernel tracing
+            if not counters:
+                # Timing-only mode: --kernel-trace for dispatch timestamps.
+                # Still use --input YAML for kernel_include_regex filter + output config.
                 prof_cmd.append("--kernel-trace")
 
-            prof_cmd.extend(["-d", str(output_dir), "--output-format", "csv"])
+            # Use --input for the combined YAML file
+            prof_cmd.extend(["--input", str(input_yaml)])
+
+            # Pass custom counter definitions via --extra-counters only if the
+            # file defines hardware-level counters (block+event).  Files that
+            # only contain Python-evaluated expressions don't need this flag
+            # because their underlying raw counters are already built-in.
+            if counter_defs_file and self._needs_extra_counters(counter_defs_file):
+                prof_cmd.extend(["--extra-counters", str(counter_defs_file)])
+                logger.debug(f"Using --extra-counters: {counter_defs_file.name}")
 
             # Add kernel filter if specified
             if kernel_filter:
@@ -145,8 +198,8 @@ class ROCProfV3Wrapper:
                 logger.error(f"stdout: {result.stdout}")
                 logger.error(f"stderr: {result.stderr}")
                 raise RuntimeError(
-                    f"rocprofv3 failed with exit code {result.returncode}\\n"
-                    f"stdout: {result.stdout}\\n"
+                    f"rocprofv3 failed with exit code {result.returncode}\n"
+                    f"stdout: {result.stdout}\n"
                     f"stderr: {result.stderr}"
                 )
 
@@ -160,6 +213,16 @@ class ROCProfV3Wrapper:
             logger.debug(f"Parsing CSV files from {output_dir}")
             results = self._parse_output(output_dir)
             logger.info(f"Successfully parsed {len(results)} kernel dispatch(es)")
+
+            # rocprofv3 --kernel-trace ignores kernel_include_regex, so filter here
+            if not counters and kernel_filter and results:
+                pat = re.compile(kernel_filter)
+                before = len(results)
+                results = [r for r in results if pat.search(r.kernel_name)]
+                if len(results) < before:
+                    logger.debug(
+                        f"Filtered {before} -> {len(results)} dispatches by kernel_filter={kernel_filter!r}"
+                    )
 
             # Post-filter only in timing-only mode:
             # - For counter collection, rocprofv3 already applies kernel filters to
@@ -191,19 +254,100 @@ class ROCProfV3Wrapper:
 
                 shutil.rmtree(output_dir, ignore_errors=True)
 
-    def _create_input_file(self, counters: List[str], output_dir: Path) -> Path:
+    def _create_input_yaml(
+        self,
+        counters: List[str],
+        output_dir: Path,
+        kernel_filter: Optional[str] = None,
+        kernel_iteration_range: Optional[str] = None,
+        counter_defs_file: Optional[Path] = None,
+        arch: Optional[str] = None,
+    ) -> Path:
         """
-        Create rocprofv3 input file
-        Format: Simple text file with counter names
+        Create rocprofv3 input YAML file with jobs section + rocprofiler-sdk section.
+
+
+        Args:
+            counters: List of counter names to collect
+            output_dir: Output directory
+            kernel_filter: Optional kernel filter regex
+            kernel_iteration_range: Optional iteration range
+            counter_defs_file: Optional path to counter definitions YAML
+            arch: GPU architecture to filter counter definitions by
+
+        Returns:
+            Path to created input YAML file
         """
-        input_file = output_dir / "input.txt"
+        input_file = output_dir / "rocprof_input.yaml"
 
-        # rocprofv3 input format: one counter per line, or comma-separated
-        # Let's use comma-separated on one line
-        content = "pmc: " + " ".join(counters) + "\\n"
+        # Build the YAML structure
+        yaml_content = {}
 
+        # Load custom counter definitions if available
+        if counter_defs_file and counter_defs_file.exists():
+            logger.debug(f"Loading counter definitions from {counter_defs_file}")
+            with open(counter_defs_file, "r") as f:
+                counter_defs = yaml.safe_load(f)
+                if "rocprofiler-sdk" in counter_defs:
+                    sdk_section = counter_defs["rocprofiler-sdk"].copy()
+                    if "counters" in sdk_section:
+                        filtered_counters = []
+                        for counter in sdk_section["counters"]:
+                            should_include = False
+                            if "definitions" in counter:
+                                arch_matched_defs = []
+                                for defn in counter["definitions"]:
+                                    if arch:
+                                        archs = defn.get("architectures", [])
+                                        if archs and arch not in archs:
+                                            continue
+                                        # Strip non-matching architectures so rocprofv3
+                                        # doesn't try to build ASTs for other GPUs
+                                        if archs and len(archs) > 1:
+                                            defn = dict(defn)
+                                            defn["architectures"] = [arch]
+                                    if "expression" in defn or (
+                                        "block" in defn and "event" in defn
+                                    ):
+                                        should_include = True
+                                        arch_matched_defs.append(defn)
+                                if should_include and arch_matched_defs:
+                                    counter = dict(counter)
+                                    counter["definitions"] = arch_matched_defs
+                            if should_include:
+                                filtered_counters.append(counter)
+                        sdk_section["counters"] = filtered_counters
+                    yaml_content["rocprofiler-sdk"] = sdk_section
+                    logger.debug(
+                        f"Loaded {len(sdk_section.get('counters', []))} counter definitions for arch={arch} (excluded builtin and non-matching counters)"
+                    )
+
+        # Create jobs section
+        job = {
+            "kernel_include_regex": kernel_filter if kernel_filter else ".*",
+            "output_file": "out",
+            "output_directory": str(output_dir),
+            "output_format": ["csv", "json"],
+            "truncate_kernels": True,
+        }
+
+        if kernel_iteration_range:
+            job["kernel_iteration_range"] = kernel_iteration_range
+
+        if counters:
+            job["pmc"] = counters
+        else:
+            # Timing-only mode: empty pmc list (rocprofv3 will just trace kernels)
+            job["pmc"] = []
+
+        yaml_content["jobs"] = [job]
+
+        # Write YAML file
         with open(input_file, "w") as f:
-            f.write(content)
+            yaml.dump(yaml_content, f, default_flow_style=False, sort_keys=False)
+
+        logger.debug(f"Created input YAML: {input_file}")
+        logger.debug(f"YAML content:\n{yaml.dump(yaml_content, default_flow_style=False)[:500]}")
 
         return input_file
 

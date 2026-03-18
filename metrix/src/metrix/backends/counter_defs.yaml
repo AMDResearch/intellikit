@@ -1,0 +1,14 @@
+# Public counter definitions for IntelliKit metrix
+# These use counters available via rocprofv3 --list-avail (no proprietary data)
+
+rocprofiler-sdk:
+  counters:
+    - name: GPU_UTILIZATION
+      definitions:
+        - expression: (GRBM_GUI_ACTIVE / GRBM_COUNT) * 100
+          architectures: [gfx1201, gfx1151]
+
+    - name: L2_HIT_RATE
+      definitions:
+        - expression: (GL2C_HIT_sum / (GL2C_HIT_sum + GL2C_MISS_sum)) * 100
+          architectures: [gfx1201, gfx1151]

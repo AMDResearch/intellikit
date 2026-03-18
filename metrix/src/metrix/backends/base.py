@@ -19,24 +19,24 @@ class DeviceSpecs:
     name: str
 
     # Compute specs
-    num_cu: int
-    max_waves_per_cu: int
-    wavefront_size: int
-    base_clock_mhz: float  # MHz (base GPU clock frequency)
+    num_cu: int = 0
+    max_waves_per_cu: int = 0
+    wavefront_size: int = 32
+    base_clock_mhz: float = 0.0
 
     # Memory specs
-    hbm_bandwidth_gbs: float  # GB/s
-    l2_bandwidth_gbs: float  # GB/s
-    l2_size_mb: float  # MB
-    lds_size_per_cu_kb: float  # KB
+    hbm_bandwidth_gbs: float = 0.0
+    l2_bandwidth_gbs: float = 0.0
+    l2_size_mb: float = 0.0
+    lds_size_per_cu_kb: float = 0.0
 
     # Compute capabilities
-    fp32_tflops: float
-    fp64_tflops: float
-    int8_tops: float
+    fp32_tflops: float = 0.0
+    fp64_tflops: float = 0.0
+    int8_tops: float = 0.0
 
     # Clock speeds
-    boost_clock_mhz: int
+    boost_clock_mhz: int = 0
 
 
 @dataclass
@@ -85,6 +85,7 @@ class CounterBackend(ABC):
         self._metrics = {}
         self._unsupported_metrics = {}
         self._discover_metrics()
+        self._load_yaml_metrics_if_available()  # Load YAML metrics if available (takes precedence)
         self._raw_data = {}  # Current raw counter values (for metric computation)
         self._aggregated = {}  # Aggregated results: {dispatch_key: {counter: Statistics}}
 
@@ -114,6 +115,148 @@ class CounterBackend(ABC):
         """Get list of all metrics supported by this backend"""
         return list(self._metrics.keys())
 
+    def _load_yaml_metrics_if_available(self):
+        """
+        Load metrics from counter_defs.yaml if it exists.
+        If YAML exists, it takes precedence over @metric decorators.
+        """
+        import yaml
+        import re
+        from pathlib import Path
+
+        arch = self.device_specs.arch
+        yaml_path = Path(__file__).parent / "counter_defs.yaml"
+
+        if not yaml_path.exists():
+            return
+
+        print(f"📄 Loading YAML-based metrics from {yaml_path.name}")
+
+        try:
+            with open(yaml_path, "r") as f:
+                yaml_data = yaml.safe_load(f)
+        except Exception as e:
+            print(f"⚠️  Failed to load YAML metrics: {e}")
+            return
+
+        if not yaml_data or "rocprofiler-sdk" not in yaml_data:
+            return
+
+        # Parse YAML and collect metrics matching this architecture first
+        yaml_metrics = {}
+        counters_section = yaml_data["rocprofiler-sdk"].get("counters", [])
+
+        for counter_def in counters_section:
+            counter_name = counter_def.get("name")
+            definitions = counter_def.get("definitions", [])
+
+            if not definitions:
+                continue
+
+            # Find the first definition that matches this architecture
+            definition = None
+            for defn in definitions:
+                archs = defn.get("architectures", [])
+                if not archs or arch in archs:
+                    definition = defn
+                    break
+
+            if definition is None:
+                continue
+
+            # Register counters: derived, reduce(), and built-in
+            if "expression" in definition:
+                expression = definition["expression"]
+
+                # Check if this is a simple reduce() expression
+                import re
+
+                reduce_match = re.match(
+                    r"^reduce\([A-Z_0-9]+,\s*(?:sum|max|min)\)$", expression.strip()
+                )
+
+                if reduce_match:
+                    yaml_metrics[counter_name] = {
+                        "counters": [counter_name],
+                        "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
+                    }
+                else:
+                    required_counters = self._extract_counters_from_expression(expression)
+                    compute_fn = self._create_yaml_compute_function(expression, counter_name)
+                    yaml_metrics[counter_name] = {
+                        "counters": required_counters,
+                        "compute": compute_fn,
+                    }
+            else:
+                yaml_metrics[counter_name] = {
+                    "counters": [counter_name],
+                    "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
+                }
+
+        if not yaml_metrics:
+            return
+
+        # YAML metrics found for this arch -- replace @metric-based metrics
+        self._metrics.clear()
+        self._unsupported_metrics.clear()
+        self._metrics.update(yaml_metrics)
+        print(f"✓ Loaded {len(self._metrics)} YAML-based metrics for {arch}")
+
+    def _extract_counters_from_expression(self, expression: str) -> List[str]:
+        """Extract counter names from YAML expression"""
+        import re
+
+        counters = set()
+
+        # Extract from reduce() calls
+        for match in re.finditer(r"reduce\(([A-Z_0-9]+),\s*(?:sum|max|min)\)", expression):
+            counters.add(match.group(1))
+
+        # Extract standalone counter names
+        for match in re.finditer(r"\b([A-Z][A-Z_0-9]*(?:_sum)?)\b", expression):
+            counter_name = match.group(1)
+            if counter_name not in ["CU_NUM"]:
+                counters.add(counter_name)
+
+        return sorted(list(counters))
+
+    def _create_yaml_compute_function(self, expression: str, metric_name: str):
+        """Create a callable that evaluates YAML expression"""
+        import re
+
+        def compute():
+            namespace = dict(self._raw_data)
+            namespace["CU_NUM"] = self.device_specs.num_cu
+
+            # Replace reduce(X, op) with X_op
+            processed_expr = re.sub(
+                r"reduce\(([A-Z_0-9]+),\s*(sum|max|min)\)", r"\1_\2", expression
+            )
+
+            # Add safe math functions
+            import math
+
+            namespace.update(
+                {
+                    "min": min,
+                    "max": max,
+                    "abs": abs,
+                    "sqrt": math.sqrt,
+                    "log": math.log,
+                    "exp": math.exp,
+                }
+            )
+
+            try:
+                result = eval(processed_expr, {"__builtins__": {}}, namespace)
+                return float(result) if result is not None else 0.0
+            except (ZeroDivisionError, KeyError, NameError, TypeError):
+                return 0.0
+
+        compute._yaml_expression = expression
+        compute._metric_name = metric_name
+        return compute
+
     def get_metric_counters(self, metric: str) -> List[str]:
         """
         Get the actual hardware counter names required for a specific metric.
@@ -126,9 +269,6 @@ class CounterBackend(ABC):
 
         Returns:
             List of hardware counter names required for this metric
-
-        Raises:
-            ValueError: If metric is unknown
         """
         if metric not in self._metrics:
             available = ", ".join(self.get_available_metrics())
@@ -144,9 +284,6 @@ class CounterBackend(ABC):
 
         Returns:
             List of unique hardware counter names
-
-        Raises:
-            ValueError: If any metric is unknown
         """
         counters = set()
         # duration_us comes from profiler timestamps, not rocprof - do not request it
@@ -203,7 +340,7 @@ class CounterBackend(ABC):
         if not counters:
             return [[]]
 
-        max_per_pass = 14  # Conservative default for generic backends
+        max_per_pass = 6
         if len(counters) <= max_per_pass:
             return [counters]
 
@@ -213,6 +350,106 @@ class CounterBackend(ABC):
 
         logger.info(f"Splitting {len(counters)} counters into {len(passes)} simple passes")
         return passes
+
+    def _compute_derived_metrics(self, kernel_results: dict) -> dict:
+        """
+        Compute derived metrics for all kernels after aggregation.
+
+        This is needed when using category-based batching, where derived metrics
+        (like occupancy, bandwidth utilization, hit rates) depend on counters
+        from multiple categories collected in separate passes.
+        """
+        from ..logger import logger
+
+        @dataclass
+        class MetricStats:
+            min: float
+            max: float
+            avg: float
+            count: int
+
+        for kernel_name, kernel_data in kernel_results.items():
+            # Get all available metrics for this backend
+            available_metrics = self.get_available_metrics()
+
+            # Try to compute each derived metric
+            for metric_name in available_metrics:
+                # Skip if already computed or if it's a raw counter
+                if metric_name in kernel_data:
+                    continue
+
+                # Skip unsupported metrics
+                if metric_name in self._unsupported_metrics:
+                    continue
+
+                # Get the metric function
+                metric_info = self._metrics.get(metric_name)
+                if not metric_info:
+                    continue
+
+                # Extract counters and function from metric_info dict
+                if isinstance(metric_info, dict):
+                    required_params = metric_info.get("counters", [])
+                    metric_func = metric_info.get("compute")
+                    if not metric_func or not required_params:
+                        continue
+                else:
+                    # Old-style: metric_info is the function directly
+                    metric_func = metric_info
+                    if hasattr(metric_func, "_metric_counters"):
+                        required_params = metric_func._metric_counters
+                    elif hasattr(metric_func, "_original_func"):
+                        import inspect
+
+                        sig = inspect.signature(metric_func._original_func)
+                        required_params = [p for p in sig.parameters.keys() if p != "self"]
+                    else:
+                        continue
+
+                # Check if all required counters are available
+                missing_counters = [p for p in required_params if p not in kernel_data]
+                if missing_counters:
+                    continue  # Can't compute this metric
+
+                try:
+                    # Extract counter values (use avg across replays)
+                    counter_values = {param: kernel_data[param].avg for param in required_params}
+
+                    # Call the metric function
+                    # If it has _original_func, call that directly with counter_values
+                    # Otherwise, call the function itself (it will read from self._raw_data)
+                    if hasattr(metric_func, "_original_func"):
+                        derived_value = metric_func._original_func(self, **counter_values)
+                    else:
+                        # For dict-style metrics, the function needs self._raw_data set
+                        # Save original _raw_data
+                        old_raw_data = getattr(self, "_raw_data", None)
+                        try:
+                            # Temporarily set _raw_data to our counter values
+                            self._raw_data = counter_values
+                            derived_value = metric_func()
+                        finally:
+                            # Restore original _raw_data
+                            if old_raw_data is not None:
+                                self._raw_data = old_raw_data
+                            elif hasattr(self, "_raw_data"):
+                                delattr(self, "_raw_data")
+
+                    # Add to kernel_data as a MetricStats object
+                    # (use the same value for min/max/avg since it's derived from averages)
+                    kernel_data[metric_name] = MetricStats(
+                        min=derived_value,
+                        max=derived_value,
+                        avg=derived_value,
+                        count=kernel_data[required_params[0]].count,  # Use count from first counter
+                    )
+
+                except Exception as e:
+                    # If computation fails, just skip this metric
+                    logger.debug(f"Could not compute {metric_name} for {kernel_name}: {e}")
+                    continue
+
+        return kernel_results
 
     def _split_counters_into_passes(self, counters: List[str]) -> List[List[str]]:
         """
@@ -230,11 +467,12 @@ class CounterBackend(ABC):
         self,
         command: str,
         metrics: List[str],
-        num_replays: int = 10,
+        num_replays: int = 5,
         aggregate_by_kernel: bool = False,
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = 0,
+        use_kernel_iteration_range: bool = False,  # Disabled: rocprofv3 hangs with multiple counter blocks
     ):
         """
         Profile command with two-level aggregation and multi-pass support
@@ -261,6 +499,116 @@ class CounterBackend(ABC):
         # Get counters needed
         counters = self.get_required_counters(metrics)
 
+        # Split metrics into category-based batches to avoid rocprofv3 hangs
+        # Group by category (memory.*, proprietary.*, etc.) for better organization
+        MAX_METRICS_PER_BATCH = 6
+        if len(metrics) > MAX_METRICS_PER_BATCH:
+            logger.info(f"Grouping {len(metrics)} metrics by category for efficient profiling")
+
+            # Group metrics by category (prefix before the dot)
+            from collections import defaultdict
+
+            category_groups = defaultdict(list)
+            for metric in metrics:
+                category = metric.split(".")[0] if "." in metric else "other"
+                category_groups[category].append(metric)
+
+            # Split large categories into sub-batches
+            batches = []
+            for category, category_metrics in sorted(category_groups.items()):
+                if len(category_metrics) <= MAX_METRICS_PER_BATCH:
+                    batches.append((category, category_metrics))
+                else:
+                    # Split large category into chunks
+                    for i in range(0, len(category_metrics), MAX_METRICS_PER_BATCH):
+                        chunk = category_metrics[i : i + MAX_METRICS_PER_BATCH]
+                        batch_label = f"{category} [{i // MAX_METRICS_PER_BATCH + 1}]"
+                        batches.append((batch_label, chunk))
+
+            all_kernel_results = {}
+            total_batches = len(batches)
+
+            # Process each batch
+            for batch_num, (batch_label, batch_metrics) in enumerate(batches, 1):
+                sep = "=" * 60
+                print(f"\n{sep}")
+                print(
+                    f"📊 Profiling {batch_label} ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
+                )
+                sep = "=" * 60
+                print(f"{sep}")
+                logger.info(
+                    f"Profiling {batch_label} metrics ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
+                )
+
+                # Recursively call profile with batch (won't recurse since len <= MAX_METRICS_PER_BATCH)
+                batch_result = self.profile(
+                    command=command,
+                    metrics=batch_metrics,
+                    num_replays=num_replays,
+                    aggregate_by_kernel=aggregate_by_kernel,
+                    kernel_filter=kernel_filter,
+                    cwd=cwd,
+                    timeout_seconds=timeout_seconds,
+                    use_kernel_iteration_range=use_kernel_iteration_range,
+                )
+
+                # Merge batch results
+                for kernel_name, kernel_data in batch_result._aggregated.items():
+                    if kernel_name not in all_kernel_results:
+                        all_kernel_results[kernel_name] = {}
+                    all_kernel_results[kernel_name].update(kernel_data)
+
+                # Show results for this batch immediately (grouped by kernel)
+                print(f"\n✓ {batch_label} RESULTS:")
+                for kernel_name, kernel_data in batch_result._aggregated.items():
+                    print(f"  [{kernel_name}]")
+                    for metric_name, metric_stats in sorted(kernel_data.items()):
+                        if hasattr(metric_stats, "avg"):
+                            print(f"    {metric_name}: {metric_stats.avg:.2f}")
+
+            logger.info(f"✓ Collected all {len(metrics)} metrics across {total_batches} batches")
+
+            # Compute derived metrics now that all counters are aggregated
+            print(f"\n{'=' * 60}")
+            print("📊 Computing derived metrics...")
+            print("=" * 60)
+            all_kernel_results = self._compute_derived_metrics(all_kernel_results)
+            print("✓ Derived metrics computed\n")
+
+            # Display derived metrics
+            print("\n✓ DERIVED METRICS:")
+            for kernel_name, kernel_data in all_kernel_results.items():
+                derived_found = False
+                for metric_name in sorted(kernel_data.keys()):
+                    # Show metrics with common derived metric patterns
+                    if any(
+                        x in metric_name
+                        for x in ["percent", "rate", "efficiency", "utilization", "bandwidth"]
+                    ):
+                        if not derived_found:
+                            print(f"  {kernel_name}:")
+                            derived_found = True
+                        metric_stats = kernel_data[metric_name]
+                        if hasattr(metric_stats, "avg"):
+                            # Format as percentage if it's a percent metric
+                            if (
+                                "percent" in metric_name
+                                or "rate" in metric_name
+                                or "efficiency" in metric_name
+                                or "utilization" in metric_name
+                            ):
+                                print(f"    {metric_name}: {metric_stats.avg:.2f}%")
+                            else:
+                                print(f"    {metric_name}: {metric_stats.avg:.2f}")
+            print("")
+
+            # Return merged results - set our _aggregated and return self
+            self._aggregated = all_kernel_results
+            return self
+
+        # If metrics <= MAX_METRICS_PER_BATCH, continue with normal flow
+
         # Split counters into passes based on hardware compatibility
         counter_passes = self._split_counters_into_passes(counters)
 
@@ -273,20 +621,70 @@ class CounterBackend(ABC):
         all_results_by_kernel = {}
 
         for pass_num, pass_counters in enumerate(counter_passes, 1):
-            if len(counter_passes) > 1:
+            if True:  # Always show per-pass results
                 logger.info(
                     f"Pass {pass_num}/{len(counter_passes)}: collecting {len(pass_counters)} counters"
                 )
 
             pass_results = []
-            for replay_id in range(num_replays):
-                results = self._run_rocprof(
-                    command, pass_counters, kernel_filter, cwd=cwd, timeout_seconds=timeout_seconds
+
+            # Use kernel_iteration_range for faster profiling
+            if use_kernel_iteration_range:
+                iteration_range = f"[1,{num_replays}]"
+                logger.info(
+                    f"  Using kernel_iteration_range={iteration_range} (rocprofv3 internal iterations)"
                 )
-                # Tag with replay_id for debugging
+                results = self._run_rocprof(
+                    command,
+                    pass_counters,
+                    kernel_filter,
+                    cwd=cwd,
+                    timeout_seconds=timeout_seconds,
+                    kernel_iteration_range=iteration_range,
+                )
+                # Tag all results with replay_id 0 since rocprofv3 handles iterations
                 for r in results:
-                    r.run_id = replay_id
+                    r.run_id = 0
                 pass_results.extend(results)
+            else:
+                # Legacy mode: run application multiple times
+                for replay_id in range(num_replays):
+                    # Show progress every 10 replays or at key milestones
+                    if num_replays >= 20 and (
+                        replay_id == 0 or (replay_id + 1) % 10 == 0 or replay_id == num_replays - 1
+                    ):
+                        logger.info(f"  Replay {replay_id + 1}/{num_replays}...")
+
+                    results = self._run_rocprof(
+                        command,
+                        pass_counters,
+                        kernel_filter,
+                        cwd=cwd,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    # Tag with replay_id for debugging
+                    for r in results:
+                        r.run_id = replay_id
+                    pass_results.extend(results)
+
+            # Report per-pass statistics for agent visibility
+            if True:  # Always show per-pass results
+                # Compute statistics for this pass only
+                pass_stats = self._aggregate_by_kernel_then_runs(pass_results, num_replays)
+                logger.info(f"\n  Pass {pass_num}/{len(counter_passes)} Results:")
+                for kernel_name, counter_stats in pass_stats.items():
+                    logger.info(f"    {kernel_name}:")
+                    for counter_name, stats in counter_stats.items():
+                        if counter_name.startswith("_"):
+                            continue
+                        if counter_name == "duration_us":
+                            logger.info(
+                                f"      {counter_name}: {stats.avg:.2f} us (min={stats.min:.2f}, max={stats.max:.2f})"
+                            )
+                        else:
+                            logger.info(
+                                f"      {counter_name}: {stats.avg:,.0f} (min={stats.min:,.0f}, max={stats.max:,.0f})"
+                            )
 
             # Merge counter data from this pass with previous passes
             for result in pass_results:
@@ -328,10 +726,10 @@ class CounterBackend(ABC):
         if dispatch_key not in self._aggregated:
             raise KeyError(f"Unknown dispatch key: {dispatch_key}")
 
+        counter_stats = self._aggregated[dispatch_key]
+
         if metric not in self._metrics:
             raise ValueError(f"Unknown metric: {metric}")
-
-        counter_stats = self._aggregated[dispatch_key]
 
         # Compute metric using min/max/avg of each counter
         metric_min = self._compute_with_stat_type(metric, counter_stats, "min")
@@ -381,6 +779,7 @@ class CounterBackend(ABC):
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = 0,
+        kernel_iteration_range: Optional[str] = None,
     ) -> List[ProfileResult]:
         """
         Run rocprofv3 and return results
@@ -485,6 +884,11 @@ class CounterBackend(ABC):
                 count=len(duration_values),
             )
 
+        # Propagate per-run dispatch count (set by _merge_dispatches)
+        num_dispatches_vals = [getattr(d, "_num_dispatches", 1) for d in dispatches]
+        if num_dispatches_vals:
+            stats["_num_dispatches"] = round(sum(num_dispatches_vals) / len(num_dispatches_vals))
+
         return stats
 
     def _merge_dispatches(self, dispatches: List[ProfileResult]) -> ProfileResult:
@@ -500,7 +904,7 @@ class CounterBackend(ABC):
             dispatches: List of ProfileResult objects for same kernel
 
         Returns:
-            Single ProfileResult with summed counters and average duration_ns
+            Single ProfileResult with merged counters and average duration_ns
         """
         if not dispatches:
             raise ValueError("Cannot merge empty dispatch list")
@@ -509,15 +913,27 @@ class CounterBackend(ABC):
         merged_counters = defaultdict(float)
         total_duration = 0
 
+        _AVG_PATTERNS = ("Percent", "Hit", "Util", "Busy", "Occupancy", "Mean", "Rate", "Ratio")
+
+        def _should_average(name: str) -> bool:
+            return any(p in name for p in _AVG_PATTERNS)
+
+        non_summable_counts = defaultdict(int)
+
         for dispatch in dispatches:
             for counter, value in dispatch.counters.items():
                 merged_counters[counter] += value
+                if _should_average(counter):
+                    non_summable_counts[counter] += 1
             total_duration += dispatch.duration_ns
 
-        # Average duration so rate metrics (flops/time) use per-run time
+        for counter, count in non_summable_counts.items():
+            if count > 0:
+                merged_counters[counter] /= count
+
         avg_duration_ns = total_duration // len(dispatches)
 
-        return ProfileResult(
+        merged = ProfileResult(
             dispatch_id=first.dispatch_id,
             kernel_name=first.kernel_name,
             gpu_id=first.gpu_id,
@@ -530,3 +946,5 @@ class CounterBackend(ABC):
             accum_vgpr=first.accum_vgpr,
             sgpr=first.sgpr,
         )
+        merged._num_dispatches = len(dispatches)
+        return merged
