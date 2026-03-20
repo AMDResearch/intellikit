@@ -15,7 +15,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 
 from ._internal.codegen import generate_kernel_metadata
-from ._internal.ipc.communication import get_kern_arg_data, send_response
+from ._internal.ipc.communication import get_kern_arg_data
 from .exceptions import AccordoBuildError, AccordoProcessError, AccordoTimeoutError
 from .kernel_args import extract_kernel_arguments
 from .result import ArrayMismatch, ValidationResult
@@ -79,18 +79,22 @@ def _build_accordo(accordo_path: Path, parallel_jobs: int = 16) -> Path:
         raise AccordoBuildError(f"Accordo build failed: {str(e)}")
 
 
-def _validate_arrays(arr1: np.ndarray, arr2: np.ndarray, tolerance: float) -> bool:
+def _validate_arrays(
+    arr1: np.ndarray, arr2: np.ndarray, atol: float, rtol: float, equal_nan: bool
+) -> bool:
     """Validate two arrays are close within tolerance.
 
     Args:
             arr1: First array
             arr2: Second array
-            tolerance: Absolute tolerance
+            atol: Absolute tolerance
+            rtol: Relative tolerance
+            equal_nan: Whether NaN values compare equal
 
     Returns:
-            True if arrays match within tolerance
+            True if arrays match within tolerances
     """
-    return np.allclose(arr1, arr2, atol=tolerance, rtol=0)
+    return np.allclose(arr1, arr2, atol=atol, rtol=rtol, equal_nan=equal_nan)
 
 
 class Accordo:
@@ -280,12 +284,13 @@ class Accordo:
                 pass
 
             return Snapshot(
-                arrays=result_arrays,
+                arrays=result_arrays[0] if result_arrays else [],
                 execution_time_ms=execution_time_ms,
                 binary=binary,
                 working_directory=self.working_directory,
                 grid_size=grid,
                 block_size=block,
+                dispatch_arrays=result_arrays,
             )
         except _TimeoutException:
             signal.alarm(0)
@@ -308,26 +313,44 @@ class Accordo:
         self,
         reference_snapshot: Snapshot,
         optimized_snapshot: Snapshot,
-        tolerance: float = 1e-6,
+        tolerance: Optional[float] = 1e-6,
+        *,
+        atol: Optional[float] = None,
+        rtol: float = 0.0,
+        equal_nan: bool = False,
     ) -> ValidationResult:
         """Compare two snapshots and validate their arrays.
 
         Args:
                 reference_snapshot: Snapshot from reference binary
                 optimized_snapshot: Snapshot from optimized binary
-                tolerance: Absolute tolerance for array comparison
+                tolerance: Legacy absolute tolerance (backward-compatible alias for atol)
+                atol: Absolute tolerance for array comparison
+                rtol: Relative tolerance for array comparison
+                equal_nan: If True, NaN values compare equal (torch.isclose-like behavior)
 
         Returns:
                 ValidationResult with validation status and details
 
         Example:
-                >>> result = validator.compare_snapshots(ref, opt, tolerance=1e-4)
+                >>> result = validator.compare_snapshots(ref, opt, tolerance=1e-4, rtol=1e-5, equal_nan=False)
                 >>> if result.is_valid:
                 ...     print(f"✓ PASS: {result.num_arrays_validated} arrays matched")
         """
+        effective_atol = atol if atol is not None else (1e-6 if tolerance is None else tolerance)
+        reference_dispatches = (
+            reference_snapshot.dispatch_arrays
+            if reference_snapshot.dispatch_arrays is not None
+            else [reference_snapshot.arrays]
+        )
+        optimized_dispatches = (
+            optimized_snapshot.dispatch_arrays
+            if optimized_snapshot.dispatch_arrays is not None
+            else [optimized_snapshot.arrays]
+        )
         results = {
-            "reference": reference_snapshot.arrays,
-            "optimized": optimized_snapshot.arrays,
+            "reference": reference_dispatches,
+            "optimized": optimized_dispatches,
         }
         execution_times = {
             "reference": reference_snapshot.execution_time_ms,
@@ -337,7 +360,9 @@ class Accordo:
         return self._validate_results(
             results=results,
             execution_times=execution_times,
-            tolerance=tolerance,
+            atol=effective_atol,
+            rtol=rtol,
+            equal_nan=equal_nan,
         )
 
     def _run_instrumented_app(
@@ -346,7 +371,7 @@ class Accordo:
         label: str,
         extra_env: Optional[dict] = None,
         timeout_seconds: int = 30,
-    ) -> List[np.ndarray]:
+    ) -> List[List[np.ndarray]]:
         """Run an instrumented application and collect kernel argument data.
 
         Args:
@@ -356,7 +381,7 @@ class Accordo:
                 timeout_seconds: Timeout for IPC wait (used by get_kern_arg_data)
 
         Returns:
-                List of numpy arrays with kernel argument data
+                List of dispatch captures. Each dispatch is a list of output arrays.
         """
         timestamp = int(time.time() * 1000)
         pipe_name = f"/tmp/kernel_pipe_{timestamp}_{label}"
@@ -422,34 +447,38 @@ class Accordo:
                 pass
             raise
 
-        # Send completion response
-        send_response(pipe_name)
-
         return result_arrays
 
     def _validate_results(
         self,
         results: dict,
         execution_times: dict,
-        tolerance: float,
+        atol: float,
+        rtol: float,
+        equal_nan: bool,
     ) -> ValidationResult:
         """Validate results from reference and optimized runs.
 
         Args:
-                results: Dictionary with "reference" and "optimized" array lists
+                results: Dictionary with "reference" and "optimized" dispatch lists
                 execution_times: Execution times for each run
-                tolerance: Absolute tolerance for comparison
+                atol: Absolute tolerance for comparison
+                rtol: Relative tolerance for comparison
+                equal_nan: Whether NaN values compare equal
 
         Returns:
                 ValidationResult with validation status
         """
-        reference_arrays = results["reference"]
-        optimized_arrays = results["optimized"]
+        reference_dispatches = results["reference"]
+        optimized_dispatches = results["optimized"]
 
-        if len(reference_arrays) != len(optimized_arrays):
+        if len(reference_dispatches) != len(optimized_dispatches):
             return ValidationResult(
                 is_valid=False,
-                error_message=f"Array count mismatch: {len(reference_arrays)} vs {len(optimized_arrays)}",
+                error_message=(
+                    "Dispatch count mismatch: "
+                    f"{len(reference_dispatches)} vs {len(optimized_dispatches)}"
+                ),
                 execution_time_ms=execution_times,
             )
 
@@ -464,40 +493,58 @@ class Accordo:
             if "*" in arg_type and "const" not in arg_type
         ]
 
-        for array_idx, (ref_arr, opt_arr) in enumerate(zip(reference_arrays, optimized_arrays)):
-            # Map array index to the correct kernel argument index
-            kernel_arg_idx = output_arg_indices[array_idx]
-            arg_name, arg_type = self.kernel_args[kernel_arg_idx]
+        for dispatch_idx, (reference_arrays, optimized_arrays) in enumerate(
+            zip(reference_dispatches, optimized_dispatches)
+        ):
+            if len(reference_arrays) != len(optimized_arrays):
+                return ValidationResult(
+                    is_valid=False,
+                    error_message=(
+                        f"Array count mismatch at dispatch {dispatch_idx}: "
+                        f"{len(reference_arrays)} vs {len(optimized_arrays)}"
+                    ),
+                    execution_time_ms=execution_times,
+                )
+            for array_idx, (ref_arr, opt_arr) in enumerate(zip(reference_arrays, optimized_arrays)):
+                # Map array index to the correct kernel argument index
+                kernel_arg_idx = output_arg_indices[array_idx]
+                arg_name, arg_type = self.kernel_args[kernel_arg_idx]
+                matched_key = f"dispatch_{dispatch_idx}:{arg_name}"
 
-            if not _validate_arrays(ref_arr, opt_arr, tolerance):
-                # Array mismatch
-                diff = np.abs(ref_arr - opt_arr)
-                mismatch = ArrayMismatch(
-                    arg_index=kernel_arg_idx,  # Use kernel arg index, not array index
-                    arg_name=arg_name,
-                    arg_type=arg_type,
-                    max_difference=float(np.max(diff)),
-                    mean_difference=float(np.mean(diff)),
-                    reference_sample=ref_arr[:10] if len(ref_arr) > 10 else ref_arr,
-                    optimized_sample=opt_arr[:10] if len(opt_arr) > 10 else opt_arr,
-                )
-                mismatches.append(mismatch)
+                if not _validate_arrays(ref_arr, opt_arr, atol, rtol, equal_nan):
+                    # Array mismatch
+                    diff = np.abs(ref_arr - opt_arr)
+                    mismatch = ArrayMismatch(
+                        arg_index=kernel_arg_idx,  # Use kernel arg index, not array index
+                        arg_name=arg_name,
+                        arg_type=arg_type,
+                        max_difference=float(np.max(diff)),
+                        mean_difference=float(np.mean(diff)),
+                        reference_sample=ref_arr[:10] if len(ref_arr) > 10 else ref_arr,
+                        optimized_sample=opt_arr[:10] if len(opt_arr) > 10 else opt_arr,
+                        dispatch_index=dispatch_idx,
+                    )
+                    mismatches.append(mismatch)
 
-                logging.debug(
-                    f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - NOT close"
-                )
-                logging.debug(f"  Max difference: {mismatch.max_difference}")
-                logging.debug(f"  Mean difference: {mismatch.mean_difference}")
-            else:
-                # Array matched
-                matched_arrays[arg_name] = {
-                    "index": kernel_arg_idx,  # Use kernel arg index
-                    "type": arg_type,
-                    "size": len(ref_arr),
-                }
-                logging.debug(
-                    f"Output array {array_idx} (kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - MATCH"
-                )
+                    logging.debug(
+                        f"Dispatch {dispatch_idx} output array {array_idx} "
+                        f"(kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - NOT close"
+                    )
+                    logging.debug(f"  Max difference: {mismatch.max_difference}")
+                    logging.debug(f"  Mean difference: {mismatch.mean_difference}")
+                else:
+                    # Array matched
+                    matched_arrays[matched_key] = {
+                        "index": kernel_arg_idx,  # Use kernel arg index
+                        "type": arg_type,
+                        "size": len(ref_arr),
+                        "dispatch": dispatch_idx,
+                        "arg_name": arg_name,
+                    }
+                    logging.debug(
+                        f"Dispatch {dispatch_idx} output array {array_idx} "
+                        f"(kernel arg {kernel_arg_idx} '{arg_name}' {arg_type}) - MATCH"
+                    )
 
         # Determine overall success
         is_valid = len(mismatches) == 0

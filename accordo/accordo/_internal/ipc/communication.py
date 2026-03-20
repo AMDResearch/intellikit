@@ -103,6 +103,30 @@ def read_ipc_handles(args, ipc_file_name, sentinel_file=None):
     return handles, sizes
 
 
+def _read_ipc_records(ipc_file_name):
+    """Read all IPC records in-order from file as (handle_np, size) tuples."""
+    if not os.path.exists(ipc_file_name):
+        return []
+
+    with open(ipc_file_name, "rb") as file:
+        data = file.read()
+
+    records = []
+    messages = data.split(b"BEGIN\n")
+    for message in messages:
+        if b"END\n" not in message:
+            continue
+        content = message.split(b"END\n")[0]
+        if len(content) != 72:
+            continue
+        handle_data = content[:64]
+        size_data = content[64:72]
+        handle_np = np.frombuffer(handle_data, dtype=np.uint8)
+        size_value = int.from_bytes(size_data, byteorder="little")
+        records.append((handle_np, size_value))
+    return records
+
+
 def send_response(pipe_name):
     """Send completion response through named pipe."""
     with open(pipe_name, "w") as fifo:
@@ -123,7 +147,7 @@ def get_kern_arg_data(
             baseline_time_ms: Baseline execution time (for dynamic timeout)
 
     Returns:
-            List of NumPy arrays with argument data
+            List of dispatch captures. Each dispatch is a list of NumPy arrays.
 
     Raises:
             TimeoutError: If IPC operation times out
@@ -254,27 +278,10 @@ def get_kern_arg_data(
                 f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
             )
 
-        # Pipe connected and IPC file ready; read it
-        while True:
-            if process_pid is not None and not _process_is_alive(process_pid):
-                raise RuntimeError(
-                    f"Accordo process (PID {process_pid}) crashed or terminated during execution. "
-                    "Check for segfaults or GPU memory access errors."
-                )
-            if time.time() - start_time > ipc_timeout_seconds:
-                raise TimeoutError(
-                    f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
-                )
-            try:
-                ipc_handles, ptr_sizes = read_ipc_handles(
-                    args, ipc_file_name, sentinel_file=sentinel_file
-                )
-                break
-            except AccordoKernelNeverDispatched:
-                raise
-            except Exception:
-                time.sleep(0.1)
+        # Pipe connected and IPC file ready; dispatch batches are handled below.
     finally:
+        # Close initial readiness reader. A dedicated keepalive reader is created
+        # during dispatch processing so subsequent dispatch writes never block.
         if pipe_fd is not None:
             try:
                 os.close(pipe_fd)
@@ -290,37 +297,86 @@ def get_kern_arg_data(
         "__hip_bfloat16*": ml_dtypes.bfloat16,
     }
 
-    results = []
     pointer_args = list(filter(lambda arg: "*" in arg and "const" not in arg, args))
     logging.debug(f"pointer_args: {pointer_args}")
+    output_arg_count = len(pointer_args)
+    if output_arg_count == 0:
+        return [[]]
 
-    for handle, arg, array_size in zip(ipc_handles, pointer_args, ptr_sizes):
-        ptr = open_ipc_handle(handle)
-        logging.debug(f"Opened IPC Ptr: {ptr} (0x{ptr:x})")
+    processed_records = 0
+    dispatch_results = []
+    processing_start = time.time()
+    keepalive_fd = os.open(pipe_name, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        while True:
+            if time.time() - processing_start > ipc_timeout_seconds:
+                raise TimeoutError(
+                    f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
+                )
 
-        # Strip type qualifiers (restrict, const, volatile) and type specifiers (struct, union, class, enum)
-        words_to_strip = ("restrict", "const", "volatile", "struct", "union", "class", "enum")
-        arg_type = " ".join(word for word in arg.split() if word not in words_to_strip)
-        logging.debug(f"arg_type (after stripping qualifiers and specifiers): {arg_type}")
+            records = _read_ipc_records(ipc_file_name)
+            while len(records) - processed_records >= output_arg_count:
+                batch = records[processed_records : processed_records + output_arg_count]
+                processed_records += output_arg_count
 
-        if arg_type in type_map:
-            dtype = type_map[arg_type]
-            logging.debug(f"dtype: {dtype}")
+                dispatch_arrays = []
+                for (handle, array_size), arg in zip(batch, pointer_args):
+                    ptr = open_ipc_handle(handle)
+                    logging.debug(f"Opened IPC Ptr: {ptr} (0x{ptr:x})")
 
-            # Special handling for FP16 and bfloat16
-            if arg_type == "__half*":
-                temp_array = memcpy_d2h(ptr, array_size // 2, ctypes.c_uint16)
-                host_array = np.frombuffer(temp_array, dtype=np.float16)
-            elif arg_type == "__hip_bfloat16*":
-                temp_array = memcpy_d2h(ptr, array_size // 2, ctypes.c_uint16)
-                host_array = np.frombuffer(temp_array, dtype=ml_dtypes.bfloat16)
-            else:
-                num_elements = array_size // ctypes.sizeof(dtype)
-                host_array = memcpy_d2h(ptr, num_elements, dtype)
-        else:
-            raise TypeError(f"Unsupported pointer type: {arg_type}")
+                    words_to_strip = (
+                        "restrict",
+                        "const",
+                        "volatile",
+                        "struct",
+                        "union",
+                        "class",
+                        "enum",
+                    )
+                    arg_type = " ".join(word for word in arg.split() if word not in words_to_strip)
+                    logging.debug(
+                        f"arg_type (after stripping qualifiers and specifiers): {arg_type}"
+                    )
 
-        logging.debug(f"Received data from IPC ({arg_type}/{len(host_array)}): {host_array}")
-        results.append(host_array)
+                    if arg_type not in type_map:
+                        raise TypeError(f"Unsupported pointer type: {arg_type}")
 
-    return results
+                    dtype = type_map[arg_type]
+                    logging.debug(f"dtype: {dtype}")
+
+                    if arg_type == "__half*":
+                        temp_array = memcpy_d2h(ptr, array_size // 2, ctypes.c_uint16)
+                        host_array = np.frombuffer(temp_array, dtype=np.float16)
+                    elif arg_type == "__hip_bfloat16*":
+                        temp_array = memcpy_d2h(ptr, array_size // 2, ctypes.c_uint16)
+                        host_array = np.frombuffer(temp_array, dtype=ml_dtypes.bfloat16)
+                    else:
+                        num_elements = array_size // ctypes.sizeof(dtype)
+                        host_array = memcpy_d2h(ptr, num_elements, dtype)
+
+                    logging.debug(
+                        f"Received data from IPC ({arg_type}/{len(host_array)}): {host_array}"
+                    )
+                    dispatch_arrays.append(host_array)
+
+                dispatch_results.append(dispatch_arrays)
+                send_response(pipe_name)
+
+            if process_pid is not None and not _process_is_alive(process_pid):
+                if len(records) - processed_records > 0:
+                    raise RuntimeError(
+                        "Accordo process exited with incomplete IPC batch. "
+                        "This indicates dispatch/IPC synchronization failure."
+                    )
+                if dispatch_results:
+                    return dispatch_results
+                raise RuntimeError(
+                    f"Accordo process (PID {process_pid}) terminated before producing IPC data."
+                )
+
+            time.sleep(0.05)
+    finally:
+        try:
+            os.close(keepalive_fd)
+        except OSError:
+            pass
