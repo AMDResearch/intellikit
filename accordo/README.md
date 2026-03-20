@@ -59,8 +59,8 @@ The `accordo` entry point exposes JSON on stdout (logging on stderr). Subcommand
 ```
 accordo validate \
   --kernel-name NAME \
-  --ref-binary CMD_OR_PATH \
-  --opt-binary CMD_OR_PATH \
+  --ref-binary PATH_TO_EXECUTABLE \
+  --opt-binary PATH_TO_EXECUTABLE \
   [--tolerance FLOAT]      # default: 1e-6
   [--timeout SECONDS]       # per snapshot, default: 30
   [--working-dir DIR]       # default: .
@@ -69,6 +69,8 @@ accordo validate \
 ```
 
 Example: `accordo validate --kernel-name reduce_sum --ref-binary ./app_ref --opt-binary ./app_opt`
+
+The CLI passes each flag as a **single executable path** (no embedded spaces or extra argv). For runs that need arguments, use a wrapper script or the Python API (`capture_snapshot` accepts `binary` as a list, e.g. `["./app", "--flag"]`).
 
 ## API Reference
 

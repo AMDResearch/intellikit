@@ -42,7 +42,7 @@ metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency,compute.total_f
 metrix -o results.json ./my_app
 ```
 
-Options: `--profile`/`-p` (run `metrix list profiles` for names: `quick`, `memory`, `memory_bandwidth`, `memory_cache`, `compute`), `--metrics`/`-m`, `--time-only`, `--kernel`/`-k` (regular expression), `--num-replays`/`-n`, `--output`/`-o`, `--top`, `--aggregate`, `--timeout`, `--no-counters`, `--log`/`-l`, `--quiet`/`-q`. Discovery: `metrix list <metrics|profiles|counters|devices>`, `metrix info <metric|profile|counter> <name>`.
+Options: `--profile`/`-p` (run `metrix list profiles` for names: `quick`, `memory`, `memory_bandwidth`, `memory_cache`, `compute`), `--metrics`/`-m`, `--time-only`, `--kernel`/`-k` (regular expression), `--num-replays`/`-n`, `--output`/`-o`, `--top`, `--aggregate`, `--timeout`, `--no-counters`, `--log`/`-l`, `--quiet`/`-q`. Discovery: `metrix list <metrics|profiles|devices>`, `metrix info <metric|profile> <name>`. Note: `metrix list counters` and `metrix info counter <name>` are not implemented yet (CLI reports “not yet implemented”).
 
 ### Python API
 

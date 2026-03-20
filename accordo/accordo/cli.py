@@ -48,8 +48,16 @@ def _parse_kernel_args(raw: str) -> List[Tuple[str, str]]:
 def _build_validate_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("validate", help="Validate kernel correctness")
     p.add_argument("--kernel-name", required=True, help="Kernel function name to intercept")
-    p.add_argument("--ref-binary", required=True, help="Reference binary path/command")
-    p.add_argument("--opt-binary", required=True, help="Optimized binary path/command")
+    p.add_argument(
+        "--ref-binary",
+        required=True,
+        help="Path to reference executable (single path; use API or a wrapper for argv)",
+    )
+    p.add_argument(
+        "--opt-binary",
+        required=True,
+        help="Path to optimized executable (single path; use API or a wrapper for argv)",
+    )
     p.add_argument(
         "--tolerance", type=float, default=1e-6, help="Absolute tolerance (default: 1e-6)"
     )

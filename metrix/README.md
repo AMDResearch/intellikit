@@ -110,7 +110,7 @@ metrix profile [options] <target>
   --time-only        Only collect timing, no hardware counters
   --kernel, -k       Filter kernels by name (regular expression, passed to rocprofv3)
   --num-replays, -n  Replay the application N times and aggregate (default: 10)
-  --aggregate        Force aggregation by kernel name (auto when --num-replays > 1)
+  --aggregate        Aggregate metrics by kernel name across replays (default: per-dispatch across runs)
   --top K            Show only top K slowest kernels
   --output, -o       Output file (.json, .csv, .txt)
   --timeout SECONDS  Profiling timeout in seconds (default: 60)
@@ -118,11 +118,13 @@ metrix profile [options] <target>
   --quiet, -q        Quiet mode
   --no-counters      Omit raw counter values from output
 
-metrix list <metrics|profiles|counters|devices> [--category CAT]
+metrix list <metrics|profiles|devices> [--category CAT]
 
-metrix info <metric|profile|counter> <name>
+metrix info <metric|profile> <name>
 
 ```
+
+`metrix list counters` and `metrix info counter <name>` exist but currently print “not yet implemented” in the CLI.
 
 Note: GPU architecture is auto-detected using `rocminfo`.
 
