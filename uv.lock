@@ -22,7 +22,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "kerneldb", git = "https://github.com/AMDResearch/kerneldb.git?rev=bb5d9d1bdc7433d81e04b194adba2c0158520a38" },
+    { name = "kerneldb", git = "https://github.com/AMDResearch/kerneldb.git?rev=e549dcd0bb2d5363761a60ba960f1a804673c809" },
     { name = "numpy" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
@@ -365,8 +365,8 @@ wheels = [
 
 [[package]]
 name = "kerneldb"
-version = "0.1.dev104+gbb5d9d1bd"
-source = { git = "https://github.com/AMDResearch/kerneldb.git?rev=bb5d9d1bdc7433d81e04b194adba2c0158520a38#bb5d9d1bdc7433d81e04b194adba2c0158520a38" }
+version = "0.1.dev130+ge549dcd0"
+source = { git = "https://github.com/AMDResearch/kerneldb.git?rev=e549dcd0bb2d5363761a60ba960f1a804673c809#e549dcd0bb2d5363761a60ba960f1a804673c809" }
 
 [[package]]
 name = "linex"
