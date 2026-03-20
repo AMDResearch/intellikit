@@ -28,6 +28,8 @@ SOFTWARE.
 #include <fmt/core.h>
 #include "log.hpp"
 
+#include <cstdio>
+#include <cstdlib>
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -36,6 +38,9 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <poll.h>
+#include <atomic>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -123,11 +128,26 @@ std::mutex accordo::mutex_{};
 std::shared_mutex accordo::stop_mutex_{};
 accordo* accordo::singleton_{nullptr};
 
+// Set to true when we see the target kernel and call send_message_and_wait.
+// OnUnload writes sentinel file if still false (kernel was never dispatched).
+static std::atomic<bool> s_target_kernel_dispatched{false};
+
 accordo::accordo(HsaApiTable* table,
                  uint64_t runtime_version,
                  uint64_t failed_tool_count,
                  const char* const* failed_tool_names)
     : api_table_{table} {
+  s_target_kernel_dispatched.store(false, std::memory_order_relaxed);
+  // Write sentinel immediately so Python can fail fast if we never see the target kernel.
+  const char* sentinel_path = std::getenv("ACCORDO_SENTINEL_FILE");
+  if (sentinel_path) {
+    std::ofstream ofs(sentinel_path);
+    if (ofs) {
+      ofs << "no_matching_dispatch";
+      ofs.flush();
+      LOG_DETAIL("Wrote initial sentinel (will remove when target kernel runs): {}", sentinel_path);
+    }
+  }
   LOG_DETAIL("Saving current APIs.");
   save_hsa_api();
   LOG_DETAIL("Hooking new APIs.");
@@ -297,15 +317,34 @@ void accordo::send_message_and_wait(void* kernarg_buffer) {
       writeIpcHandleToFile(handle, ptr_size);
     }
   }
+  close(fd);
 
-  // Wait for Python to finish processing
-  fd = open(pipe_name, O_RDONLY);
+  // Wait for Python to finish processing (with parent-PID watchdog).
+  // Open non-blocking so we never get stuck before entering the watchdog loop.
+  fd = open(pipe_name, O_RDONLY | O_NONBLOCK);
   if (fd < 0) {
     LOG_ERROR("Failed to open FIFO for reading");
     return;
   }
+  const char* parent_pid_str = std::getenv("ACCORDO_PARENT_PID");
+  int parent_pid = parent_pid_str ? std::atoi(parent_pid_str) : 0;
   char buffer[10];
-  read(fd, buffer, sizeof(buffer));
+  bool got_done = false;
+  while (!got_done) {
+    struct pollfd pfd = {fd, POLLIN, 0};
+    int pr = poll(&pfd, 1, 500);
+    if (pr > 0 && (pfd.revents & POLLIN)) {
+      ssize_t n = read(fd, buffer, sizeof(buffer));
+      if (n > 0) {
+        got_done = true;
+        break;
+      }
+    }
+    if (parent_pid > 0 && kill(static_cast<pid_t>(parent_pid), 0) != 0) {
+      LOG_INFO("Parent process {} no longer alive; stopping wait", parent_pid);
+      break;
+    }
+  }
   close(fd);
 
   LOG_INFO("Python response received. Continuing execution...");
@@ -633,6 +672,11 @@ void accordo::write_packets(hsa_queue_t* queue,
 
     auto args = is_traceable_packet(packet);
     if (args.has_value()) {
+      s_target_kernel_dispatched.store(true, std::memory_order_relaxed);
+      const char* sentinel_path = std::getenv("ACCORDO_SENTINEL_FILE");
+      if (sentinel_path) {
+        std::remove(sentinel_path);
+      }
       send_message_and_wait(args.value());
     }
   } catch (const std::exception& e) {
@@ -733,7 +777,19 @@ PUBLIC_API bool OnLoad(HsaApiTable* table,
   return true;
 }
 
-PUBLIC_API void OnUnload() {}
+PUBLIC_API void OnUnload() {
+  if (!intelliperf::s_target_kernel_dispatched.load(std::memory_order_relaxed)) {
+    const char* sentinel_path = std::getenv("ACCORDO_SENTINEL_FILE");
+    if (sentinel_path) {
+      std::ofstream ofs(sentinel_path);
+      if (ofs) {
+        ofs << "no_matching_dispatch";
+        ofs.flush();
+        LOG_INFO("Wrote sentinel (kernel never dispatched): {}", sentinel_path);
+      }
+    }
+  }
+}
 
 static void unload_me() __attribute__((destructor));
 void unload_me() {}
