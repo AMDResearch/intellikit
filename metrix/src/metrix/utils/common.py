@@ -15,7 +15,7 @@ def split_counters_into_passes(
     *,
     block_limits: Optional[Dict[str, int]] = None,
     get_counter_block: Optional[Callable[[str], str]] = None,
-    max_per_pass: int = 14,
+    max_per_pass: int = 6,
     default_block_limit: int = 4,
     logger=None,
 ) -> List[List[str]]:
@@ -92,11 +92,18 @@ def split_counters_into_passes(
             if not block_counters:
                 continue
 
+            # Check if we've reached the max_per_pass limit for this pass
+            if len(current_pass) >= max_per_pass:
+                break
+
             # Get limit for this block (default to default_block_limit if unknown)
             limit = block_limits.get(block_name, default_block_limit)
             available_slots = limit - pass_block_count[block_name]
             if available_slots <= 0:
                 continue
+
+            # Limit to not exceed max_per_pass for the entire pass
+            available_slots = min(available_slots, max_per_pass - len(current_pass))
 
             # Add as many counters from this block as possible
             to_add = block_counters[:available_slots]

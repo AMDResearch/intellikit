@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [accordo, linex, metrix, nexus, rocm_mcp, uprof_mcp]
+        package: [accordo, kerncap, linex, metrix, nexus, rocm_mcp, uprof_mcp]
         install_method: [editable, non-editable, github]
 
     steps:

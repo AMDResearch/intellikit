@@ -17,7 +17,7 @@ authors = [
 license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["accordo", "linex", "metrix", "nexus"]
+dependencies = ["accordo", "kerncap", "linex", "metrix", "nexus"]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/intellikit"
@@ -26,6 +26,7 @@ Documentation = "https://github.com/AMDResearch/intellikit/blob/main/README.md"
 
 [tool.uv.sources]
 "accordo" = { path = "accordo" }
+"kerncap" = { path = "kerncap" }
 "linex" = { path = "linex" }
 "metrix" = { path = "metrix" }
 "nexus" = { path = "nexus" }
@@ -37,6 +38,7 @@ cmake.build-type = "Release"
 # Install all packages with their correct paths
 wheel.packages = [
     "accordo",
+    "kerncap/kerncap",
     "linex/src/linex",
     "metrix/src/metrix",
     "nexus/nexus",

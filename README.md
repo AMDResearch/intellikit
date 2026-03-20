@@ -50,6 +50,43 @@ else:
     print(result.summary())
 ```
 
+### [Kerncap](kerncap/) - GPU Kernel Extraction and Isolation
+
+Captures GPU kernel dispatches and generates standalone reproducers for HIP and Triton kernels.
+
+**Use cases:**
+
+- Extract and isolate a single kernel from a large application
+- Generate reproducers for HIP and Triton kernels
+- Enable edit-recompile-validate optimization loops
+
+**Quick example:**
+
+```python
+from kerncap import Kerncap
+
+kc = Kerncap()
+
+# Profile to find the hottest kernel
+profile = kc.profile(["./my_app", "--args"])
+for kernel in profile[:5]:
+    print(f"{kernel.name}: {kernel.total_duration_ns / 1e6:.1f} ms ({kernel.percentage:.1f}%)")
+top_kernel = profile[0]
+print(f"\nExtracting top kernel: {top_kernel.name}")
+
+# Extract into a standalone reproducer
+result = kc.extract(
+    kernel_name=top_kernel.name,
+    cmd="./my_app --args",
+    source_dir="./src",
+    output="./isolated/my_kernel",
+)
+
+# Validate the reproducer
+validation = kc.validate(result.output_dir)
+print(f"{'PASS' if validation.passed else 'FAIL'}")
+```
+
 ### [Linex](linex/) - Source-Level GPU Performance Profiling
 
 Maps GPU performance metrics to your source code lines.
@@ -209,6 +246,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 
 ```bash
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=accordo"
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=kerncap"
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=linex"
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"
@@ -222,13 +260,14 @@ pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=upro
 git clone https://github.com/AMDResearch/intellikit.git
 cd intellikit
 pip install -e ./accordo
+pip install -e ./kerncap
 pip install -e ./linex
 # ... or any subset of the tools
 ```
 
 ### Agent Skills (AI agents)
 
-Install IntelliKit skills so AI agents can discover and use Metrix, Accordo, Nexus, and Linex. Skills are installed as `SKILL.md` files under a single directory; agents that read that location get the instructions automatically.
+Install IntelliKit skills so AI agents can discover and use Metrix, Accordo, Nexus, Linex, and Kerncap. Skills are installed as `SKILL.md` files under a single directory; agents that read that location get the instructions automatically.
 
 **Default: local (current workspace) - agents target**
 
@@ -284,6 +323,7 @@ Skills are installed inside the target directory (e.g., `./.agents/skills/` for 
 Each tool has its own detailed documentation:
 
 - [Accordo Documentation](accordo/README.md) + [Examples](accordo/examples/)
+- [Kerncap Documentation](kerncap/README.md) + [Examples](kerncap/examples/)
 - [Linex Documentation](linex/README.md) + [Examples](linex/examples/)
 - [Metrix Documentation](metrix/README.md) + [Examples](metrix/examples/)
 - [Nexus Documentation](nexus/README.md) + [Examples](nexus/examples/)
