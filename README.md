@@ -4,13 +4,11 @@
 
 # IntelliKit
 
-**Profiling and analysis for AMD GPUs — built for humans and for LLMs**
-
-**MCP servers** · **Agent skills** ([`install/skills/install.sh`](install/skills/install.sh))
+**Profiling and analysis for AMD software — GPU, host CPU, and LLM workflows**
 
 </div>
 
-IntelliKit is a set of Python tools on top of **ROCm**. Each package takes the detailed signals GPUs already expose — hardware counters, traces, dispatch data — and shapes them into **clear APIs** you can actually use. For LLM-style workflows you also get **[Model Context Protocol (MCP)](https://modelcontextprotocol.io/)** servers (profiling, compile, docs, sysinfo, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo via [`install/skills/install.sh`](install/skills/install.sh). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
+IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
 
 ---
 
@@ -34,13 +32,13 @@ Rough workflow: **isolate** a kernel → **profile** it (counters and/or source 
 
 ## Quick start
 
-**Tools** — every package from Git via `pip` ([`install/tools/install.sh`](install/tools/install.sh); no metapackage at the repo root):
+**Tools** — every package from Git via `pip` (`install/tools/install.sh`; no metapackage at the repo root):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
 ```
 
-**Skills** — agent skill files for Kerncap, Metrix, Linex, Nexus, and Accordo ([`install/skills/install.sh`](install/skills/install.sh)):
+**Skills** — agent skill files for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
@@ -55,8 +53,9 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 | Requirement | Notes |
 |-------------|--------|
 | Python | 3.10 or newer |
-| ROCm | 6.0+ (use **7.0+** for Linex) |
-| GPU | **MI300+** for the full experience; some pieces vary by tool — see each package’s README |
+| ROCm | 6.0+ for GPU packages (use **7.0+** for Linex); skip if you only use host-side tools like `uprof_mcp` |
+| GPU | **MI300+** for the full GPU experience; some pieces vary by tool — see each package’s README |
+| uProf | **AMD uProf** on **x86** for `uprof_mcp` only — see that README |
 
 For **development** on a subset of packages only, use editable installs (nothing to install at the monorepo root):
 
@@ -83,7 +82,7 @@ for kernel in results.kernels:
 
 ## MCP quick config
 
-With **[uv](https://docs.astral.sh/uv/)** and a clone of this repo, you can point an MCP client at each package directory (adjust `/path/to/intellikit/...`):
+With **uv** and a clone of this repo, you can point an MCP client at each package directory (adjust `/path/to/intellikit/...`):
 
 ```json
 {
