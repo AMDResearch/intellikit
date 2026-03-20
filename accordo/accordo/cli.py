@@ -50,14 +50,27 @@ def _build_validate_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--kernel-name", required=True, help="Kernel function name to intercept")
     p.add_argument("--ref-binary", required=True, help="Reference binary path/command")
     p.add_argument("--opt-binary", required=True, help="Optimized binary path/command")
-    p.add_argument("--tolerance", type=float, default=1e-6, help="Absolute tolerance (default: 1e-6)")
-    p.add_argument("--timeout", type=int, default=30, help="Timeout per snapshot in seconds (default: 30)")
-    p.add_argument("--working-dir", default=".", help="Working directory for binary execution (default: .)")
-    p.add_argument("--kernel-args", type=_parse_kernel_args, default=None,
-                   help="Manual kernel args as 'name:type,name:type,...'")
-    p.add_argument("--log-level", default="WARNING",
-                   choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                   help="Logging level (default: WARNING)")
+    p.add_argument(
+        "--tolerance", type=float, default=1e-6, help="Absolute tolerance (default: 1e-6)"
+    )
+    p.add_argument(
+        "--timeout", type=int, default=30, help="Timeout per snapshot in seconds (default: 30)"
+    )
+    p.add_argument(
+        "--working-dir", default=".", help="Working directory for binary execution (default: .)"
+    )
+    p.add_argument(
+        "--kernel-args",
+        type=_parse_kernel_args,
+        default=None,
+        help="Manual kernel args as 'name:type,name:type,...'",
+    )
+    p.add_argument(
+        "--log-level",
+        default="WARNING",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (default: WARNING)",
+    )
 
 
 def _run_validate(args: argparse.Namespace) -> int:
@@ -90,24 +103,30 @@ def _run_validate(args: argparse.Namespace) -> int:
         )
 
         ref_snapshot = validator.capture_snapshot(
-            binary=args.ref_binary, timeout_seconds=args.timeout,
+            binary=args.ref_binary,
+            timeout_seconds=args.timeout,
         )
         opt_snapshot = validator.capture_snapshot(
-            binary=args.opt_binary, timeout_seconds=args.timeout,
+            binary=args.opt_binary,
+            timeout_seconds=args.timeout,
         )
         result = validator.compare_snapshots(
-            ref_snapshot, opt_snapshot, tolerance=args.tolerance,
+            ref_snapshot,
+            opt_snapshot,
+            tolerance=args.tolerance,
         )
 
         mismatches_serialized = []
-        for m in (result.mismatches or []):
-            mismatches_serialized.append({
-                "arg_index": m.arg_index,
-                "arg_name": m.arg_name,
-                "arg_type": m.arg_type,
-                "max_difference": m.max_difference,
-                "mean_difference": m.mean_difference,
-            })
+        for m in result.mismatches or []:
+            mismatches_serialized.append(
+                {
+                    "arg_index": m.arg_index,
+                    "arg_name": m.arg_name,
+                    "arg_type": m.arg_type,
+                    "max_difference": m.max_difference,
+                    "mean_difference": m.mean_difference,
+                }
+            )
 
         output = {
             "is_valid": result.is_valid,
