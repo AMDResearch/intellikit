@@ -157,7 +157,10 @@ from accordo import Accordo
 
 # 1) Baseline metrics
 profiler = Metrix()
-baseline = profiler.profile("./app_baseline")
+baseline = profiler.profile(
+    "./app_baseline",
+    metrics=["memory.hbm_bandwidth_utilization"],
+)
 baseline_bw = baseline.kernels[0].metrics["memory.hbm_bandwidth_utilization"].avg
 
 # 2) See what ran on the GPU
@@ -172,7 +175,10 @@ opt = validator.capture_snapshot(binary="./app_opt")
 result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
 
 if result.is_valid:
-    opt_results = profiler.profile("./app_opt")
+    opt_results = profiler.profile(
+        "./app_opt",
+        metrics=["memory.hbm_bandwidth_utilization"],
+    )
     opt_bw = opt_results.kernels[0].metrics["memory.hbm_bandwidth_utilization"].avg
     print(f"PASS — {result.num_arrays_validated} arrays matched; BW delta {opt_bw - baseline_bw:.1f}%")
 ```

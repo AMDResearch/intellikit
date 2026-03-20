@@ -2,7 +2,7 @@
 # IntelliKit Tools Installer
 # Installs tools from Git via pip3 (git+https...#subdirectory=<tool>).
 # Usage: curl -sSL <install script URL> | bash -s -- [OPTIONS]
-#    or: ./install.sh [OPTIONS]
+#    or: ./install/tools/install.sh [OPTIONS]  (from repo root)
 # Pass options after bash -s -- when piping from curl so they reach this script.
 
 set -e
@@ -23,7 +23,7 @@ print_usage() {
   echo ""
   echo "Usage:"
   echo "  curl -sSL ${INSTALL_SCRIPT_URL} | bash -s -- [OPTIONS]"
-  echo "  ./install.sh [OPTIONS]"
+  echo "  ./install/tools/install.sh [OPTIONS]   # from repo root"
   echo ""
   echo "Options:"
   echo "  --tools <list>    Comma-separated tools to install only (default: all)."
