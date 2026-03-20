@@ -43,6 +43,7 @@ Multiple Kernels:
 from .exceptions import (
     AccordoBuildError,
     AccordoError,
+    AccordoKernelNeverDispatched,
     AccordoProcessError,
     AccordoTimeoutError,
     AccordoValidationError,
@@ -68,4 +69,5 @@ __all__ = [
     "AccordoTimeoutError",
     "AccordoProcessError",
     "AccordoValidationError",
+    "AccordoKernelNeverDispatched",
 ]

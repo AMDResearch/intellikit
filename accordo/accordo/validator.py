@@ -261,6 +261,7 @@ class Accordo:
                 binary_cmd=binary,
                 label="snapshot",
                 extra_env=extra_env,
+                timeout_seconds=timeout_seconds,
             )
             signal.alarm(0)  # Cancel alarm on success
             execution_time_ms = (time.time() - start_time) * 1000
@@ -344,6 +345,7 @@ class Accordo:
         binary_cmd: List[str],
         label: str,
         extra_env: Optional[dict] = None,
+        timeout_seconds: int = 30,
     ) -> List[np.ndarray]:
         """Run an instrumented application and collect kernel argument data.
 
@@ -351,6 +353,7 @@ class Accordo:
                 binary_cmd: Binary command with arguments
                 label: Label for this run
                 extra_env: Optional extra environment variables
+                timeout_seconds: Timeout for IPC wait (used by get_kern_arg_data)
 
         Returns:
                 List of numpy arrays with kernel argument data
@@ -383,6 +386,8 @@ class Accordo:
         env["ACCORDO_LOG_LEVEL"] = str(level_map.get(debug_level, 0))
         env["ACCORDO_PIPE_NAME"] = pipe_name
         env["ACCORDO_IPC_OUTPUT_FILE"] = ipc_file_name
+        env["ACCORDO_SENTINEL_FILE"] = ipc_file_name + ".no_kernel"
+        env["ACCORDO_PARENT_PID"] = str(os.getpid())
 
         # Launch process
         logging.debug(f"Launching {label} process for kernel {self.kernel_name}")
@@ -405,6 +410,7 @@ class Accordo:
                 pipe_name,
                 arg_types,
                 ipc_file_name,
+                ipc_timeout_seconds=timeout_seconds,
                 process_pid=process_pid,
                 baseline_time_ms=None,
             )
