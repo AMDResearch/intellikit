@@ -6,16 +6,19 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** Python >= 3.10 (root), ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
+**Requirements:** Python >= 3.10, ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
 
 ## Build Commands
 
 ```bash
-# Using uv (preferred for development) - installs all tools
-uv sync
+# Install all tools from Git (supported path for users and CI-style setups)
+# Default pip command is pip3; script requires Python 3.10+ (checks before installing).
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
+# Subset only: ... | bash -s -- --tools metrix,linex
+# From a clone:
+#   ./install/tools/install.sh [--tools ...] [--pip-cmd ...] [--repo-url ...] [--ref ...] [--dry-run]
 
-# Or using pip - install individual tools (from repo root)
-# Note: root pyproject.toml includes accordo, kerncap, linex, metrix, nexus as dependencies
+# Editable installs for development (any subset; from repo root)
 pip install -e accordo/ -e kerncap/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
 
 # Install individual tools
@@ -63,7 +66,7 @@ cd rocm_mcp && pytest tests/
 ## Linting
 
 ```bash
-# Lint entire repo (ruff configured in root pyproject.toml)
+# Lint entire repo (shared config: ruff.toml; packages may extend and override)
 ruff check .
 ruff format .
 
@@ -159,8 +162,8 @@ This affects import paths and where to find source code.
 
 ## Dependency Management
 
-- **uv**: Preferred for development (lockfile: `uv.lock`)
-- **pip**: Supported for individual tool installation
+- **install.sh**: Installs packages from Git via `pip` (`install/tools/install.sh`); default is all tools, optional `--tools` for a subset
+- **pip**: Editable installs per tool from a clone (`pip install -e <tool>/`)
 - **External dependencies**: Some tools depend on external repos (e.g., `accordo` requires `kerneldb` from GitHub)
 - **C++ dependencies**: `nexus` requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`); `kerncap` requires `hipcc`, `cmake`, and HSA headers (standard ROCm)
 
@@ -212,7 +215,7 @@ pip install -e metrix/
 # Run MCP server directly (will use stdio transport)
 metrix-mcp
 
-# Or via uv
+# Or from the package directory with uv
 cd metrix && uv run metrix-mcp
 ```
 
@@ -335,4 +338,4 @@ Each tool can be installed independently:
 
 - Separate `pyproject.toml` for each tool
 - Individual testing and development
-- Shared root-level ruff configuration
+- Shared root-level `ruff.toml` (packages extend via `pyproject.toml`)

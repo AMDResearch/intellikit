@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Shared Ruff config for the monorepo. Per-package pyproject.toml files may
+# `extend = "../ruff.toml"` and override `[tool.ruff.lint]` as needed.
+
+line-length = 100
+exclude = [
+    "**/*.ipynb",
+    "build/**",
+    "test/**",
+    "**/resources/**",
+]
+
+[lint]
+select = ["ALL"]
+ignore = [
+    "ANN002",  # no type annotation for *args
+    "ANN003",  # no type annotation for **kwargs
+    "BLE001",  # catch blind exception
+    "C901",    # McCabe complexity
+    "COM812",  # interferes with formatter
+    "D100",    # missing docstring in public module
+    "D104",    # missing docstring in public package
+    "INP001",  # implicit namespace package
+    "LOG015",  # logging on root logger
+    "PLC0415", # top-level imports
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments in function
+    "S101",    # allow assert
+    "S603",    # subprocess without shell
+    "T201",    # using print
+    "TRY401",  # allow exception message
+]
+extend-select = ["I"]
+
+[lint.pydocstyle]
+convention = "google"
+ignore-var-parameters = true
+
+[format]
+docstring-code-format = true
+docstring-code-line-length = 100
+quote-style = "double"
