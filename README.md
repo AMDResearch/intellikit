@@ -112,6 +112,7 @@ More servers and examples: [rocm_mcp/README.md](rocm_mcp/README.md), [AGENTS.md]
 
 **Tools script** ([`install/tools/install.sh`](install/tools/install.sh))
 
+- Default **`pip3`**; the script checks that pip’s Python is **3.10+** before installing (override with `--pip-cmd` if needed).
 - Subset only: `--tools metrix,linex,nexus`
 - Custom pip:  
   `curl -sSL .../install/tools/install.sh | bash -s -- --pip-cmd pip3.12`  

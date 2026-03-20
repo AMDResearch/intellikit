@@ -12,6 +12,7 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 
 ```bash
 # Install all tools from Git (supported path for users and CI-style setups)
+# Default pip command is pip3; script requires Python 3.10+ (checks before installing).
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
 # Subset only: ... | bash -s -- --tools metrix,linex
 # From a clone:

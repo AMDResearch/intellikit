@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # IntelliKit Tools Installer
-# Installs tools from Git via pip (git+https...#subdirectory=<tool>).
+# Installs tools from Git via pip3 (git+https...#subdirectory=<tool>).
 # Usage: curl -sSL <install script URL> | bash -s -- [OPTIONS]
 #    or: ./install.sh [OPTIONS]
 # Pass options after bash -s -- when piping from curl so they reach this script.
@@ -11,7 +11,7 @@ ALL_TOOLS=(accordo kerncap linex metrix nexus rocm_mcp uprof_mcp)
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh"
 REPO_URL="https://github.com/AMDResearch/intellikit.git"
 REF="main"
-PIP_CMD="pip"
+PIP_CMD="pip3"
 DRY_RUN=false
 # Set only via --tools; empty = install all
 TOOL_SELECTION=""
@@ -28,7 +28,7 @@ print_usage() {
   echo "Options:"
   echo "  --tools <list>    Comma-separated tools to install only (default: all)."
   echo "                    Example: --tools metrix,linex"
-  echo "  --pip-cmd <cmd>   Pip command (default: pip). Example: --pip-cmd 'python3.12 -m pip'"
+  echo "  --pip-cmd <cmd>   Pip command (default: pip3). Example: --pip-cmd 'python3.12 -m pip'"
   echo "  -p <cmd>          Short for --pip-cmd"
   echo "  --repo-url <url>  Git repo URL (default: https://github.com/AMDResearch/intellikit.git)"
   echo "  --ref <ref>       Git branch/tag/commit (default: main)"
@@ -67,6 +67,56 @@ trim() {
   printf '%s' "$s"
 }
 
+# Require Python >= 3.10 for the interpreter used by PIP_CMD.
+require_python_ge_310() {
+  local ver_line major minor py_exe
+
+  if ! ver_line=$(eval "${PIP_CMD} --version 2>&1"); then
+    echo "Error: cannot run: ${PIP_CMD} --version" >&2
+    exit 1
+  fi
+
+  if [[ "$ver_line" =~ \(python\ ([0-9]+)\.([0-9]+) ]]; then
+    major="${BASH_REMATCH[1]}"
+    minor="${BASH_REMATCH[2]}"
+    if (( 10#$major < 3 || (10#$major == 3 && 10#$minor < 10) )); then
+      echo "Error: Python ${major}.${minor} is too old. IntelliKit requires Python 3.10 or newer." >&2
+      echo "(${ver_line})" >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  if [[ "$PIP_CMD" == *" -m pip"* ]]; then
+    py_exe="${PIP_CMD%% -m pip*}"
+    py_exe="$(trim "$py_exe")"
+    if [[ -z "$py_exe" ]]; then
+      echo "Error: could not parse interpreter from --pip-cmd=${PIP_CMD}" >&2
+      exit 1
+    fi
+    if ! "$py_exe" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+      echo "Error: ${py_exe} must be Python 3.10 or newer (IntelliKit requirement)." >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  if [[ "$PIP_CMD" == "pip3" || "$PIP_CMD" == "pip" ]]; then
+    if command -v python3 >/dev/null 2>&1; then
+      if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+        return 0
+      fi
+      echo "Error: python3 must be 3.10 or newer. (${ver_line})" >&2
+      exit 1
+    fi
+  fi
+
+  echo "Error: could not verify Python >= 3.10 for PIP_CMD=${PIP_CMD}" >&2
+  echo "${PIP_CMD} --version reported: ${ver_line}" >&2
+  echo "Use a Python 3.10+ pip, or pass --pip-cmd 'python3.12 -m pip'." >&2
+  exit 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
@@ -96,6 +146,8 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+require_python_ge_310
 
 INSTALL_TOOLS=()
 if [[ -z "${TOOL_SELECTION}" ]]; then
