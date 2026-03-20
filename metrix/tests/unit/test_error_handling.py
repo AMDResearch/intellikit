@@ -174,7 +174,7 @@ class TestMetricComputation:
         backend._raw_data = {"TCC_HIT_sum": 0, "TCC_MISS_sum": 0}
 
         # Should return 0.0, not raise ZeroDivisionError
-        result = backend._l2_hit_rate()
+        result = backend._metrics["memory.l2_hit_rate"]["compute"]()
         assert result == 0.0
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
@@ -189,5 +189,5 @@ class TestMetricComputation:
         }
 
         # Should not crash
-        result = backend._l2_hit_rate()
+        result = backend._metrics["memory.l2_hit_rate"]["compute"]()
         assert isinstance(result, (int, float))
