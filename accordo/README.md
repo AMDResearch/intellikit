@@ -52,6 +52,24 @@ for opt_binary in ["./opt_v1", "./opt_v2", "./opt_v3"]:
     print(f"{opt_binary}: {'✓ PASS' if result.is_valid else '✗ FAIL'}")
 ```
 
+## Command line
+
+The `accordo` entry point exposes JSON on stdout (logging on stderr). Subcommands:
+
+```
+accordo validate \
+  --kernel-name NAME \
+  --ref-binary CMD_OR_PATH \
+  --opt-binary CMD_OR_PATH \
+  [--tolerance FLOAT]      # default: 1e-6
+  [--timeout SECONDS]       # per snapshot, default: 30
+  [--working-dir DIR]       # default: .
+  [--kernel-args 'n1:t1,n2:t2,...']
+  [--log-level DEBUG|INFO|WARNING|ERROR]  # default: WARNING
+```
+
+Example: `accordo validate --kernel-name reduce_sum --ref-binary ./app_ref --opt-binary ./app_opt`
+
 ## API Reference
 
 ### `Accordo(binary, kernel_name, **options)`
