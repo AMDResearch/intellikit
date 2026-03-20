@@ -19,7 +19,54 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.build-matrix.outputs.packages }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            accordo:
+              - 'accordo/**'
+            kerncap:
+              - 'kerncap/**'
+            linex:
+              - 'linex/**'
+            metrix:
+              - 'metrix/**'
+            nexus:
+              - 'nexus/**'
+            infra:
+              - '.github/**'
+              - 'apptainer/**'
+              - 'docker/**'
+              - 'install/**'
+              - 'pyproject.toml'
+
+      - name: Build package matrix
+        id: build-matrix
+        run: |
+          ALL='["accordo","kerncap","linex","metrix","nexus"]'
+
+          # Infra changes or non-PR events → test everything
+          if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "packages=${ALL}" >> "$GITHUB_OUTPUT"
+          else
+            # Filter to only pytest-eligible packages (exclude rocm_mcp, uprof_mcp)
+            CHANGED='${{ steps.filter.outputs.changes }}'
+            FILTERED=$(echo "$CHANGED" | jq -c '[.[] | select(. == "accordo" or . == "kerncap" or . == "linex" or . == "metrix" or . == "nexus")]')
+            echo "packages=${FILTERED}" >> "$GITHUB_OUTPUT"
+          fi
+
   build-container-image:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.packages != '[]'
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 30
     steps:
@@ -43,13 +90,13 @@ jobs:
 
   pytest:
     name: pytest ${{ matrix.install_method }} - ${{ matrix.package }}
-    needs: build-container-image
+    needs: [detect-changes, build-container-image]
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        package: [accordo, kerncap, linex, metrix, nexus]
+        package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
         install_method: [editable, non-editable]
 
     steps:
