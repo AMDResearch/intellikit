@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from textwrap import dedent
 from pathlib import Path
 
 import pytest
@@ -423,23 +424,25 @@ def test_app_exits_when_python_dies_before_sending_done():
     We run capture_snapshot in a subprocess, wait for the kernel to run (C++ to block),
     kill the Python subprocess, then assert the instrumented app (child) exits within 10s.
     """
-    driver_script = """
-import sys
-from pathlib import Path
-from accordo import Accordo
+    driver_script = dedent(
+        """
+        import sys
+        from pathlib import Path
+        from accordo import Accordo
 
-tmp_dir = sys.argv[1]
-pid_file = sys.argv[2]
-bin_path = sys.argv[3]
+        tmp_dir = sys.argv[1]
+        pid_file = sys.argv[2]
+        bin_path = sys.argv[3]
 
-Path(pid_file).write_text(str(__import__("os").getpid()))
-validator = Accordo(
-    binary=bin_path,
-    kernel_name="reduce_sum",
-    working_directory=tmp_dir,
-)
-validator.capture_snapshot(binary=bin_path, timeout_seconds=60)
-"""
+        Path(pid_file).write_text(str(__import__("os").getpid()))
+        validator = Accordo(
+            binary=bin_path,
+            kernel_name="reduce_sum",
+            working_directory=tmp_dir,
+        )
+        validator.capture_snapshot(binary=bin_path, timeout_seconds=60)
+        """
+    )
     with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
         tmp_path = Path(tmp_dir)
         bin_path = _compile_hip(_reduce_source(REDUCE_KERNEL_BASELINE), "reduction", tmp_path)

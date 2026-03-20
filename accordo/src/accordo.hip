@@ -38,8 +38,9 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <csignal>
+#include <signal.h>
 #include <poll.h>
+#include <atomic>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -129,14 +130,14 @@ accordo* accordo::singleton_{nullptr};
 
 // Set to true when we see the target kernel and call send_message_and_wait.
 // OnUnload writes sentinel file if still false (kernel was never dispatched).
-static bool s_target_kernel_dispatched = false;
+static std::atomic<bool> s_target_kernel_dispatched{false};
 
 accordo::accordo(HsaApiTable* table,
                  uint64_t runtime_version,
                  uint64_t failed_tool_count,
                  const char* const* failed_tool_names)
     : api_table_{table} {
-  s_target_kernel_dispatched = false;
+  s_target_kernel_dispatched.store(false, std::memory_order_relaxed);
   // Write sentinel immediately so Python can fail fast if we never see the target kernel.
   const char* sentinel_path = std::getenv("ACCORDO_SENTINEL_FILE");
   if (sentinel_path) {
@@ -318,8 +319,9 @@ void accordo::send_message_and_wait(void* kernarg_buffer) {
   }
   close(fd);
 
-  // Wait for Python to finish processing (with parent-PID watchdog)
-  fd = open(pipe_name, O_RDONLY);
+  // Wait for Python to finish processing (with parent-PID watchdog).
+  // Open non-blocking so we never get stuck before entering the watchdog loop.
+  fd = open(pipe_name, O_RDONLY | O_NONBLOCK);
   if (fd < 0) {
     LOG_ERROR("Failed to open FIFO for reading");
     return;
@@ -670,7 +672,7 @@ void accordo::write_packets(hsa_queue_t* queue,
 
     auto args = is_traceable_packet(packet);
     if (args.has_value()) {
-      s_target_kernel_dispatched = true;
+      s_target_kernel_dispatched.store(true, std::memory_order_relaxed);
       const char* sentinel_path = std::getenv("ACCORDO_SENTINEL_FILE");
       if (sentinel_path) {
         std::remove(sentinel_path);
@@ -776,7 +778,7 @@ PUBLIC_API bool OnLoad(HsaApiTable* table,
 }
 
 PUBLIC_API void OnUnload() {
-  if (!intelliperf::s_target_kernel_dispatched) {
+  if (!intelliperf::s_target_kernel_dispatched.load(std::memory_order_relaxed)) {
     const char* sentinel_path = std::getenv("ACCORDO_SENTINEL_FILE");
     if (sentinel_path) {
       std::ofstream ofs(sentinel_path);

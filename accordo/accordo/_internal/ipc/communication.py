@@ -153,7 +153,8 @@ def get_kern_arg_data(
 
     def _open_pipe():
         try:
-            fd = os.open(pipe_name, os.O_RDONLY | os.O_NONBLOCK)
+            # Use blocking open in a helper thread so it only succeeds once writer connects.
+            fd = os.open(pipe_name, os.O_RDONLY)
             if fd >= 0:
                 pipe_result.append(fd)
         except OSError:
@@ -206,9 +207,9 @@ def get_kern_arg_data(
                 f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
             )
 
-        # Verify IPC file appears (C++ writes it after connecting). If we never see it, treat as no kernel.
+        # Verify IPC file appears (C++ writes it after connecting). Wait until global timeout budget.
         ipc_ready = False
-        for _ in range(50):  # 5s
+        while True:
             if time.time() - start_time > ipc_timeout_seconds:
                 break
             if process_pid is not None and not _process_is_alive(process_pid):
