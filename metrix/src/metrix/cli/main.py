@@ -127,7 +127,7 @@ Examples:
     profile_parser.add_argument(
         "--aggregate",
         action="store_true",
-        help="Force aggregation by kernel name (auto-enabled when --num-replays > 1)",
+        help="Aggregate metrics by kernel name across replays (default: per-dispatch across runs)",
     )
 
     # List command

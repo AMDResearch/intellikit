@@ -33,6 +33,7 @@ dev = [
 ]
 
 [project.scripts]
+accordo = "accordo.cli:main"
 accordo-mcp = "accordo.mcp.server:main"
 
 [tool.scikit-build]

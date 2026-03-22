@@ -97,23 +97,36 @@ for kernel in results.kernels:
 
 ## CLI Options
 
-```
-metrix [options] <command>
+Profiling uses the `profile` subcommand (or omit `profile` when the first argument is your app or a flag — Metrix inserts `profile` for you).
 
-Options:
-  --profile, -p      Use pre-defined profile (quick, memory, compute)
-  --metrics, -m      Comma-separated list of metrics
-  --time-only        Only collect timing
-  --kernel, -k       Filter by kernel name substring
-  --runs, -n         Number of runs (default: 10)
-  --aggregate        Aggregate by kernel name
-  --top K            Show top K kernels
+```
+metrix [--version] <command> ...
+
+metrix profile [options] <target>
+
+  --profile, -p      Metric profile: quick | memory | memory_bandwidth |
+                     memory_cache | compute (default: all metrics if omitted)
+  --metrics, -m      Comma-separated list of metrics (mutually exclusive with -p / --time-only)
+  --time-only        Only collect timing, no hardware counters
+  --kernel, -k       Filter kernels by name (regular expression, passed to rocprofv3)
+  --num-replays, -n  Replay the application N times and aggregate (default: 10)
+  --aggregate        Aggregate metrics by kernel name across replays (default: per-dispatch across runs)
+  --top K            Show only top K slowest kernels
   --output, -o       Output file (.json, .csv, .txt)
-  --verbose, -v      Verbose output
+  --timeout SECONDS  Profiling timeout in seconds (default: 60)
+  --log, -l          Logging level: debug | info | warning | error (default: warning)
   --quiet, -q        Quiet mode
+  --no-counters      Omit raw counter values from output
 
-Note: GPU architecture is auto-detected using rocminfo
+metrix list <metrics|profiles|devices> [--category CAT]
+
+metrix info <metric|profile> <name>
+
 ```
+
+`metrix list counters` and `metrix info counter <name>` exist but currently print “not yet implemented” in the CLI.
+
+Note: GPU architecture is auto-detected using `rocminfo`.
 
 ## Testing
 
