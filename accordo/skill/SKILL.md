@@ -19,7 +19,7 @@ Capture and compare kernel outputs from reference and optimized binaries to vali
 2. **Ensure binaries are built with debug symbols** (`-g`) so kernel arguments can be extracted.
 3. **Choose execution path:**
    - If an Accordo MCP server is available, call its `validate_kernel_correctness` tool, which performs capture-and-compare with the same semantics described below.
-   - Otherwise use the Python API from the environment where Accordo is installed.
+   - Otherwise use the Python API or the `accordo validate` CLI (`accordo validate --help` for flags: `--kernel-name`, `--ref-binary`, `--opt-binary`, `--tolerance`, `--timeout`, `--working-dir`, `--kernel-args`, `--log-level`).
 
 ### Python API
 
