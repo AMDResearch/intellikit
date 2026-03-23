@@ -7,7 +7,6 @@ from metrix.utils.distributed import (
     apply_rank_suffix,
     detect_distributed_context,
     normalize_command_argv,
-    split_launcher_command,
 )
 
 
@@ -34,6 +33,16 @@ def test_apply_rank_suffix_distributed_file_path():
     assert apply_rank_suffix("results.json", ctx) == "results.rank0003.json"
 
 
+def test_apply_rank_suffix_no_extension():
+    ctx = DistributedContext(global_rank=0, world_size=4)
+    assert apply_rank_suffix("results", ctx) == "results.rank0000"
+
+
+def test_apply_rank_suffix_single_process():
+    ctx = DistributedContext(global_rank=0, world_size=1)
+    assert apply_rank_suffix("results.json", ctx) == "results.json"
+
+
 def test_normalize_command_argv_accepts_string_and_sequence():
     assert normalize_command_argv('torchrun --nproc_per_node=2 train.py --arg "two words"') == [
         "torchrun",
@@ -48,29 +57,3 @@ def test_normalize_command_argv_accepts_string_and_sequence():
         "4",
         "./app",
     ]
-
-
-def test_split_launcher_command_torchrun():
-    split = split_launcher_command([
-        "torchrun", "--nproc_per_node=8", "train.py", "--lr", "0.01"
-    ])
-    assert split.is_distributed
-    assert split.launcher_name == "torchrun"
-    assert split.launcher_argv == ["torchrun", "--nproc_per_node=8"]
-    assert split.app_argv == ["train.py", "--lr", "0.01"]
-
-
-def test_split_launcher_command_mpirun():
-    split = split_launcher_command([
-        "mpirun", "-np", "4", "./my_app", "--size", "1024"
-    ])
-    assert split.is_distributed
-    assert split.launcher_name == "mpirun"
-    assert split.launcher_argv == ["mpirun", "-np", "4"]
-    assert split.app_argv == ["./my_app", "--size", "1024"]
-
-
-def test_split_launcher_command_no_launcher():
-    split = split_launcher_command(["./my_app", "--size", "1024"])
-    assert not split.is_distributed
-    assert split.app_argv == ["./my_app", "--size", "1024"]

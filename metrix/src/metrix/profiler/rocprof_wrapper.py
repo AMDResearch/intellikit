@@ -15,7 +15,7 @@ from typing import List, Dict, Optional, Sequence
 # Import ProfileResult from backends to avoid duplication
 from ..backends.base import ProfileResult
 from ..logger import logger
-from ..utils.distributed import detect_distributed_context, normalize_command_argv, split_launcher_command
+from ..utils.distributed import detect_distributed_context, normalize_command_argv
 
 
 class ROCProfV3Wrapper:
@@ -80,6 +80,7 @@ class ROCProfV3Wrapper:
         extra_counters_path: Optional[Path] = None,
         arch: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
+        launcher: Optional[str | Sequence[str]] = None,
     ) -> List[ProfileResult]:
         """
         Profile a command with specified counters (single pass).
@@ -169,13 +170,13 @@ class ROCProfV3Wrapper:
 
             # Add target command
             command_argv = normalize_command_argv(command)
-            launcher_split = split_launcher_command(command_argv)
             prof_cmd.append("--")
-            prof_cmd.extend(launcher_split.app_argv)
+            prof_cmd.extend(command_argv)
 
-            # If a distributed launcher was detected, wrap: launcher rocprofv3 ... -- app
-            if launcher_split.is_distributed:
-                prof_cmd = launcher_split.launcher_argv + prof_cmd
+            # If a launcher is specified, prepend it: launcher rocprofv3 ... -- app
+            if launcher is not None:
+                launcher_argv = normalize_command_argv(launcher)
+                prof_cmd = launcher_argv + prof_cmd
 
             logger.debug(f"rocprofv3 command: {' '.join(prof_cmd)}")
             logger.info(f"Starting rocprofv3 with {len(counters)} counters")

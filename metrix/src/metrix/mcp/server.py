@@ -12,7 +12,7 @@ mcp = FastMCP("IntelliKit Metrix")
 
 
 @mcp.tool()
-def profile_metrics(command: str, metrics: list[str] = None) -> dict:
+def profile_metrics(command: str, metrics: list[str] = None, launcher: str = None) -> dict:
     """
     Profile GPU application and collect hardware performance metrics.
 
@@ -33,7 +33,7 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     if metrics is None:
         metrics = ["memory.hbm_bandwidth_utilization"]
 
-    results_obj = profiler.profile(command, metrics=metrics)
+    results_obj = profiler.profile(command, metrics=metrics, launcher=launcher)
 
     results = {
         "rank": {

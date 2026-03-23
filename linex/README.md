@@ -26,13 +26,15 @@ for line in profiler.source_lines[:5]:
 
 ## Distributed Launchers
 
-Linex can wrap distributed launcher commands (`torchrun`, `mpirun/mpiexec`, `srun`,
-`horovodrun`) and automatically records rank metadata from common environment variables.
+Linex supports distributed profiling with launchers like `torchrun`, `mpirun`,
+`srun`, and `horovodrun`. Pass the launcher separately so Linex builds the
+correct command order (`launcher rocprofv3 ... -- app`).
 
 ```python
 profiler = Linex()
 profiler.profile(
-    "torchrun --nproc_per_node=8 train.py",
+    command="train.py",
+    launcher="torchrun --nproc_per_node=8",
     output_dir="linex_sqtt",
 )
 
@@ -42,7 +44,8 @@ for rank_key, rank_profile in profiler.rank_profiles.items():
 ```
 
 In distributed mode, Linex writes traces into rank-specific subdirectories
-(`.../rank0000`, `.../rank0001`, ...) to avoid collisions.
+(`.../rank0000`, `.../rank0001`, ...) to avoid collisions. Rank metadata is
+automatically detected from environment variables set by the launcher.
 
 ## What You Get
 

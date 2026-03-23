@@ -98,6 +98,7 @@ class GFX942Backend(CounterBackend):
         counters: List[str],
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
+        launcher: Optional[str | Sequence[str]] = None,
         timeout_seconds: Optional[int] = 0,
     ) -> List[ProfileResult]:
         """Run rocprofv3 and return results (single pass only - base class handles multi-pass)"""

@@ -49,18 +49,20 @@ metrix -o results.json ./my_app
 
 ## Distributed Launchers
 
-Metrix supports launcher commands such as `torchrun`, `mpirun/mpiexec`, `srun`, and
-`horovodrun`. Pass launcher commands directly after `--` so arguments are preserved.
+Metrix supports distributed profiling with launchers like `torchrun`, `mpirun`,
+`srun`, and `horovodrun`. Use `--launcher` to specify the launcher command
+separately from the application, ensuring the correct invocation order
+(`launcher rocprofv3 ... -- app`).
 
 ```bash
 # Torch distributed
-metrix profile -- torchrun --nproc_per_node=8 train.py
+metrix profile --launcher "torchrun --nproc_per_node=8" -- train.py
 
 # MPI
-metrix profile -- mpirun -np 8 ./my_app --problem-size 4096
+metrix profile --launcher "mpirun -np 8" -- ./my_app --problem-size 4096
 
 # Slurm
-metrix profile -- srun -N 2 -n 16 ./my_app
+metrix profile --launcher "srun -N 2 -n 16" -- ./my_app
 ```
 
 When distributed rank variables are present (`RANK`, `OMPI_COMM_WORLD_RANK`,

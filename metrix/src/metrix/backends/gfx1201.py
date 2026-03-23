@@ -56,6 +56,7 @@ class GFX1201Backend(CounterBackend):
         counters: List[str],
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
+        launcher: Optional[str | Sequence[str]] = None,
         timeout_seconds: Optional[int] = 0,
         kernel_iteration_range: Optional[str] = None,
     ) -> List[ProfileResult]:

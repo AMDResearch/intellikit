@@ -475,6 +475,7 @@ class CounterBackend(ABC):
         metrics: List[str],
         num_replays: int = 5,
         aggregate_by_kernel: bool = False,
+        launcher: Optional[str | Sequence[str]] = None,
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = 0,
@@ -784,6 +785,7 @@ class CounterBackend(ABC):
         counters: List[str],
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
+        launcher: Optional[str | Sequence[str]] = None,
         timeout_seconds: Optional[int] = 0,
         kernel_iteration_range: Optional[str] = None,
     ) -> List[ProfileResult]:

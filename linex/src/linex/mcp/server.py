@@ -12,7 +12,7 @@ mcp = FastMCP("IntelliKit Linex")
 
 
 @mcp.tool()
-def profile_application(command: str, kernel_filter: str = None, top_n: int = 10) -> dict:
+def profile_application(command: str, kernel_filter: str = None, top_n: int = 10, launcher: str = None) -> dict:
     """
     Profile a GPU application and get source-level performance metrics.
 
@@ -28,7 +28,7 @@ def profile_application(command: str, kernel_filter: str = None, top_n: int = 10
         Dictionary with total_source_lines, total_instructions, and hotspots list
     """
     profiler = Linex()
-    profiler.profile(command, kernel_filter=kernel_filter)
+    profiler.profile(command, kernel_filter=kernel_filter, launcher=launcher)
 
     results = {
         "distributed_context": {
@@ -113,7 +113,7 @@ def analyze_instruction_hotspots(
         Dictionary with hotspot_analysis list containing ISA-level details
     """
     profiler = Linex()
-    profiler.profile(command, kernel_filter=kernel_filter)
+    profiler.profile(command, kernel_filter=kernel_filter, launcher=launcher, launcher=launcher)
 
     results = {
         "distributed_context": {

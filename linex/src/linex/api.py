@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from .distributed import DistributedContext, detect_distributed_context, normalize_command_argv, split_launcher_command
+from .distributed import DistributedContext, detect_distributed_context, normalize_command_argv
 
 
 @dataclass
@@ -183,6 +183,7 @@ class Linex:
         kernel_filter: Optional[str] = None,
         force_cu_mask: bool = True,
         env: Optional[Dict[str, str]] = None,
+        launcher: Optional[str | Sequence[str]] = None,
     ) -> "Linex":
         """
         Profile an application and collect source-level performance data.
@@ -222,7 +223,6 @@ class Linex:
         output_path.mkdir(parents=True, exist_ok=True)
 
         command_argv = normalize_command_argv(command)
-        launcher_split = split_launcher_command(command_argv)
 
         cmd = [
             "rocprofv3",
@@ -242,11 +242,12 @@ class Linex:
         if kernel_filter:
             cmd.extend(["--kernel-include-regex", kernel_filter])
 
-        cmd.extend(["--", *launcher_split.app_argv])
+        cmd.extend(["--", *command_argv])
 
-        # If a distributed launcher was detected, wrap: launcher rocprofv3 ... -- app
-        if launcher_split.is_distributed:
-            cmd = launcher_split.launcher_argv + cmd
+        # If a launcher is specified, prepend it: launcher rocprofv3 ... -- app
+        if launcher is not None:
+            launcher_argv = normalize_command_argv(launcher)
+            cmd = launcher_argv + cmd
 
         if force_cu_mask and "HSA_CU_MASK" not in run_env:
             run_env["HSA_CU_MASK"] = "0x1"  # Force to CU 0 unless caller already set a mask

@@ -52,6 +52,15 @@ Examples:
     )
 
     profile_parser.add_argument(
+        "--launcher",
+        default=None,
+        help=(
+            "Distributed launcher command to wrap rocprofv3 "
+            "(e.g., 'torchrun --nproc_per_node=8' or 'mpirun -np 4')"
+        ),
+    )
+
+    profile_parser.add_argument(
         "target",
         nargs=argparse.REMAINDER,
         help=(

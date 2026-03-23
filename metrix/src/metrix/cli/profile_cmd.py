@@ -113,6 +113,7 @@ def profile_command(args):
             metrics=metrics_to_compute,
             num_replays=args.num_replays,
             aggregate_by_kernel=args.aggregate,
+            launcher=args.launcher,
             kernel_filter=kernel_filter,
         )
     except Exception as e:

@@ -359,8 +359,8 @@ class TestROCProfV3Wrapper:
         assert results[0].world_size == 8
 
 
-    def test_launcher_command_builds_correct_order(self, wrapper_no_rocm_check):
-        """torchrun command should produce: torchrun args rocprofv3 ... -- app args."""
+    def test_launcher_param_builds_correct_order(self, wrapper_no_rocm_check):
+        """Explicit launcher param should produce: launcher rocprofv3 ... -- app."""
         wrapper = wrapper_no_rocm_check
         captured_cmd = []
 
@@ -378,18 +378,47 @@ class TestROCProfV3Wrapper:
             tempfile.TemporaryDirectory() as tmpdir,
         ):
             wrapper.profile(
-                command="torchrun --nproc_per_node=4 train.py --lr 0.01",
+                command="train.py --lr 0.01",
                 counters=[],
                 output_dir=Path(tmpdir),
+                launcher="torchrun --nproc_per_node=4",
             )
 
         assert captured_cmd[0] == "torchrun"
         assert captured_cmd[1] == "--nproc_per_node=4"
         rocprofv3_idx = captured_cmd.index("rocprofv3")
-        assert rocprofv3_idx > 1
+        assert rocprofv3_idx == 2
         separator_idx = captured_cmd.index("--")
         assert captured_cmd[separator_idx + 1] == "train.py"
         assert captured_cmd[separator_idx + 2] == "--lr"
+
+    def test_no_launcher_uses_plain_rocprofv3(self, wrapper_no_rocm_check):
+        """Without launcher, command should start with rocprofv3."""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command="./my_app --size 1024",
+                counters=[],
+                output_dir=Path(tmpdir),
+            )
+
+        assert captured_cmd[0] == "rocprofv3"
+        separator_idx = captured_cmd.index("--")
+        assert captured_cmd[separator_idx + 1] == "./my_app"
 
     def test_parse_missing_optional_fields(self, wrapper):
         """Handle missing optional fields gracefully"""
