@@ -121,6 +121,12 @@ class Metrix:
             cwd: Working directory for command execution (default: None)
             timeout_seconds: Timeout in seconds for profiling (default: 0, zero or None for no timeout)
 
+        Note:
+            When using ``launcher``, rank metadata is detected from environment
+            variables (RANK, LOCAL_RANK, etc.) set by the launcher in child
+            processes. For torchrun, run ``torchrun --no-python metrix ...``
+            so each rank gets its own metrix process with correct env vars.
+
         Returns:
             ProfilingResults object with all collected data
         """

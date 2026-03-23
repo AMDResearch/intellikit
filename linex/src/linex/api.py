@@ -199,6 +199,15 @@ class Linex:
             kernel_filter: Regex filter for kernel names (default: None = all kernels)
             force_cu_mask: Force waves to target CU using HSA_CU_MASK (default: True)
 
+        Note:
+            When using ``launcher``, the launcher spawns child processes that
+            each run rocprofv3. Rank metadata is detected from environment
+            variables (RANK, LOCAL_RANK, WORLD_SIZE, etc.) set by the launcher
+            in each child process. This means ``launcher`` is most useful when
+            Linex itself runs *inside* a launched process (e.g.,
+            ``torchrun --no-python ... linex-cli ...``), not when calling
+            ``Linex().profile(launcher=...)`` from a non-distributed parent.
+
         Returns:
             self for chaining
         """

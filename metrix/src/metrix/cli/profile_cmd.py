@@ -21,11 +21,10 @@ from ..utils.distributed import (
 
 
 def profile_command(args):
+    """Execute profile command using clean backend API."""
     command_argv = normalize_command_argv(_normalize_cli_target(args.target))
     command_display = " ".join(command_argv)
     dist_context = detect_distributed_context()
-
-    """Execute profile command using clean backend API"""
 
     # Auto-detect architecture
     arch = detect_or_default(None)
