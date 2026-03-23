@@ -472,7 +472,7 @@ class CounterBackend(ABC):
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = 0,
-        use_kernel_iteration_range: bool = False,  # Disabled: rocprofv3 hangs with multiple counter blocks
+        kernel_iteration_range: Optional[str] = None,
     ):
         """
         Profile command with two-level aggregation and multi-pass support
@@ -490,16 +490,25 @@ class CounterBackend(ABC):
                 in profiling results.
             cwd: Working directory for command execution
             timeout_seconds: Timeout in seconds for profiling (default: 0, None for no timeout)
+            kernel_iteration_range: Optional YAML ``jobs[].kernel_iteration_range`` string passed
+                to rocprofv3 ``--input`` (e.g. ``"[5,5]"`` for the 5th launch of each matched kernel).
+                When set, Metrix runs ``num_replays`` profiling passes, each applying this range.
 
         Returns:
             self (for chaining)
         """
         from ..logger import logger
 
+        # rocprofv3 jobs[].kernel_iteration_range — optional per-kernel launch index window.
+        user_iteration_range: Optional[str] = (
+            kernel_iteration_range.strip() if kernel_iteration_range else None
+        )
+        effective_iteration_range: Optional[str] = user_iteration_range
+
         # Get counters needed
         counters = self.get_required_counters(metrics)
 
-        # Split metrics into category-based batches to avoid rocprofv3 hangs
+        # Split large metric sets into category-based batches (fewer counters per rocprof pass)
         # Group by category (memory.*, proprietary.*, etc.) for better organization
         MAX_METRICS_PER_BATCH = 6
         if len(metrics) > MAX_METRICS_PER_BATCH:
@@ -550,7 +559,7 @@ class CounterBackend(ABC):
                     kernel_filter=kernel_filter,
                     cwd=cwd,
                     timeout_seconds=timeout_seconds,
-                    use_kernel_iteration_range=use_kernel_iteration_range,
+                    kernel_iteration_range=kernel_iteration_range,
                 )
 
                 # Merge batch results
@@ -628,28 +637,29 @@ class CounterBackend(ABC):
 
             pass_results = []
 
-            # Use kernel_iteration_range for faster profiling
-            if use_kernel_iteration_range:
-                iteration_range = f"[1,{num_replays}]"
+            if effective_iteration_range is not None:
                 logger.info(
-                    f"  Using kernel_iteration_range={iteration_range} (rocprofv3 internal iterations)"
+                    f"  Using kernel_iteration_range={effective_iteration_range} "
+                    f"across {num_replays} replay(s)"
                 )
-                results = self._run_rocprof(
-                    command,
-                    pass_counters,
-                    kernel_filter,
-                    cwd=cwd,
-                    timeout_seconds=timeout_seconds,
-                    kernel_iteration_range=iteration_range,
-                )
-                # Tag all results with replay_id 0 since rocprofv3 handles iterations
-                for r in results:
-                    r.run_id = 0
-                pass_results.extend(results)
-            else:
-                # Legacy mode: run application multiple times
                 for replay_id in range(num_replays):
-                    # Show progress every 10 replays or at key milestones
+                    if num_replays >= 20 and (
+                        replay_id == 0 or (replay_id + 1) % 10 == 0 or replay_id == num_replays - 1
+                    ):
+                        logger.info(f"  Replay {replay_id + 1}/{num_replays}...")
+                    results = self._run_rocprof(
+                        command,
+                        pass_counters,
+                        kernel_filter,
+                        cwd=cwd,
+                        timeout_seconds=timeout_seconds,
+                        kernel_iteration_range=effective_iteration_range,
+                    )
+                    for r in results:
+                        r.run_id = replay_id
+                    pass_results.extend(results)
+            else:
+                for replay_id in range(num_replays):
                     if num_replays >= 20 and (
                         replay_id == 0 or (replay_id + 1) % 10 == 0 or replay_id == num_replays - 1
                     ):
@@ -662,7 +672,6 @@ class CounterBackend(ABC):
                         cwd=cwd,
                         timeout_seconds=timeout_seconds,
                     )
-                    # Tag with replay_id for debugging
                     for r in results:
                         r.run_id = replay_id
                     pass_results.extend(results)
@@ -790,6 +799,7 @@ class CounterBackend(ABC):
             kernel_filter: Optional regular expression to filter kernels by name
             cwd: Optional working directory for command execution
             timeout_seconds: Timeout in seconds for profiling (default: 0, zero or None for no timeout)
+            kernel_iteration_range: Optional rocprofv3 job field (e.g. ``"[2,4]"``)
 
         Returns:
             List of ProfileResult objects
