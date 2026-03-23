@@ -625,6 +625,8 @@ hsa_status_t nexus::hsa_executable_symbol_get_info(
 hsa_status_t nexus::hsa_executable_freeze(hsa_executable_t executable,
                                            const char* options) {
   auto instance = get_instance();
+  LOG_INFO("Intercepting hsa_executable_freeze (handle=0x{:x})",
+           executable.handle);
   auto result = hsa_core_call(instance, hsa_executable_freeze, executable, options);
   if (result != HSA_STATUS_SUCCESS) {
     return result;
@@ -678,6 +680,13 @@ hsa_status_t nexus::hsa_executable_freeze(hsa_executable_t executable,
                   return HSA_STATUS_SUCCESS;
                 },
                 &iter_data);
+
+  {
+    std::lock_guard<std::mutex> g(mutex_);
+    LOG_INFO("After freeze: {} kernel handles, {} symbol names registered",
+             instance->handles_symbols_.size(),
+             instance->symbols_names_.size());
+  }
 
   return result;
 }
