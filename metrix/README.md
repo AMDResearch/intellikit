@@ -132,12 +132,6 @@ metrix info <metric|profile> <name>
 `metrix list counters` and `metrix info counter <name>` exist but currently print “not yet implemented” in the CLI.
 
 Note: GPU architecture is auto-detected using `rocminfo`.
-metrix list <metrics|profiles|counters|devices> [--category CAT]
-
-metrix info <metric|profile|counter> <name>
-```
-
-Note: GPU architecture is auto-detected using `rocminfo`.
 
 **rocprofv3 iteration field:** Metrix passes counters via `rocprofv3 --input <file>`. The launch-index
 window is the YAML key **`kernel_iteration_range`** on each object under top-level **`jobs`**

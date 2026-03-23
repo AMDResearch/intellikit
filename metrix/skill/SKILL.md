@@ -42,8 +42,7 @@ metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency,compute.total_f
 metrix -o results.json ./my_app
 ```
 
-Options: `--profile`/`-p` (run `metrix list profiles` for names: `quick`, `memory`, `memory_bandwidth`, `memory_cache`, `compute`), `--metrics`/`-m`, `--time-only`, `--kernel`/`-k` (regular expression), `--num-replays`/`-n`, `--output`/`-o`, `--top`, `--aggregate`, `--timeout`, `--no-counters`, `--log`/`-l`, `--quiet`/`-q`. Discovery: `metrix list <metrics|profiles|devices>`, `metrix info <metric|profile> <name>`. Note: `metrix list counters` and `metrix info counter <name>` are not implemented yet (CLI reports “not yet implemented”).
-Options: `--profile`/`-p` (see `metrix list profiles`), `--metrics`/`-m`, `--time-only`, `--kernel`/`-k` (regex), `--num-replays`/`-n`, `--kernel-iteration` / `--kernel-iteration-range` (YAML `jobs[].kernel_iteration_range`), `--output`/`-o`, `--top`, `--aggregate`, `--timeout`, `--no-counters`, `--log`/`-l`, `--quiet`/`-q`.
+Options: `--profile`/`-p` (run `metrix list profiles` for names: `quick`, `memory`, `memory_bandwidth`, `memory_cache`, `compute`), `--metrics`/`-m`, `--time-only`, `--kernel`/`-k` (regular expression), `--num-replays`/`-n`, `--kernel-iteration` / `--kernel-iteration-range` (YAML `jobs[].kernel_iteration_range`), `--output`/`-o`, `--top`, `--aggregate`, `--timeout`, `--no-counters`, `--log`/`-l`, `--quiet`/`-q`. Discovery: `metrix list <metrics|profiles|devices>`, `metrix info <metric|profile> <name>`. Note: `metrix list counters` and `metrix info counter <name>` are not implemented yet (CLI reports “not yet implemented”).
 
 With `--kernel-iteration*`, always set `--kernel` as well: launch indices are counted **per kernel name**, so a narrow regex keeps “Nth launch” meaningful.
 
