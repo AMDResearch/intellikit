@@ -554,6 +554,7 @@ class CounterBackend(ABC):
                     metrics=batch_metrics,
                     num_replays=num_replays,
                     aggregate_by_kernel=aggregate_by_kernel,
+                    launcher=launcher,
                     kernel_filter=kernel_filter,
                     cwd=cwd,
                     timeout_seconds=timeout_seconds,
