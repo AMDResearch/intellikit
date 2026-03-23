@@ -113,7 +113,7 @@ def analyze_instruction_hotspots(
         Dictionary with hotspot_analysis list containing ISA-level details
     """
     profiler = Linex()
-    profiler.profile(command, kernel_filter=kernel_filter, launcher=launcher, launcher=launcher)
+    profiler.profile(command, kernel_filter=kernel_filter, launcher=launcher)
 
     results = {
         "distributed_context": {

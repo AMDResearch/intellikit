@@ -55,10 +55,8 @@ def test_profile_uses_rank_scoped_output_and_loads_deterministic_ui_dir(tmp_path
         m.stderr = ""
         return m
 
-    with (
-        patch.object(Linex, "_ensure_decoder", return_value=dummy_decoder),
-        patch("subprocess.run", side_effect=fake_run),
-    ):
+    with patch.object(Linex, "_ensure_decoder", return_value=dummy_decoder), \
+         patch("subprocess.run", side_effect=fake_run):
         profiler = Linex()
         profiler.profile(
             command='python -c "print(1)"',
@@ -95,10 +93,8 @@ def test_profile_with_launcher_builds_correct_command_order(tmp_path):
         m.stderr = ""
         return m
 
-    with (
-        patch.object(Linex, "_ensure_decoder", return_value=dummy_decoder),
-        patch("subprocess.run", side_effect=fake_run),
-    ):
+    with patch.object(Linex, "_ensure_decoder", return_value=dummy_decoder), \
+         patch("subprocess.run", side_effect=fake_run):
         profiler = Linex()
         profiler.profile(
             command="train.py --lr 0.01",
@@ -138,10 +134,8 @@ def test_profile_without_launcher_uses_plain_rocprofv3(tmp_path):
         m.stderr = ""
         return m
 
-    with (
-        patch.object(Linex, "_ensure_decoder", return_value=dummy_decoder),
-        patch("subprocess.run", side_effect=fake_run),
-    ):
+    with patch.object(Linex, "_ensure_decoder", return_value=dummy_decoder), \
+         patch("subprocess.run", side_effect=fake_run):
         profiler = Linex()
         profiler.profile(
             command="./my_app --size 1024",
