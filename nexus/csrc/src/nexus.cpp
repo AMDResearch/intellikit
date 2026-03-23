@@ -459,6 +459,22 @@ hsa_status_t nexus::hsa_code_object_reader_create_from_file(
   if (result != HSA_STATUS_SUCCESS) {
     LOG_ERROR("Failed to create a code object reader from file {}", file);
   }
+
+  if (instance->kdb_) {
+    char fd_path[64];
+    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", file);
+    char resolved[4096];
+    ssize_t len = readlink(fd_path, resolved, sizeof(resolved) - 1);
+    if (len > 0) {
+      resolved[len] = '\0';
+      std::string file_path(resolved);
+      LOG_DETAIL("Adding code object from file: {}", file_path);
+      instance->kdb_->addFile(file_path, instance->gpu_agent_.agent, "");
+    } else {
+      LOG_WARN("Could not resolve fd {} to file path", file);
+    }
+  }
+
   return result;
 }
 
@@ -492,12 +508,11 @@ static std::optional<std::string> find_mmap_file_from_ptr(const void* ptr) {
         return {};
       }
 
-      // if (path.empty()) {
-      //   return {};
-      // }
+      if (path.empty() || path[0] == '[') {
+        return {};
+      }
 
-      // return path;
-      return path.empty() ? "[anonymous mapping]" : path;
+      return path;
     }
   }
 
