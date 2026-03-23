@@ -514,12 +514,19 @@ class Accordo:
                 if not _validate_arrays(ref_arr, opt_arr, atol, rtol, equal_nan):
                     # Array mismatch
                     diff = np.abs(ref_arr - opt_arr)
+                    finite_diff = diff[~np.isnan(diff)]
+                    if finite_diff.size > 0:
+                        max_diff = float(np.max(finite_diff))
+                        mean_diff = float(np.mean(finite_diff))
+                    else:
+                        max_diff = 0.0
+                        mean_diff = 0.0
                     mismatch = ArrayMismatch(
                         arg_index=kernel_arg_idx,  # Use kernel arg index, not array index
                         arg_name=arg_name,
                         arg_type=arg_type,
-                        max_difference=float(np.max(diff)),
-                        mean_difference=float(np.mean(diff)),
+                        max_difference=max_diff,
+                        mean_difference=mean_diff,
                         reference_sample=ref_arr[:10] if len(ref_arr) > 10 else ref_arr,
                         optimized_sample=opt_arr[:10] if len(opt_arr) > 10 else opt_arr,
                         dispatch_index=dispatch_idx,

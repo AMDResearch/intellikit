@@ -14,7 +14,8 @@ class Snapshot:
     """Represents a captured snapshot of kernel argument data.
 
     Attributes:
-            arrays: List of numpy arrays containing kernel argument data
+            arrays: Output arrays from the first kernel dispatch (for backward compatibility).
+                     Use dispatch_arrays for per-dispatch access when multiple dispatches are captured.
             execution_time_ms: Time taken to execute and capture the snapshot (milliseconds)
             binary: The binary command that was executed
             working_directory: The directory where the binary was executed
