@@ -622,6 +622,66 @@ hsa_status_t nexus::hsa_executable_symbol_get_info(
   return result;
 }
 
+hsa_status_t nexus::hsa_executable_freeze(hsa_executable_t executable,
+                                           const char* options) {
+  auto instance = get_instance();
+  auto result = hsa_core_call(instance, hsa_executable_freeze, executable, options);
+  if (result != HSA_STATUS_SUCCESS) {
+    return result;
+  }
+
+  // After freezing, iterate all symbols in this executable to populate
+  // handles_symbols_ and symbols_names_. This catches kernels loaded by
+  // libraries like hipBLASLt that don't call hsa_executable_get_symbol_by_name.
+  struct IterData {
+    nexus* instance;
+    hsa_executable_t executable;
+  };
+  IterData iter_data{instance, executable};
+
+  hsa_core_call(instance,
+                hsa_executable_iterate_symbols,
+                executable,
+                [](hsa_executable_t exec, hsa_executable_symbol_t symbol,
+                   void* data) -> hsa_status_t {
+                  auto* d = static_cast<IterData*>(data);
+                  auto* inst = d->instance;
+
+                  // Get symbol type — only care about kernel symbols
+                  hsa_symbol_kind_t kind;
+                  hsa_core_call(inst, hsa_executable_symbol_get_info, symbol,
+                                HSA_EXECUTABLE_SYMBOL_INFO_TYPE, &kind);
+                  if (kind != HSA_SYMBOL_KIND_KERNEL) {
+                    return HSA_STATUS_SUCCESS;
+                  }
+
+                  // Get symbol name
+                  uint32_t name_len = 0;
+                  hsa_core_call(inst, hsa_executable_symbol_get_info, symbol,
+                                HSA_EXECUTABLE_SYMBOL_INFO_NAME_LENGTH, &name_len);
+                  std::string name(name_len, '\0');
+                  hsa_core_call(inst, hsa_executable_symbol_get_info, symbol,
+                                HSA_EXECUTABLE_SYMBOL_INFO_NAME, name.data());
+
+                  // Get kernel object handle
+                  uint64_t kernel_object = 0;
+                  hsa_core_call(inst, hsa_executable_symbol_get_info, symbol,
+                                HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT, &kernel_object);
+
+                  {
+                    std::lock_guard<std::mutex> g(mutex_);
+                    inst->symbols_names_[symbol] = name;
+                    inst->kernels_executables_[name] = d->executable;
+                    inst->handles_symbols_[kernel_object] = symbol;
+                  }
+
+                  return HSA_STATUS_SUCCESS;
+                },
+                &iter_data);
+
+  return result;
+}
+
 void nexus::save_hsa_api() {
   rocr_api_table_.core_ = new CoreApiTable();
   rocr_api_table_.amd_ext_ = new AmdExtTable();
@@ -658,10 +718,13 @@ void nexus::hook_api() {
   api_table_->core_->hsa_executable_symbol_get_info_fn =
       nexus::hsa_executable_symbol_get_info;
 
+  api_table_->core_->hsa_executable_freeze_fn = nexus::hsa_executable_freeze;
+
   // Intercepting the hsa_shut_down function causes a crash at the end
   // For now, we are not going to intercept it and we will dump the trace
   // every time we see a new kernel
   // api_table_->core_->hsa_shut_down_fn = nexus::hsa_shut_down;
+
 }
 
 hsa_status_t nexus::add_queue(hsa_queue_t* queue, hsa_agent_t agent) {

@@ -288,6 +288,9 @@ class nexus {
       hsa_executable_symbol_info_t attribute,
       void* value);
 
+  static hsa_status_t hsa_executable_freeze(hsa_executable_t executable,
+                                             const char* options);
+
   static hsa_status_t hsa_shut_down();
 
   using packet_word_t = uint32_t;
