@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from .distributed import DistributedContext, detect_distributed_context, normalize_command_argv
+from .distributed import DistributedContext, detect_distributed_context, normalize_command_argv, split_launcher_command
 
 
 @dataclass
@@ -222,6 +222,7 @@ class Linex:
         output_path.mkdir(parents=True, exist_ok=True)
 
         command_argv = normalize_command_argv(command)
+        launcher_split = split_launcher_command(command_argv)
 
         cmd = [
             "rocprofv3",
@@ -241,7 +242,11 @@ class Linex:
         if kernel_filter:
             cmd.extend(["--kernel-include-regex", kernel_filter])
 
-        cmd.extend(["--", *command_argv])
+        cmd.extend(["--", *launcher_split.app_argv])
+
+        # If a distributed launcher was detected, wrap: launcher rocprofv3 ... -- app
+        if launcher_split.is_distributed:
+            cmd = launcher_split.launcher_argv + cmd
 
         if force_cu_mask and "HSA_CU_MASK" not in run_env:
             run_env["HSA_CU_MASK"] = "0x1"  # Force to CU 0 unless caller already set a mask
