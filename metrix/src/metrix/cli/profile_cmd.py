@@ -93,8 +93,7 @@ def profile_command(args):
         resolved_iteration_range = kernel_iteration_range.strip()
     if resolved_iteration_range:
         logger.info(
-            "Kernel iteration range (jobs[].kernel_iteration_range): "
-            f"{resolved_iteration_range}"
+            f"Kernel iteration range (jobs[].kernel_iteration_range): {resolved_iteration_range}"
         )
     logger.info(f"{'=' * 80}")
 

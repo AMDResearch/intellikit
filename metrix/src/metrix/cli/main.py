@@ -157,7 +157,7 @@ Examples:
         type=str,
         metavar="RANGE",
         help=(
-            'YAML jobs[].kernel_iteration_range passed via rocprofv3 --input, e.g. '
+            "YAML jobs[].kernel_iteration_range passed via rocprofv3 --input, e.g. "
             '"[1,3]" or "[10,10]". See ROCprofiler-SDK input schema.'
         ),
     )
