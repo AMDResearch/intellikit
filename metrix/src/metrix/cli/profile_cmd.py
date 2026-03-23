@@ -13,7 +13,11 @@ from io import StringIO
 from ..backends import get_backend, Statistics, detect_or_default
 from ..metrics import METRIC_PROFILES, METRIC_CATALOG
 from ..logger import logger
-from ..utils.distributed import apply_rank_suffix, detect_distributed_context, normalize_command_argv
+from ..utils.distributed import (
+    apply_rank_suffix,
+    detect_distributed_context,
+    normalize_command_argv,
+)
 
 
 def profile_command(args):
@@ -164,7 +168,9 @@ def profile_command(args):
     output_path = args.output
     if output_path and dist_context.is_distributed:
         output_path = apply_rank_suffix(output_path, dist_context)
-        logger.info("Distributed output path for rank %s: %s", dist_context.global_rank, output_path)
+        logger.info(
+            "Distributed output path for rank %s: %s", dist_context.global_rank, output_path
+        )
 
     if output_path:
         # Detect format from file extension
@@ -174,10 +180,14 @@ def profile_command(args):
         if ext == ".json":
             _write_json_output(output_file, results, metrics_to_compute, dist_context)
         elif ext == ".csv":
-            _write_csv_output(output_file, results, metrics_to_compute, args.aggregate, dist_context)
+            _write_csv_output(
+                output_file, results, metrics_to_compute, args.aggregate, dist_context
+            )
         else:
             # Default to text
-            _write_text_output(output_file, results, metrics_to_compute, args.aggregate, dist_context)
+            _write_text_output(
+                output_file, results, metrics_to_compute, args.aggregate, dist_context
+            )
     else:
         # Print to stdout
         _print_text_results(
@@ -231,7 +241,11 @@ def _print_text_results(
             # - "dispatch_1:kernel_name"
             # - "rank_1:dispatch_1:kernel_name" (distributed)
             parts = dispatch_key.split(":")
-            if len(parts) >= 2 and parts[0].startswith("rank_") and parts[1].startswith("dispatch_"):
+            if (
+                len(parts) >= 2
+                and parts[0].startswith("rank_")
+                and parts[1].startswith("dispatch_")
+            ):
                 dispatch_id = parts[1].replace("dispatch_", "")
                 kernel_name = ":".join(parts[2:]) if len(parts) > 2 else ""
                 print(f"Dispatch #{dispatch_id}: {kernel_name}")

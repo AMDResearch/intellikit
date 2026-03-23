@@ -121,6 +121,7 @@ def apply_rank_suffix(path: str, context: DistributedContext) -> str:
         return path
 
     from pathlib import Path as _Path
+
     p = _Path(path)
     suffix = p.suffix
     if suffix:

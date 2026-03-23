@@ -279,7 +279,9 @@ class Linex:
                 hostname=dist_context.hostname,
                 launcher=dist_context.launcher,
                 ui_output_dir=str(ui_dir),
-                source_lines=sorted(source_lines.values(), key=lambda x: x.total_cycles, reverse=True),
+                source_lines=sorted(
+                    source_lines.values(), key=lambda x: x.total_cycles, reverse=True
+                ),
                 instructions=instructions,
             )
 

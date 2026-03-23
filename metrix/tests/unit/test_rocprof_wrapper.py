@@ -358,7 +358,6 @@ class TestROCProfV3Wrapper:
         assert results[0].local_rank == 1
         assert results[0].world_size == 8
 
-
     def test_launcher_param_builds_correct_order(self, wrapper_no_rocm_check):
         """Explicit launcher param should produce: launcher rocprofv3 ... -- app."""
         wrapper = wrapper_no_rocm_check

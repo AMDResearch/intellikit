@@ -816,7 +816,9 @@ class CounterBackend(ABC):
         groups = defaultdict(list)
         for result in results:
             if result.world_size > 1:
-                key = f"rank_{result.global_rank}:dispatch_{result.dispatch_id}:{result.kernel_name}"
+                key = (
+                    f"rank_{result.global_rank}:dispatch_{result.dispatch_id}:{result.kernel_name}"
+                )
             else:
                 key = f"dispatch_{result.dispatch_id}:{result.kernel_name}"
             groups[key].append(result)

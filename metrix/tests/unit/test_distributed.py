@@ -20,7 +20,11 @@ def test_detect_distributed_context_torchrun_env():
 
 
 def test_detect_distributed_context_mpi_env():
-    env = {"OMPI_COMM_WORLD_RANK": "5", "OMPI_COMM_WORLD_LOCAL_RANK": "1", "OMPI_COMM_WORLD_SIZE": "8"}
+    env = {
+        "OMPI_COMM_WORLD_RANK": "5",
+        "OMPI_COMM_WORLD_LOCAL_RANK": "1",
+        "OMPI_COMM_WORLD_SIZE": "8",
+    }
     ctx = detect_distributed_context(env)
     assert ctx.global_rank == 5
     assert ctx.local_rank == 1
