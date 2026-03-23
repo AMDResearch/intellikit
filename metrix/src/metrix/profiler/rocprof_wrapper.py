@@ -98,7 +98,8 @@ class ROCProfV3Wrapper:
                   ``".*attention.*"``   - kernels whose names contain "attention"
                   ``"gemm|attention"``  - kernels matching either pattern
             cwd: Optional working directory
-            kernel_iteration_range: Optional iteration range (e.g., "[1,5]" to profile iterations 1-5)
+            kernel_iteration_range: Optional rocprofv3 job field (e.g. ``"[1,5]"`` or ``"[3,3]"``
+                for only the 3rd launch of each kernel matching ``kernel_filter``)
             extra_counters_path: Path to YAML with custom counter definitions (rocprofiler-sdk: section)
             arch: GPU architecture (e.g., "gfx1201") to filter counter definitions
 
@@ -331,6 +332,7 @@ class ROCProfV3Wrapper:
             "truncate_kernels": True,
         }
 
+        # ROCprofiler-SDK / rocprofv3 --input YAML: jobs[].kernel_iteration_range (e.g. "[1,5]")
         if kernel_iteration_range:
             job["kernel_iteration_range"] = kernel_iteration_range
 

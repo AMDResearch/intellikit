@@ -87,6 +87,7 @@ class Metrix:
         aggregate_by_kernel: bool = True,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = 0,
+        kernel_iteration_range: Optional[str] = None,
     ) -> ProfilingResults:
         """
         Profile a command
@@ -109,6 +110,9 @@ class Metrix:
             aggregate_by_kernel: Aggregate dispatches by kernel name (default: True)
             cwd: Working directory for command execution (default: None)
             timeout_seconds: Timeout in seconds for profiling (default: 0, zero or None for no timeout)
+            kernel_iteration_range: Optional YAML ``jobs[].kernel_iteration_range`` string
+                (rocprofv3 ``--input``). E.g. ``"[5,5]"`` for only the 5th launch of each matched
+                kernel. Metrix runs ``num_replays`` profiling passes, each applying this range.
 
         Returns:
             ProfilingResults object with all collected data
@@ -158,6 +162,8 @@ class Metrix:
         logger.info(f"Collecting {len(metrics_to_compute)} metrics across {num_replays} replay(s)")
         if rocprof_filter:
             logger.info(f"Kernel filter: {rocprof_filter}")
+        if kernel_iteration_range:
+            logger.info(f"Kernel iteration range: {kernel_iteration_range}")
 
         # Profile using backend (filtering at rocprofv3 level)
         logger.debug(f"Calling backend.profile with {len(metrics_to_compute)} metrics")
@@ -169,6 +175,7 @@ class Metrix:
             kernel_filter=rocprof_filter,
             cwd=cwd,
             timeout_seconds=timeout_seconds,
+            kernel_iteration_range=kernel_iteration_range,
         )
         logger.debug("Backend.profile completed")
 

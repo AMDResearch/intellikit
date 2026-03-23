@@ -14,6 +14,13 @@ from .list_cmd import list_command
 from .info_cmd import info_command
 
 
+def _positive_int(value: str) -> int:
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return n
+
+
 def create_parser():
     """Create argument parser"""
 
@@ -31,6 +38,9 @@ Examples:
 
   # Filter specific kernels (regex)
   metrix profile --profile memory --kernel "matmul.*" ./my_app
+
+  # Only the 10th launch of a repeatedly-dispatched kernel (use with --kernel)
+  metrix profile --kernel "^my_gemm" --kernel-iteration 10 -n 3 ./bench
 
   # List available metrics
   metrix list metrics --category memory
@@ -128,6 +138,28 @@ Examples:
         "--aggregate",
         action="store_true",
         help="Aggregate metrics by kernel name across replays (default: per-dispatch across runs)",
+    )
+
+    _kernel_iter = profile_parser.add_mutually_exclusive_group()
+    _kernel_iter.add_argument(
+        "--kernel-iteration",
+        type=_positive_int,
+        metavar="N",
+        help=(
+            "Collect hardware counters only for the Nth launch of each kernel matching "
+            "--kernel (YAML jobs[].kernel_iteration_range [N,N]). Use when the app runs the "
+            "same kernel multiple times (warmups, loops) and you want one launch. Combine "
+            "with -n to average across multiple full-app replays."
+        ),
+    )
+    _kernel_iter.add_argument(
+        "--kernel-iteration-range",
+        type=str,
+        metavar="RANGE",
+        help=(
+            'YAML jobs[].kernel_iteration_range passed via rocprofv3 --input, e.g. '
+            '"[1,3]" or "[10,10]". See ROCprofiler-SDK input schema.'
+        ),
     )
 
     # List command

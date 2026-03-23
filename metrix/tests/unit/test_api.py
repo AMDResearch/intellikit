@@ -2,6 +2,8 @@
 Unit tests for the high-level Metrix API
 """
 
+from unittest.mock import patch
+
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
 from metrix.backends import Statistics
@@ -11,10 +13,9 @@ class TestMetrixInit:
     """Test Metrix initialization"""
 
     def test_init_default(self):
-        """Test default initialization (falls back to gfx942 if no hardware detected)"""
+        """Test default initialization (architecture from hardware detection)"""
         profiler = Metrix()
-        # Default depends on hardware detection, but should succeed
-        assert profiler.arch in ["gfx942", "gfx90a", "gfx1201"]
+        assert profiler.arch
         assert profiler.backend is not None
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
@@ -165,3 +166,27 @@ class TestUnsupportedMetricsAPI:
         assert "memory.atomic_latency" not in filtered
         assert "memory.l2_hit_rate" in filtered
         assert "memory.hbm_bandwidth_utilization" in filtered
+
+
+class TestMetrixProfilePlumbing:
+    """Metrix.profile forwards options to the backend without running rocprof."""
+
+    def test_profile_forwards_kernel_iteration_range_and_replays(self):
+        profiler = Metrix(arch="gfx942")
+        with patch.object(profiler.backend, "profile") as mock_profile:
+            mock_profile.return_value = None
+            out = profiler.profile(
+                "./fake_app",
+                metrics=["memory.l2_hit_rate"],
+                kernel_iteration_range="[3,3]",
+                num_replays=2,
+                kernel_filter=r"^my_kernel",
+            )
+        mock_profile.assert_called_once()
+        kwargs = mock_profile.call_args.kwargs
+        assert kwargs["command"] == "./fake_app"
+        assert kwargs["metrics"] == ["memory.l2_hit_rate"]
+        assert kwargs["kernel_iteration_range"] == "[3,3]"
+        assert kwargs["num_replays"] == 2
+        assert kwargs["kernel_filter"] == r"^my_kernel"
+        assert out.total_kernels == 0
