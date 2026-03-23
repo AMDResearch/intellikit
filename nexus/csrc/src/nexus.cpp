@@ -555,7 +555,14 @@ hsa_status_t nexus::hsa_code_object_reader_create_from_memory(
   }
 
   if (instance->kdb_) {
-    if (filename.has_value()) {
+    // Skip KernelDB indexing for very large code objects (>50MB).
+    // Disassembling e.g. hipBLASLt's 208MB Tensile library crashes.
+    // The freeze hook still registers kernel names for dispatch tracking.
+    constexpr size_t kMaxDisassemblySize = 50 * 1024 * 1024;
+    if (size > kMaxDisassemblySize) {
+      LOG_INFO("Skipping KernelDB indexing for large code object ({} bytes, file: {})",
+               size, filename.value_or("unknown"));
+    } else if (filename.has_value()) {
       instance->kdb_->addFile(filename.value(), instance->gpu_agent_.agent, "", true);
     } else {
       LOG_DETAIL(

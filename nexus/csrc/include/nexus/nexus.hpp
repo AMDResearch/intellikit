@@ -33,6 +33,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <set>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -344,6 +345,7 @@ class nexus {
 
   std::unordered_map<std::uint64_t, hsa_executable_symbol_t> handles_symbols_;
   std::unordered_map<void*, std::size_t> pointer_sizes_;
+  std::set<std::string> large_code_objects_;  // code objects too large to disassemble
   std::mutex mm_mutex_;
   std::unique_ptr<kernelDB::kernelDB> kdb_;
 };
