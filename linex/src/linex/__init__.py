@@ -8,7 +8,7 @@ Maps rocprofv3 SQTT traces to source code granularity,
 providing cycle counts and performance metrics per source line.
 """
 
-from .api import Linex, SourceLine, InstructionData
+from .api import InstructionData, Linex, RankProfile, SourceLine
 
 __version__ = "0.1.0"
-__all__ = ["Linex", "SourceLine", "InstructionData"]
+__all__ = ["Linex", "SourceLine", "InstructionData", "RankProfile"]

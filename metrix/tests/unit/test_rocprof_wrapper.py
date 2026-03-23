@@ -290,6 +290,74 @@ class TestROCProfV3Wrapper:
         assert len(results) == 1
         assert results[0].kernel_name == "my_kernel(float*, int)"
 
+    def test_command_string_uses_shlex_parsing(self, wrapper_no_rocm_check):
+        """Quoted command arguments are preserved via shlex parsing."""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command='python -c "print(1 + 2)"',
+                counters=[],
+                output_dir=Path(tmpdir),
+            )
+
+        assert "--" in captured_cmd
+        idx = captured_cmd.index("--")
+        assert captured_cmd[idx + 1 : idx + 4] == ["python", "-c", "print(1 + 2)"]
+
+    def test_profile_sets_distributed_rank_fields(self, wrapper_no_rocm_check):
+        """ProfileResult receives distributed rank metadata from env."""
+        wrapper = wrapper_no_rocm_check
+
+        parsed = [
+            ProfileResult(
+                dispatch_id=1,
+                kernel_name="my_kernel",
+                gpu_id=0,
+                duration_ns=1000,
+                grid_size=(256, 1, 1),
+                workgroup_size=(64, 1, 1),
+                counters={},
+            )
+        ]
+
+        def fake_run(cmd, **kwargs):
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = ""
+            m.stderr = ""
+            return m
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=parsed),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            results = wrapper.profile(
+                command="true",
+                counters=[],
+                output_dir=Path(tmpdir),
+                env={"RANK": "3", "LOCAL_RANK": "1", "WORLD_SIZE": "8"},
+            )
+
+        assert len(results) == 1
+        assert results[0].global_rank == 3
+        assert results[0].local_rank == 1
+        assert results[0].world_size == 8
+
     def test_parse_missing_optional_fields(self, wrapper):
         """Handle missing optional fields gracefully"""
         row = {

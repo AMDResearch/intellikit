@@ -47,6 +47,27 @@ metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
 metrix -o results.json ./my_app
 ```
 
+## Distributed Launchers
+
+Metrix supports launcher commands such as `torchrun`, `mpirun/mpiexec`, `srun`, and
+`horovodrun`. Pass launcher commands directly after `--` so arguments are preserved.
+
+```bash
+# Torch distributed
+metrix profile -- torchrun --nproc_per_node=8 train.py
+
+# MPI
+metrix profile -- mpirun -np 8 ./my_app --problem-size 4096
+
+# Slurm
+metrix profile -- srun -N 2 -n 16 ./my_app
+```
+
+When distributed rank variables are present (`RANK`, `OMPI_COMM_WORLD_RANK`,
+`SLURM_PROCID`, etc.), Metrix emits per-rank metadata and automatically suffixes
+`--output/-o` files with a rank tag (for example, `results.rank0003.json`) to avoid
+cross-rank clobbering.
+
 ## Python API
 
 ```python

@@ -10,11 +10,12 @@ import csv
 import os
 import yaml
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Sequence
 
 # Import ProfileResult from backends to avoid duplication
 from ..backends.base import ProfileResult
 from ..logger import logger
+from ..utils.distributed import detect_distributed_context, normalize_command_argv
 
 
 class ROCProfV3Wrapper:
@@ -70,7 +71,7 @@ class ROCProfV3Wrapper:
 
     def profile(
         self,
-        command: str,
+        command: str | Sequence[str],
         counters: List[str],
         output_dir: Optional[Path] = None,
         kernel_filter: Optional[str] = None,
@@ -78,6 +79,7 @@ class ROCProfV3Wrapper:
         kernel_iteration_range: Optional[str] = None,
         extra_counters_path: Optional[Path] = None,
         arch: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> List[ProfileResult]:
         """
         Profile a command with specified counters (single pass).
@@ -166,8 +168,9 @@ class ROCProfV3Wrapper:
                 prof_cmd.extend(["--kernel-include-regex", kernel_filter])
 
             # Add target command
+            command_argv = normalize_command_argv(command)
             prof_cmd.append("--")
-            prof_cmd.extend(command.split())
+            prof_cmd.extend(command_argv)
 
             logger.debug(f"rocprofv3 command: {' '.join(prof_cmd)}")
             logger.info(f"Starting rocprofv3 with {len(counters)} counters")
@@ -181,8 +184,17 @@ class ROCProfV3Wrapper:
             logger.debug(f"Timeout: {self.timeout}")
             logger.debug(f"CWD: {cwd}")
 
+            run_env = os.environ.copy()
+            if env:
+                run_env.update(env)
+
             result = subprocess.run(
-                prof_cmd, capture_output=True, timeout=self.timeout, text=True, cwd=cwd
+                prof_cmd,
+                capture_output=True,
+                timeout=self.timeout,
+                text=True,
+                cwd=cwd,
+                env=run_env,
             )
             logger.info("subprocess.run returned!")
 
@@ -239,6 +251,15 @@ class ROCProfV3Wrapper:
                     ) from exc
                 results = [r for r in results if pattern.search(r.kernel_name)]
                 logger.info(f"After kernel filter '{kernel_filter}': {len(results)} dispatch(es)")
+
+            dist_context = detect_distributed_context(run_env)
+            for profile_result in results:
+                profile_result.global_rank = dist_context.global_rank
+                profile_result.local_rank = dist_context.local_rank
+                profile_result.world_size = dist_context.world_size
+                profile_result.node_rank = dist_context.node_rank
+                profile_result.hostname = dist_context.hostname
+                profile_result.launcher = dist_context.launcher
 
             return results
 

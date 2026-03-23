@@ -7,7 +7,7 @@ Metrics are loaded from counter_defs.yaml.
 from .base import CounterBackend, DeviceSpecs, ProfileResult, Statistics
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 
 class GFX1201Backend(CounterBackend):
@@ -52,7 +52,7 @@ class GFX1201Backend(CounterBackend):
 
     def _run_rocprof(
         self,
-        command: str,
+        command: str | Sequence[str],
         counters: List[str],
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,

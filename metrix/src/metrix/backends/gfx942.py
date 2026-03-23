@@ -9,7 +9,7 @@ from .base import CounterBackend, DeviceSpecs, ProfileResult
 from ..utils.common import split_counters_into_passes
 from .decorator import metric
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional, Sequence
 
 
 class GFX942Backend(CounterBackend):
@@ -94,7 +94,7 @@ class GFX942Backend(CounterBackend):
 
     def _run_rocprof(
         self,
-        command: str,
+        command: str | Sequence[str],
         counters: List[str],
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,

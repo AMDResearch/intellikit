@@ -8,7 +8,7 @@ This provides a clean, stateful API for users who want a simple interface:
 """
 
 import re
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +16,7 @@ from .backends import get_backend, Statistics, detect_or_default
 from .backends.base import CounterBackend
 from .metrics import METRIC_PROFILES, METRIC_CATALOG
 from .logger import logger
+from .utils.distributed import detect_distributed_context, normalize_command_argv
 
 
 @dataclass
@@ -28,6 +29,10 @@ class KernelResults:
     duration_us: Statistics
     metrics: Dict[str, Statistics]
     dispatch_count: int = 1
+    global_rank: int = 0
+    local_rank: int = 0
+    world_size: int = 1
+    hostname: str = ""
 
     @property
     def avg_time_us(self) -> float:
@@ -46,6 +51,11 @@ class ProfilingResults:
     command: str
     kernels: List[KernelResults]
     total_kernels: int
+    global_rank: int = 0
+    local_rank: int = 0
+    world_size: int = 1
+    hostname: str = ""
+    launcher: str = "single"
 
 
 class Metrix:
@@ -78,7 +88,7 @@ class Metrix:
 
     def profile(
         self,
-        command: str,
+        command: str | Sequence[str],
         metrics: Optional[List[str]] = None,
         profile: Optional[str] = None,
         kernel_filter: Optional[str] = None,
@@ -154,7 +164,9 @@ class Metrix:
         # Use simple kernel filter (no regex)
         rocprof_filter = kernel_filter
 
-        logger.info(f"Profiling: {command}")
+        command_argv = normalize_command_argv(command)
+        command_string = " ".join(command_argv)
+        logger.info(f"Profiling: {command_string}")
         logger.info(f"Collecting {len(metrics_to_compute)} metrics across {num_replays} replay(s)")
         if rocprof_filter:
             logger.info(f"Kernel filter: {rocprof_filter}")
@@ -162,7 +174,7 @@ class Metrix:
         # Profile using backend (filtering at rocprofv3 level)
         logger.debug(f"Calling backend.profile with {len(metrics_to_compute)} metrics")
         self.backend.profile(
-            command=command,
+            command=command_argv,
             metrics=metrics_to_compute,
             num_replays=num_replays,
             aggregate_by_kernel=aggregate_by_kernel,
@@ -177,10 +189,21 @@ class Metrix:
 
         if not dispatch_keys:
             logger.warning("No kernels profiled")
-            return ProfilingResults(command=command, kernels=[], total_kernels=0)
+            dist_context = detect_distributed_context()
+            return ProfilingResults(
+                command=command_string,
+                kernels=[],
+                total_kernels=0,
+                global_rank=dist_context.global_rank,
+                local_rank=dist_context.local_rank,
+                world_size=dist_context.world_size,
+                hostname=dist_context.hostname,
+                launcher=dist_context.launcher,
+            )
 
         # Build result objects
         kernel_results = []
+        dist_context = detect_distributed_context()
         for dispatch_key in dispatch_keys:
             # Get duration
             duration = self.backend._aggregated[dispatch_key].get("duration_us")
@@ -206,11 +229,22 @@ class Metrix:
                 duration_us=duration,
                 metrics=computed_metrics,
                 dispatch_count=int(dispatch_count),
+                global_rank=dist_context.global_rank,
+                local_rank=dist_context.local_rank,
+                world_size=dist_context.world_size,
+                hostname=dist_context.hostname,
             )
             kernel_results.append(kernel_result)
 
         return ProfilingResults(
-            command=command, kernels=kernel_results, total_kernels=len(kernel_results)
+            command=command_string,
+            kernels=kernel_results,
+            total_kernels=len(kernel_results),
+            global_rank=dist_context.global_rank,
+            local_rank=dist_context.local_rank,
+            world_size=dist_context.world_size,
+            hostname=dist_context.hostname,
+            launcher=dist_context.launcher,
         )
 
     def list_metrics(self, category: Optional[str] = None) -> List[str]:

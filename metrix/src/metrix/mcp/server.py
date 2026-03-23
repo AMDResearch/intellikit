@@ -35,11 +35,24 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
 
     results_obj = profiler.profile(command, metrics=metrics)
 
-    results = {"kernels": []}
+    results = {
+        "rank": {
+            "global_rank": results_obj.global_rank,
+            "local_rank": results_obj.local_rank,
+            "world_size": results_obj.world_size,
+            "hostname": results_obj.hostname,
+            "launcher": results_obj.launcher,
+        },
+        "kernels": [],
+    }
 
     for kernel in results_obj.kernels:
         kernel_data = {
             "name": kernel.name,
+            "global_rank": kernel.global_rank,
+            "local_rank": kernel.local_rank,
+            "world_size": kernel.world_size,
+            "hostname": kernel.hostname,
             "duration_us_avg": float(kernel.duration_us.avg)
             if hasattr(kernel.duration_us, "avg")
             else 0.0,

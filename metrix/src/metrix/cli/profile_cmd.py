@@ -13,9 +13,14 @@ from io import StringIO
 from ..backends import get_backend, Statistics, detect_or_default
 from ..metrics import METRIC_PROFILES, METRIC_CATALOG
 from ..logger import logger
+from ..utils.distributed import apply_rank_suffix, detect_distributed_context, normalize_command_argv
 
 
 def profile_command(args):
+    command_argv = normalize_command_argv(_normalize_cli_target(args.target))
+    command_display = " ".join(command_argv)
+    dist_context = detect_distributed_context()
+
     """Execute profile command using clean backend API"""
 
     # Auto-detect architecture
@@ -79,7 +84,16 @@ def profile_command(args):
     # Log configuration
     logger.info(f"{'=' * 80}")
     logger.info(f"Metrix: {mode}")
-    logger.info(f"Target: {args.target}")
+    logger.info(f"Target: {command_display}")
+    if dist_context.is_distributed:
+        logger.info(
+            "Distributed context: launcher=%s rank=%s/%s local_rank=%s host=%s",
+            dist_context.launcher,
+            dist_context.global_rank,
+            dist_context.world_size,
+            dist_context.local_rank,
+            dist_context.hostname,
+        )
     if args.num_replays > 1:
         logger.info(f"Replays: {args.num_replays}")
     if args.kernel:
@@ -95,7 +109,7 @@ def profile_command(args):
             logger.info(f"Running {args.num_replays} replays...")
 
         backend.profile(
-            command=args.target,
+            command=command_argv,
             metrics=metrics_to_compute,
             num_replays=args.num_replays,
             aggregate_by_kernel=args.aggregate,
@@ -146,28 +160,46 @@ def profile_command(args):
                 logger.warning(f"Failed to compute {metric} for {dispatch_key}: {e}")
 
     # Output results
-    if args.output:
+    output_path = args.output
+    if output_path and dist_context.is_distributed:
+        output_path = apply_rank_suffix(output_path, dist_context)
+        logger.info("Distributed output path for rank %s: %s", dist_context.global_rank, output_path)
+
+    if output_path:
         # Detect format from file extension
-        output_path = Path(args.output)
-        ext = output_path.suffix.lower()
+        output_file = Path(output_path)
+        ext = output_file.suffix.lower()
 
         if ext == ".json":
-            _write_json_output(output_path, results, metrics_to_compute)
+            _write_json_output(output_file, results, metrics_to_compute, dist_context)
         elif ext == ".csv":
-            _write_csv_output(output_path, results, metrics_to_compute, args.aggregate)
+            _write_csv_output(output_file, results, metrics_to_compute, args.aggregate, dist_context)
         else:
             # Default to text
-            _write_text_output(output_path, results, metrics_to_compute, args.aggregate)
+            _write_text_output(output_file, results, metrics_to_compute, args.aggregate, dist_context)
     else:
         # Print to stdout
-        _print_text_results(results, metrics_to_compute, args.aggregate, args.no_counters)
+        _print_text_results(
+            results, metrics_to_compute, args.aggregate, args.no_counters, dist_context
+        )
 
     logger.info(f"Profiled {len(results)} dispatch(es)/kernel(s)")
 
     return 0
 
 
-def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_counters: bool):
+def _normalize_cli_target(target) -> str | list[str]:
+    """Normalize argparse target (string or remainder list) into command input."""
+    if isinstance(target, list):
+        if target and target[0] == "--":
+            return target[1:]
+        return target
+    return target
+
+
+def _print_text_results(
+    results: Dict, metrics: List[str], aggregated: bool, no_counters: bool, dist_context
+):
     """Print results to stdout in human-readable format"""
 
     # Group metrics by category
@@ -194,14 +226,25 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
         if aggregated:
             print(f"Kernel: {dispatch_key}")
         else:
-            # dispatch_key is like "dispatch_1:kernel_name"
-            parts = dispatch_key.split(":", 1)
-            if len(parts) == 2:
+            # dispatch_key may be:
+            # - "dispatch_1:kernel_name"
+            # - "rank_1:dispatch_1:kernel_name" (distributed)
+            parts = dispatch_key.split(":")
+            if len(parts) >= 2 and parts[0].startswith("rank_") and parts[1].startswith("dispatch_"):
+                dispatch_id = parts[1].replace("dispatch_", "")
+                kernel_name = ":".join(parts[2:]) if len(parts) > 2 else ""
+                print(f"Dispatch #{dispatch_id}: {kernel_name}")
+            elif len(parts) >= 2 and parts[0].startswith("dispatch_"):
                 dispatch_id = parts[0].replace("dispatch_", "")
-                kernel_name = parts[1]
+                kernel_name = ":".join(parts[1:])
                 print(f"Dispatch #{dispatch_id}: {kernel_name}")
             else:
                 print(f"Kernel: {dispatch_key}")
+        if dist_context.is_distributed:
+            print(
+                f"Rank: {dist_context.global_rank}/{dist_context.world_size} "
+                f"(local={dist_context.local_rank}, host={dist_context.hostname})"
+            )
         print(f"{'─' * 80}")
 
         # Duration
@@ -228,9 +271,17 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
                     print(f"  {name:45s} {stats.avg:10.2f} {unit}")
 
 
-def _write_json_output(output_path: Path, results: Dict, metrics: List[str]):
+def _write_json_output(output_path: Path, results: Dict, metrics: List[str], dist_context):
     """Write results to JSON file"""
-    json_data = {}
+    json_data = {
+        "_rank": {
+            "global_rank": dist_context.global_rank,
+            "local_rank": dist_context.local_rank,
+            "world_size": dist_context.world_size,
+            "hostname": dist_context.hostname,
+            "launcher": dist_context.launcher,
+        }
+    }
 
     for dispatch_key, data in results.items():
         json_data[dispatch_key] = {
@@ -258,13 +309,24 @@ def _write_json_output(output_path: Path, results: Dict, metrics: List[str]):
     logger.info(f"Results written to {output_path}")
 
 
-def _write_csv_output(output_path: Path, results: Dict, metrics: List[str], aggregated: bool):
+def _write_csv_output(
+    output_path: Path, results: Dict, metrics: List[str], aggregated: bool, dist_context
+):
     """Write results to CSV file"""
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
 
         # Header
-        header = ["dispatch_key", "duration_min_us", "duration_max_us", "duration_avg_us"]
+        header = [
+            "global_rank",
+            "local_rank",
+            "world_size",
+            "hostname",
+            "dispatch_key",
+            "duration_min_us",
+            "duration_max_us",
+            "duration_avg_us",
+        ]
         for metric in metrics:
             header.extend(
                 [
@@ -277,7 +339,13 @@ def _write_csv_output(output_path: Path, results: Dict, metrics: List[str], aggr
 
         # Data rows
         for dispatch_key, data in results.items():
-            row = [dispatch_key]
+            row = [
+                dist_context.global_rank,
+                dist_context.local_rank,
+                dist_context.world_size,
+                dist_context.hostname,
+                dispatch_key,
+            ]
 
             duration = data.get("duration_us")
             if duration:
@@ -297,7 +365,9 @@ def _write_csv_output(output_path: Path, results: Dict, metrics: List[str], aggr
     logger.info(f"Results written to {output_path}")
 
 
-def _write_text_output(output_path: Path, results: Dict, metrics: List[str], aggregated: bool):
+def _write_text_output(
+    output_path: Path, results: Dict, metrics: List[str], aggregated: bool, dist_context
+):
     """Write results to text file"""
     buffer = StringIO()
 
@@ -305,7 +375,7 @@ def _write_text_output(output_path: Path, results: Dict, metrics: List[str], agg
     old_stdout = sys.stdout
     sys.stdout = buffer
 
-    _print_text_results(results, metrics, aggregated, no_counters=False)
+    _print_text_results(results, metrics, aggregated, no_counters=False, dist_context=dist_context)
 
     sys.stdout = old_stdout
 

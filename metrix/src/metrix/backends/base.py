@@ -6,7 +6,7 @@ Counter names appear EXACTLY ONCE - as function parameter names.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Sequence
 from dataclasses import dataclass
 from collections import defaultdict
 
@@ -66,6 +66,12 @@ class ProfileResult:
     arch_vgpr: int = 0
     accum_vgpr: int = 0
     sgpr: int = 0
+    global_rank: int = 0
+    local_rank: int = 0
+    world_size: int = 1
+    node_rank: int = 0
+    hostname: str = ""
+    launcher: str = "single"
 
 
 class CounterBackend(ABC):
@@ -465,7 +471,7 @@ class CounterBackend(ABC):
 
     def profile(
         self,
-        command: str,
+        command: str | Sequence[str],
         metrics: List[str],
         num_replays: int = 5,
         aggregate_by_kernel: bool = False,
@@ -774,7 +780,7 @@ class CounterBackend(ABC):
     @abstractmethod
     def _run_rocprof(
         self,
-        command: str,
+        command: str | Sequence[str],
         counters: List[str],
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
@@ -807,7 +813,10 @@ class CounterBackend(ABC):
         # Group by dispatch_id:kernel_name
         groups = defaultdict(list)
         for result in results:
-            key = f"dispatch_{result.dispatch_id}:{result.kernel_name}"
+            if result.world_size > 1:
+                key = f"rank_{result.global_rank}:dispatch_{result.dispatch_id}:{result.kernel_name}"
+            else:
+                key = f"dispatch_{result.dispatch_id}:{result.kernel_name}"
             groups[key].append(result)
 
         # Compute stats for each group
@@ -841,7 +850,11 @@ class CounterBackend(ABC):
         # Now aggregate merged results across replays
         groups = defaultdict(list)
         for merged in merged_replays:
-            groups[merged.kernel_name].append(merged)
+            if merged.world_size > 1:
+                key = f"rank_{merged.global_rank}:{merged.kernel_name}"
+            else:
+                key = merged.kernel_name
+            groups[key].append(merged)
 
         aggregated = {}
         for kernel_name, dispatches in groups.items():
@@ -945,6 +958,12 @@ class CounterBackend(ABC):
             arch_vgpr=first.arch_vgpr,
             accum_vgpr=first.accum_vgpr,
             sgpr=first.sgpr,
+            global_rank=first.global_rank,
+            local_rank=first.local_rank,
+            world_size=first.world_size,
+            node_rank=first.node_rank,
+            hostname=first.hostname,
+            launcher=first.launcher,
         )
         merged._num_dispatches = len(dispatches)
         return merged
