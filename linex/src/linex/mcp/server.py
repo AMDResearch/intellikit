@@ -95,7 +95,7 @@ def profile_application(command: str, kernel_filter: str = None, top_n: int = 10
 
 @mcp.tool()
 def analyze_instruction_hotspots(
-    command: str, kernel_filter: str = None, top_lines: int = 5, top_instructions_per_line: int = 10
+    command: str, kernel_filter: str = None, top_lines: int = 5, top_instructions_per_line: int = 10, launcher: str = None
 ) -> dict:
     """
     Get detailed instruction-level analysis for the hottest source lines.
