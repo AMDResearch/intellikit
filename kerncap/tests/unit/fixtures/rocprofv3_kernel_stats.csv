@@ -1,0 +1,6 @@
+"Name","Calls","TotalDurationNs","AverageNs","Percentage","MinNs","MaxNs","StdDev"
+"void matmul_kernel<float>(float const*, float const*, float*, int)",1024,580000000,566406.250000,42.30,480000,720000,45000.000000
+"void softmax_kernel<float>(float const*, float*, int)",1024,320000000,312500.000000,23.40,250000,400000,32000.000000
+"void relu_kernel<float>(float*, int)",2048,180000000,87890.625000,13.10,70000,120000,12000.000000
+"void add_kernel<float>(float const*, float const*, float*, int)",512,150000000,292968.750000,10.90,240000,380000,28000.000000
+"void copy_kernel(void*, void const*, unsigned long)",4096,140000000,34179.687500,10.20,25000,55000,6000.000000

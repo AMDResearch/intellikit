@@ -36,3 +36,9 @@ class AccordoValidationError(AccordoError):
     """Raised when array validation fails."""
 
     pass
+
+
+class AccordoKernelNeverDispatched(AccordoError):
+    """Raised when the target kernel was never dispatched (e.g. wrong name or app exited early)."""
+
+    pass

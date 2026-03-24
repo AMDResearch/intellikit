@@ -4,23 +4,49 @@
 """IPC communication for Accordo."""
 
 import ctypes
+import errno
 import logging
 import os
 import stat
+import threading
 import time
 
 import ml_dtypes
 import numpy as np
 
+from ...exceptions import AccordoKernelNeverDispatched
 from ..hip_interop import memcpy_d2h, open_ipc_handle
 
 
-def read_ipc_handles(args, ipc_file_name):
+def _process_is_alive(process_pid):
+    """Best-effort liveness check that also detects zombie child processes."""
+    if process_pid is None:
+        return True
+
+    try:
+        waited_pid, _ = os.waitpid(process_pid, os.WNOHANG)
+        if waited_pid == process_pid:
+            return False
+    except ChildProcessError:
+        return False
+    except OSError as e:
+        if e.errno == errno.ECHILD:
+            return False
+
+    try:
+        os.kill(process_pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def read_ipc_handles(args, ipc_file_name, sentinel_file=None):
     """Read IPC handles and sizes from the IPC file.
 
     Args:
             args: List of argument type strings
             ipc_file_name: Path to the IPC file
+            sentinel_file: If set, path to sentinel file; if it appears, raise AccordoKernelNeverDispatched
 
     Returns:
             Tuple of (handles, sizes)
@@ -32,6 +58,10 @@ def read_ipc_handles(args, ipc_file_name):
     handles_set = set()
 
     while len(handles) < count:
+        if sentinel_file and os.path.exists(sentinel_file):
+            raise AccordoKernelNeverDispatched(
+                "Target kernel was never dispatched (e.g. wrong name or app exited without running it)."
+            )
         if not os.path.exists(ipc_file_name):
             logging.debug("Waiting for IPC file...")
             time.sleep(0.1)
@@ -116,37 +146,140 @@ def get_kern_arg_data(
         os.mkfifo(pipe_name)
         os.chmod(pipe_name, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
 
+    sentinel_file = ipc_file_name + ".no_kernel"
     start_time = time.time()
-    with open(pipe_name, "rb") as fifo:  # noqa: F841
-        while True:
-            # Check if the process is still alive (crash detection, not timeout)
-            if process_pid is not None:
-                try:
-                    os.kill(process_pid, 0)  # Signal 0 just checks if process exists
-                except OSError:
-                    raise RuntimeError(
-                        f"Accordo process (PID {process_pid}) crashed or terminated during execution. "
-                        "Check for segfaults or GPU memory access errors."
-                    )
+    pipe_fd = None
+    pipe_result = []
 
+    def _open_pipe():
+        try:
+            # Use blocking open in a helper thread so it only succeeds once writer connects.
+            fd = os.open(pipe_name, os.O_RDONLY)
+            if fd >= 0:
+                pipe_result.append(fd)
+        except OSError:
+            pass
+
+    try:
+        # Wait for pipe to have a writer (C++ opens when kernel runs) or for sentinel/process exit.
+        # Some systems block on FIFO open even with O_NONBLOCK, so we run open in a daemon thread
+        # and poll for sentinel/process/timeout in the main thread.
+        reader = threading.Thread(target=_open_pipe, daemon=True)
+        reader.start()
+        while not pipe_result:
+            # Only check sentinel after a short delay so a kernel that runs quickly can remove it first
+            if time.time() - start_time > 1.0 and os.path.exists(sentinel_file):
+                raise AccordoKernelNeverDispatched(
+                    "Target kernel was never dispatched (e.g. wrong name or app exited without running it)."
+                )
+            if process_pid is not None and not _process_is_alive(process_pid):
+                # Process exited; wait for OnUnload to write sentinel (up to 2s)
+                for _ in range(20):
+                    time.sleep(0.1)
+                    if os.path.exists(sentinel_file):
+                        raise AccordoKernelNeverDispatched(
+                            "Target kernel was never dispatched (e.g. wrong name or app exited without running it)."
+                        )
+                raise RuntimeError(
+                    f"Accordo process (PID {process_pid}) crashed or terminated during execution. "
+                    "Check for segfaults or GPU memory access errors."
+                )
             if time.time() - start_time > ipc_timeout_seconds:
-                timeout_msg = (
+                break
+            time.sleep(0.1)
+        if pipe_result:
+            pipe_fd = pipe_result[0]
+
+        if pipe_fd is None:
+            # Timeout without ever getting a writer -> process likely exited without dispatching kernel
+            if process_pid is not None and not _process_is_alive(process_pid):
+                for _ in range(30):
+                    time.sleep(0.1)
+                    if os.path.exists(sentinel_file):
+                        raise AccordoKernelNeverDispatched(
+                            "Target kernel was never dispatched (e.g. wrong name or app exited without running it)."
+                        )
+                raise RuntimeError(
+                    f"Accordo process (PID {process_pid}) crashed or terminated during execution. "
+                    "Check for segfaults or GPU memory access errors."
+                )
+            raise TimeoutError(
+                f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
+            )
+
+        # Verify IPC file appears (C++ writes it after connecting). Wait until global timeout budget.
+        ipc_ready = False
+        while True:
+            if time.time() - start_time > ipc_timeout_seconds:
+                break
+            if process_pid is not None and not _process_is_alive(process_pid):
+                # Process exited without writing IPC file -> sentinel should exist
+                if pipe_fd is not None:
+                    try:
+                        os.close(pipe_fd)
+                    except OSError:
+                        pass
+                    pipe_fd = None
+                for _ in range(20):
+                    time.sleep(0.1)
+                    if os.path.exists(sentinel_file):
+                        raise AccordoKernelNeverDispatched(
+                            "Target kernel was never dispatched (e.g. wrong name or app exited without running it)."
+                        )
+                raise RuntimeError(
+                    f"Accordo process (PID {process_pid}) exited without capturing kernel data."
+                )
+            if os.path.exists(ipc_file_name):
+                try:
+                    with open(ipc_file_name, "rb") as f:
+                        if b"BEGIN" in f.read():
+                            ipc_ready = True
+                            break
+                except OSError:
+                    pass
+            time.sleep(0.1)
+
+        if not ipc_ready:
+            if pipe_fd is not None:
+                try:
+                    os.close(pipe_fd)
+                except OSError:
+                    pass
+                pipe_fd = None
+            if os.path.exists(sentinel_file):
+                raise AccordoKernelNeverDispatched(
+                    "Target kernel was never dispatched (e.g. wrong name or app exited without running it)."
+                )
+            raise TimeoutError(
+                f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
+            )
+
+        # Pipe connected and IPC file ready; read it
+        while True:
+            if process_pid is not None and not _process_is_alive(process_pid):
+                raise RuntimeError(
+                    f"Accordo process (PID {process_pid}) crashed or terminated during execution. "
+                    "Check for segfaults or GPU memory access errors."
+                )
+            if time.time() - start_time > ipc_timeout_seconds:
+                raise TimeoutError(
                     f"Timeout after {ipc_timeout_seconds} seconds during IPC communication"
                 )
-                if baseline_time_ms is not None:
-                    timeout_msg += f" (baseline: {baseline_time_ms}ms, 2x timeout: {ipc_timeout_seconds}s). Code may be correct but too slow to be worth profiling."
-                raise TimeoutError(timeout_msg)
-
             try:
-                ipc_handles, ptr_sizes = read_ipc_handles(args, ipc_file_name)
+                ipc_handles, ptr_sizes = read_ipc_handles(
+                    args, ipc_file_name, sentinel_file=sentinel_file
+                )
                 break
-            except Exception as e:
-                if time.time() - start_time > ipc_timeout_seconds:
-                    timeout_msg = f"Timeout after {ipc_timeout_seconds} seconds waiting for IPC data: {str(e)}"
-                    if baseline_time_ms is not None:
-                        timeout_msg += f" (baseline: {baseline_time_ms}ms, 2x timeout: {ipc_timeout_seconds}s). Code may be correct but too slow to be worth profiling."
-                    raise TimeoutError(timeout_msg)
+            except AccordoKernelNeverDispatched:
+                raise
+            except Exception:
                 time.sleep(0.1)
+    finally:
+        if pipe_fd is not None:
+            try:
+                os.close(pipe_fd)
+            except OSError:
+                pass
 
     type_map = {
         "double*": ctypes.c_double,

@@ -44,19 +44,17 @@ class TestROCProfV3Wrapper:
         """Wrapper can be created"""
         assert wrapper.timeout == 60
 
-    def test_create_input_file(self, wrapper):
-        """Input file generation works correctly"""
+    def test_create_input_yaml(self, wrapper):
+        """Input YAML generation works correctly"""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             counters = ["TCC_HIT_sum", "TCC_MISS_sum", "SQ_WAVES"]
 
-            input_file = wrapper._create_input_file(counters, tmppath)
+            input_file = wrapper._create_input_yaml(counters, tmppath)
 
             assert input_file.exists()
             content = input_file.read_text()
 
-            # Check format: "pmc: COUNTER1 COUNTER2 ..."
-            assert content.startswith("pmc:")
             assert "TCC_HIT_sum" in content
             assert "TCC_MISS_sum" in content
             assert "SQ_WAVES" in content

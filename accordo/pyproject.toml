@@ -33,6 +33,7 @@ dev = [
 ]
 
 [project.scripts]
+accordo = "accordo.cli:main"
 accordo-mcp = "accordo.mcp.server:main"
 
 [tool.scikit-build]
@@ -50,7 +51,7 @@ root = ".."
 
 # ---- Ruff configuration ----
 [tool.ruff]
-extend = "../pyproject.toml"
+extend = "../ruff.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

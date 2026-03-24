@@ -59,7 +59,7 @@ where = ["src"]
 
 # ---- Ruff configuration ----
 [tool.ruff]
-extend = "../pyproject.toml"
+extend = "../ruff.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

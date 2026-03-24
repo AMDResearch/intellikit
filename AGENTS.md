@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** Python >= 3.10 (root), ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
+**Requirements:** Python >= 3.10, ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
 
 ## Tool Descriptions
 
@@ -22,12 +22,15 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 ## Build Commands
 
 ```bash
-# Using uv (preferred for development) - installs all tools
-uv sync
+# Install all tools from Git (supported path for users and CI-style setups)
+# Default pip command is pip3; script requires Python 3.10+ (checks before installing).
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
+# Subset only: ... | bash -s -- --tools metrix,linex
+# From a clone:
+#   ./install/tools/install.sh [--tools ...] [--pip-cmd ...] [--repo-url ...] [--ref ...] [--dry-run]
 
-# Or using pip - install individual tools (from repo root)
-# Note: root pyproject.toml only includes accordo, linex, metrix, nexus as dependencies
-pip install -e accordo/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
+# Editable installs for development (any subset; from repo root)
+pip install -e accordo/ -e kerncap/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
 
 # Install individual tools
 pip install -e metrix/
@@ -37,16 +40,20 @@ pip install -e linex/
 pip install -e nexus/
 # Or build manually if needed:
 # cd nexus && mkdir -p build && cd build && cmake .. && make
+
+# Build kerncap (scikit-build-core builds libkerncap.so + kerncap-replay)
+pip install -e kerncap/
 ```
 
 ## Testing
 
 All main tools now have `tests/` directories with pytest-based test suites:
 
-- **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (unit, integration, e2e, slow)
 - **accordo**: `tests/` directory
-- **nexus**: `tests/` directory
+- **kerncap**: `tests/unit/` and `tests/integration/` with pytest markers (docker, gpu)
 - **linex**: `tests/` directory
+- **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (unit, integration, e2e, slow)
+- **nexus**: `tests/` directory
 - **rocm_mcp**: `tests/` directory
 
 All tools also have `examples/` directories for usage demonstrations.
@@ -66,12 +73,18 @@ pytest -m unit      # Fast unit tests
 pytest -m integration  # Requires GPU/rocprof
 pytest -m e2e      # End-to-end tests (require GPU and benchmarks)
 pytest -m slow     # Slow tests (> 5s)
+
+# Run kerncap unit tests (no GPU required)
+cd kerncap && pytest tests/unit/
+
+# Run rocm_mcp tests
+cd rocm_mcp && pytest tests/
 ```
 
 ## Linting
 
 ```bash
-# Lint entire repo (ruff configured in root pyproject.toml)
+# Lint entire repo (shared config: ruff.toml; packages may extend and override)
 ruff check .
 ruff format .
 
@@ -88,6 +101,7 @@ Each tool is a standalone Python package with its own `pyproject.toml`:
 | Tool | Build System | Description |
 | ------ | -------------- | ------------- |
 | **accordo** | scikit-build-core (CMake) | GPU kernel validation, C++ compiled at runtime |
+| **kerncap** | scikit-build-core (CMake) | Kernel extraction and isolation, C++ HSA interception |
 | **linex** | setuptools | Source-level SQTT profiling (`src/` layout) |
 | **metrix** | setuptools | Hardware counter profiling (`src/` layout) |
 | **nexus** | scikit-build-core (CMake) | HSA packet interception, C++ shared library |
@@ -122,7 +136,7 @@ All tools expose MCP servers via the MCP SDK's FastMCP module:
 
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
-- MCP servers: `accordo-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
 
 ### Nexus C++ Integration
 
@@ -130,6 +144,15 @@ All tools expose MCP servers via the MCP SDK's FastMCP module:
 - Headers in `nexus/csrc/include/nexus/` (`.hpp` files: `nexus.hpp`, `log.hpp`)
 - Python bindings via shared library built with CMake
 - Requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`)
+
+### Kerncap C++ Integration
+
+- C++ source in `kerncap/src/` (`.hip`, `.cpp` files)
+- Headers in `kerncap/src/` (`.hpp` files: `kerncap.hpp`, `kerncap_log.hpp`)
+- `libkerncap.so`: HSA tool library loaded via `HSA_TOOLS_LIB` for kernel capture
+- `kerncap-replay`: VA-faithful HSA kernel replay binary
+- Vendored nlohmann/json in `kerncap/vendor/`
+- Built with scikit-build-core (CMake + HIP language support)
 
 ### Accordo Runtime Compilation
 
@@ -150,16 +173,17 @@ Not all tools follow the same directory structure:
 | **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A |
 | **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | `uprof_mcp/tests/` | N/A |
 | **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` |
+| **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (runtime compiled) | `kerncap/tests/` | `kerncap/skill/` |
 | **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` |
 
 This affects import paths and where to find source code. Each main tool (accordo, linex, metrix, nexus) has a `skill/` directory containing `SKILL.md` files for AI agent integration.
 
 ## Dependency Management
 
-- **uv**: Preferred for development (lockfile: `uv.lock`)
-- **pip**: Supported for individual tool installation
+- **install.sh**: Installs packages from Git via `pip` (`install/tools/install.sh`); default is all tools, optional `--tools` for a subset
+- **pip**: Editable installs per tool from a clone (`pip install -e <tool>/`)
 - **External dependencies**: Some tools depend on external repos (e.g., `accordo` requires `kerneldb` from GitHub)
-- **C++ dependencies**: `nexus` requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`)
+- **C++ dependencies**: `nexus` requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`); `kerncap` requires `hipcc`, `cmake`, and HSA headers (standard ROCm)
 
 ## CI/CD and Development Environment
 
@@ -200,6 +224,7 @@ All MCP servers are defined in each tool's `pyproject.toml` under `[project.scri
 ```toml
 [project.scripts]
 accordo-mcp = "accordo.mcp.server:main"
+kerncap-mcp = "kerncap.mcp.server:main"
 linex-mcp = "linex.mcp.server:main"
 metrix-mcp = "metrix.mcp.server:main"
 nexus-mcp = "nexus.mcp.server:main"
@@ -244,7 +269,7 @@ metrix-mcp
 # Run MCP server with streamable-http transport
 metrix-mcp --transport http --port 8001
 
-# Or via uv
+# Or from the package directory with uv
 cd metrix && uv run metrix-mcp
 cd metrix && uv run metrix-mcp --transport http --port 8001
 ```
@@ -259,6 +284,10 @@ Add to your Claude Desktop or other MCP client config:
     "metrix-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/metrix", "metrix-mcp"]
+    },
+    "kerncap-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/kerncap", "kerncap-mcp"]
     },
     "hip-compiler-mcp": {
       "command": "uv",
@@ -313,6 +342,13 @@ cmake ..
 make
 cd ../..
 pip install -e nexus/
+```
+
+**Kerncap:**
+
+```bash
+# scikit-build-core builds libkerncap.so + kerncap-replay automatically
+pip install -e kerncap/
 ```
 
 **Accordo:**
@@ -381,4 +417,4 @@ Each tool can be installed independently:
 
 - Separate `pyproject.toml` for each tool
 - Individual testing and development
-- Shared root-level ruff configuration
+- Shared root-level `ruff.toml` (packages extend via `pyproject.toml`)

@@ -18,7 +18,55 @@ permissions:
   contents: read
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.build-matrix.outputs.packages }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            accordo:
+              - 'accordo/**'
+            kerncap:
+              - 'kerncap/**'
+            linex:
+              - 'linex/**'
+            metrix:
+              - 'metrix/**'
+            nexus:
+              - 'nexus/**'
+            rocm_mcp:
+              - 'rocm_mcp/**'
+            uprof_mcp:
+              - 'uprof_mcp/**'
+            infra:
+              - '.github/**'
+              - 'apptainer/**'
+              - 'docker/**'
+              - 'install/**'
+              - 'pyproject.toml'
+
+      - name: Build package matrix
+        id: build-matrix
+        run: |
+          ALL='["accordo","kerncap","linex","metrix","nexus","rocm_mcp","uprof_mcp"]'
+
+          # Infra changes or non-PR events → test everything
+          if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "packages=${ALL}" >> "$GITHUB_OUTPUT"
+          else
+            echo "packages=${{ steps.filter.outputs.changes }}" >> "$GITHUB_OUTPUT"
+          fi
+
   build-container-image:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.packages != '[]'
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 30
 
@@ -43,13 +91,13 @@ jobs:
 
   test-installation:
     name: Test ${{ matrix.install_method }} - ${{ matrix.package }}
-    needs: build-container-image
+    needs: [detect-changes, build-container-image]
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        package: [accordo, linex, metrix, nexus, rocm_mcp, uprof_mcp]
+        package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
         install_method: [editable, non-editable, github]
 
     steps:
@@ -65,7 +113,7 @@ jobs:
           else
             GIT_SHA="${{ github.sha }}"
           fi
-          
+
           # Subpackage installation with import test
           if [ "${{ matrix.install_method }}" = "editable" ]; then
             bash .github/scripts/container_exec.sh "
@@ -83,4 +131,3 @@ jobs:
               python3 -c 'import ${{ matrix.package }}'
             "
           fi
-

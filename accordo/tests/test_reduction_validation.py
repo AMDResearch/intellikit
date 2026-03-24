@@ -7,15 +7,21 @@ Accordo tests: inline HIP kernels, compile, capture, and compare.
 - Template kernels: scale_values<float> and scale_values<double> (parametrized).
 - Mismatch detection: reference vs wrong output (assert validation fails).
 - Validator/snapshot: kernel_args extraction, snapshot attributes, summary().
+- IPC robustness: kernel never dispatched, Python dies before "done".
 """
 
+import os
 import subprocess
+import sys
 import tempfile
+import time
+from textwrap import dedent
 from pathlib import Path
 
 import pytest
 
 from accordo import Accordo
+from accordo.exceptions import AccordoKernelNeverDispatched
 
 # -----------------------------------------------------------------------------
 # Reduction: shared main(), kernel body varies (baseline, optimized, wrong)
@@ -78,6 +84,14 @@ int main() {
 }
 """
 
+# Main that never dispatches reduce_sum (binary still has the symbol for kernelDB).
+REDUCE_MAIN_NO_DISPATCH = """
+int main() {
+    hipInit(0);
+    return 0;
+}
+"""
+
 
 def _reduce_source(kernel_body: str) -> str:
     """Build full HIP source: includes + kernel body + shared main()."""
@@ -85,6 +99,15 @@ def _reduce_source(kernel_body: str) -> str:
         "#include <hip/hip_runtime.h>\n"
         "#include <stdio.h>\n"
         "#include <stdlib.h>\n" + kernel_body.strip() + "\n" + REDUCE_MAIN
+    )
+
+
+def _reduce_source_no_dispatch(kernel_body: str) -> str:
+    """HIP source with kernel defined but main() never dispatches it."""
+    return (
+        "#include <hip/hip_runtime.h>\n"
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n" + kernel_body.strip() + "\n" + REDUCE_MAIN_NO_DISPATCH
     )
 
 
@@ -332,3 +355,142 @@ def test_validation_result_summary():
     assert pass_result.is_valid
     assert pass_result.summary()
     assert "pass" in pass_result.summary().lower() or "match" in pass_result.summary().lower()
+
+
+# -----------------------------------------------------------------------------
+# IPC robustness: kernel never dispatched, Python dies before "done"
+# -----------------------------------------------------------------------------
+
+
+def test_kernel_never_dispatched_fails_fast():
+    """When the target kernel is never dispatched, we should get a clear
+    error quickly (AccordoKernelNeverDispatched), not a generic TimeoutError after 30s.
+
+    Binary has reduce_sum symbol but main() never launches it. Without sentinel behavior,
+    Python waits for IPC file until timeout. With sentinel behavior, C++ writes a sentinel and
+    Python raises AccordoKernelNeverDispatched quickly.
+    """
+    with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        no_dispatch_bin = _compile_hip(
+            _reduce_source_no_dispatch(REDUCE_KERNEL_BASELINE), "no_dispatch", tmp_path
+        )
+        validator = Accordo(
+            binary=str(no_dispatch_bin),
+            kernel_name="reduce_sum",
+            working_directory=str(tmp_path),
+        )
+        t0 = time.perf_counter()
+        with pytest.raises(AccordoKernelNeverDispatched):
+            validator.capture_snapshot(binary=str(no_dispatch_bin), timeout_seconds=15)
+        elapsed = time.perf_counter() - t0
+    # Should fail fast (< 10s), not after full timeout
+    assert elapsed < 10.0, (
+        "Expected AccordoKernelNeverDispatched quickly; got it after %.1fs. "
+        "Without sentinel behavior this can wait for timeout." % elapsed
+    )
+
+
+def _get_child_pids(pid: int) -> list[int]:
+    """Return list of child PIDs of the given process (Linux)."""
+    # Prefer /proc (Linux) so we don't depend on ps syntax
+    proc_children = Path(f"/proc/{pid}/task/{pid}/children")
+    if not proc_children.exists():
+        proc_children = Path(f"/proc/{pid}/children")
+    if proc_children.exists():
+        try:
+            return [int(p) for p in proc_children.read_text().split()]
+        except (OSError, ValueError):
+            pass
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "pid=", "--ppid", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if out.returncode != 0:
+            return []
+        return [int(p) for p in out.stdout.strip().split() if p.strip()]
+    except (FileNotFoundError, ValueError, subprocess.TimeoutExpired):
+        return []
+
+
+def test_app_exits_when_python_dies_before_sending_done():
+    """When Python (driver) dies before sending 'done', the instrumented
+    app blocks in C++ read() forever. With the PID watchdog fix, C++ should notice the
+    parent is dead and exit, so the app process should terminate.
+
+    We run capture_snapshot in a subprocess, wait for the kernel to run (C++ to block),
+    kill the Python subprocess, then assert the instrumented app (child) exits within 10s.
+    """
+    driver_script = dedent(
+        """
+        import sys
+        from pathlib import Path
+        from accordo import Accordo
+
+        tmp_dir = sys.argv[1]
+        pid_file = sys.argv[2]
+        bin_path = sys.argv[3]
+
+        Path(pid_file).write_text(str(__import__("os").getpid()))
+        validator = Accordo(
+            binary=bin_path,
+            kernel_name="reduce_sum",
+            working_directory=tmp_dir,
+        )
+        validator.capture_snapshot(binary=bin_path, timeout_seconds=60)
+        """
+    )
+    with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        bin_path = _compile_hip(_reduce_source(REDUCE_KERNEL_BASELINE), "reduction", tmp_path)
+        pid_file = tmp_path / "driver_pid.txt"
+        driver = subprocess.Popen(
+            [sys.executable, "-c", driver_script, str(tmp_path), str(pid_file), str(bin_path)],
+            cwd=tmp_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        # Wait for driver to write its PID and enter capture_snapshot (binary started)
+        for _ in range(50):
+            if pid_file.exists():
+                break
+            time.sleep(0.1)
+        else:
+            driver.kill()
+            pytest.fail("Driver did not write pid_file")
+        driver_pid = int(pid_file.read_text().strip())
+        # Wait for driver to spawn the instrumented binary (validator init + capture_snapshot)
+        child_pids = []
+        for _ in range(120):  # up to 12s
+            child_pids = _get_child_pids(driver_pid)
+            if child_pids:
+                break
+            time.sleep(0.1)
+        if not child_pids:
+            driver.kill()
+            pytest.skip("Could not get child PIDs (e.g. non-Linux or ps not available)")
+        # Give time for kernel to run and C++ to block on read()
+        time.sleep(2.0)
+        driver.kill()
+        driver.wait(timeout=2)
+        # With PID watchdog, the instrumented app should exit when parent died
+        app_pid = child_pids[0]
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            try:
+                os.kill(app_pid, 0)
+            except OSError:
+                break
+            time.sleep(0.2)
+        else:
+            try:
+                os.kill(app_pid, 9)
+            except OSError:
+                pass
+            pytest.fail(
+                "Instrumented app did not exit within 10s after Python died. "
+                "C++ may be blocked on read() when Python never sends 'done'."
+            )
