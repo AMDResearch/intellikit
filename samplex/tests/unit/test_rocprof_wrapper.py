@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
 """Unit tests for rocprof_wrapper (no GPU required)."""
 
 import csv
