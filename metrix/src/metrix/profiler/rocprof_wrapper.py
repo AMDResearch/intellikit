@@ -28,7 +28,7 @@ from ..utils.distributed import detect_distributed_context, normalize_command_ar
 #   wrapper.py <base_output_dir> [rocprof_args...] -- <user_command...>
 _RANK_WRAPPER_SCRIPT = textwrap.dedent(
     """\
-    import os, sys, subprocess
+    import os, sys, subprocess, shlex, yaml, copy
 
     rank = int(os.environ.get("RANK", os.environ.get("OMPI_COMM_WORLD_RANK", "0")))
     local_rank = int(os.environ.get("LOCAL_RANK", os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", "0")))
@@ -43,10 +43,35 @@ _RANK_WRAPPER_SCRIPT = textwrap.dedent(
         print(f"Usage: {sys.argv[0]} <output_dir> [rocprof_args...] -- <command...>", file=sys.stderr)
         sys.exit(1)
 
+    # Handle single-element user_cmd containing spaces (torchrun passes
+    # quoted commands as one argv element via argparse.REMAINDER).
+    if len(user_cmd) == 1 and " " in user_cmd[0]:
+        user_cmd = shlex.split(user_cmd[0])
+
     rank_output_dir = os.path.join(base_output_dir, f"rank_{rank}")
     os.makedirs(rank_output_dir, exist_ok=True)
 
-    cmd = ["rocprofv3"] + rocprof_extra + ["-d", rank_output_dir, "--"] + user_cmd
+    # Rewrite the --input YAML so output_directory points to the rank-specific
+    # dir.  This avoids the "conflicting value for output_directory" error when
+    # both --input YAML and -d are provided to rocprofv3.
+    rewritten_args = []
+    for i, arg in enumerate(rocprof_extra):
+        if arg == "--input" and i + 1 < len(rocprof_extra):
+            orig_yaml = rocprof_extra[i + 1]
+            rank_yaml = os.path.join(rank_output_dir, "rocprof_input.yaml")
+            with open(orig_yaml) as f:
+                cfg = yaml.safe_load(f)
+            for job in cfg.get("jobs", []):
+                job["output_directory"] = rank_output_dir
+            with open(rank_yaml, "w") as f:
+                yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            rewritten_args.extend(["--input", rank_yaml])
+        elif i > 0 and rocprof_extra[i - 1] == "--input":
+            continue  # already handled
+        else:
+            rewritten_args.append(arg)
+
+    cmd = ["rocprofv3"] + rewritten_args + ["--"] + user_cmd
     print(f"[Rank {rank}/{world_size}] {' '.join(cmd)}", file=sys.stderr)
     result = subprocess.run(cmd, env=os.environ)
     sys.exit(result.returncode)
@@ -214,10 +239,12 @@ class ROCProfV3Wrapper:
 
                 launcher_argv = normalize_command_argv(launcher)
 
-                # Build: launcher... python wrapper.py <output_dir> [rocprof_args...] -- command...
+                # Build: launcher... wrapper.py <output_dir> [rocprof_args...] -- command...
+                # Note: no explicit "python3" — torchrun and similar launchers
+                # already invoke the script with the Python interpreter.
                 prof_cmd = (
                     launcher_argv
-                    + ["python3", str(wrapper_path), str(output_dir)]
+                    + [str(wrapper_path), str(output_dir)]
                     + rocprof_args
                     + ["--"]
                     + command_argv

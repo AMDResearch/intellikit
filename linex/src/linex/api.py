@@ -25,7 +25,7 @@ from .distributed import DistributedContext, detect_distributed_context, normali
 #   wrapper.py <base_output_dir> [rocprof_args...] -- <user_command...>
 _RANK_WRAPPER_SCRIPT = textwrap.dedent(
     """\
-    import os, sys, subprocess
+    import os, sys, subprocess, shlex
 
     rank = int(os.environ.get("RANK", os.environ.get("OMPI_COMM_WORLD_RANK", "0")))
     local_rank = int(os.environ.get("LOCAL_RANK", os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", "0")))
@@ -39,6 +39,11 @@ _RANK_WRAPPER_SCRIPT = textwrap.dedent(
     except (ValueError, IndexError):
         print(f"Usage: {sys.argv[0]} <output_dir> [rocprof_args...] -- <command...>", file=sys.stderr)
         sys.exit(1)
+
+    # Handle single-element user_cmd containing spaces (torchrun passes
+    # quoted commands as one argv element via argparse.REMAINDER).
+    if len(user_cmd) == 1 and " " in user_cmd[0]:
+        user_cmd = shlex.split(user_cmd[0])
 
     rank_output_dir = os.path.join(base_output_dir, f"rank_{rank}")
     os.makedirs(rank_output_dir, exist_ok=True)
@@ -287,10 +292,12 @@ class Linex:
 
             launcher_argv = normalize_command_argv(launcher)
 
-            # Build: launcher... python wrapper.py <output_dir> [rocprof_args...] -- command...
+            # Build: launcher... wrapper.py <output_dir> [rocprof_args...] -- command...
+            # Note: no explicit "python3" — torchrun and similar launchers
+            # already invoke the script with the Python interpreter.
             cmd = (
                 launcher_argv
-                + ["python3", str(wrapper_path), str(base_output_dir)]
+                + [str(wrapper_path), str(base_output_dir)]
                 + rocprof_args
                 + ["--"]
                 + command_argv

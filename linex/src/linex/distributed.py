@@ -108,6 +108,10 @@ def detect_distributed_context(env: Mapping[str, str] | None = None) -> Distribu
 def normalize_command_argv(command: str | Sequence[str]) -> list[str]:
     if isinstance(command, (list, tuple)):
         argv = [str(arg) for arg in command]
+        # Handle single-element lists containing spaces (e.g. from
+        # argparse.REMAINDER passing a quoted command as one element).
+        if len(argv) == 1 and " " in argv[0]:
+            argv = shlex.split(argv[0])
     else:
         argv = shlex.split(command)
     if not argv:

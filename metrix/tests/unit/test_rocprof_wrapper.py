@@ -389,12 +389,11 @@ class TestROCProfV3Wrapper:
                 launcher="torchrun --nproc_per_node=4",
             )
 
-        # With launcher, command starts with launcher, then python wrapper
+        # With launcher, command starts with launcher, then wrapper script
         assert captured_cmd[0] == "torchrun"
         assert captured_cmd[1] == "--nproc_per_node=4"
-        assert captured_cmd[2] == "python3"
-        # Wrapper script path
-        assert "_metrix_rank_wrapper.py" in captured_cmd[3]
+        # Wrapper script path (no explicit python3 — torchrun invokes it)
+        assert "_metrix_rank_wrapper.py" in captured_cmd[2]
         # After the -- separator, the user command appears
         separator_idx = captured_cmd.index("--")
         assert captured_cmd[separator_idx + 1] == "train.py"
