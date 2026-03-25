@@ -5,6 +5,7 @@ Unit tests for the high-level Metrix API
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
 from metrix.backends import Statistics
+from .conftest import requires_arch
 
 
 class TestMetrixInit:
@@ -134,6 +135,7 @@ class TestProfilingResults:
 class TestUnsupportedMetricsAPI:
     """Test API-level handling of unsupported metrics"""
 
+    @requires_arch("gfx90a")
     def test_explicit_unsupported_metric_raises_error(self):
         """Explicitly requesting unsupported metric should raise ValueError"""
         profiler = Metrix(arch="gfx90a")
@@ -141,6 +143,7 @@ class TestUnsupportedMetricsAPI:
         # Verify atomic_latency is marked as unsupported
         assert "memory.atomic_latency" in profiler.backend._unsupported_metrics
 
+    @requires_arch("gfx90a")
     def test_profile_filters_unsupported_in_profile(self):
         """Using a profile that includes unsupported metrics should filter them"""
         profiler = Metrix(arch="gfx90a")
