@@ -125,7 +125,7 @@ def format_text_output(results):
     lines.append("")
 
     # Global opcode breakdown
-    lines.append(f"Global Instruction Breakdown")
+    lines.append("Global Instruction Breakdown")
     lines.append(f"{'-' * 70}")
     for h in results.global_top_opcodes:
         lines.append(f"  {h.percentage:5.1f}%  {h.sample_count:6d}  {h.opcode}")
@@ -145,11 +145,11 @@ def format_text_output(results):
             lines.append(f"  Holes:       {kernel.empty_instruction_count} (idle/between-wave gaps)")
 
         if is_stochastic and kernel.top_stall_reasons:
-            lines.append(f"  Stall reasons:")
+            lines.append("  Stall reasons:")
             for reason, pct in kernel.top_stall_reasons.items():
                 lines.append(f"    {pct:5.1f}%  {reason}")
 
-        lines.append(f"  Top instructions:")
+        lines.append("  Top instructions:")
         for h in kernel.top_instructions:
             instr_display = h.instruction[:60] if len(h.instruction) > 60 else h.instruction
             if is_stochastic:
