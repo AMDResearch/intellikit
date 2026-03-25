@@ -223,6 +223,80 @@ class TestSamplexAnalysis:
         assert mfma.stalled_count == 0
 
 
+class TestKernelFilter:
+    """Test kernel_filter regex filtering (post-collection in API)."""
+
+    def _make_multi_kernel_raw(self):
+        return PCSamplingResult(
+            command="./app",
+            interval=256,
+            method="stochastic",
+            samples=[
+                _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
+                _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
+                _make_sample(dispatch_id=2, instruction="v_mfma_f32_16x16x32_f16 a, v, v, a"),
+                _make_sample(dispatch_id=3, instruction="global_load_dwordx4 v[0:3], v[4:5], off"),
+            ],
+            dispatches=[
+                _make_dispatch(dispatch_id=1, kernel_name="gemm_kernel_fp16"),
+                _make_dispatch(dispatch_id=2, kernel_name="gemm_kernel_fp32"),
+                _make_dispatch(dispatch_id=3, kernel_name="copy_buffer"),
+            ],
+        )
+
+    def test_no_filter_returns_all(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+        sampler.wrapper.sample.return_value = self._make_multi_kernel_raw()
+
+        results = sampler.sample("./app")
+        assert len(results.kernels) == 3
+
+    def test_filter_matches_subset(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+        sampler.wrapper.sample.return_value = self._make_multi_kernel_raw()
+
+        results = sampler.sample("./app", kernel_filter="gemm")
+        assert len(results.kernels) == 2
+        assert all("gemm" in k.name for k in results.kernels)
+
+    def test_filter_matches_exact(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+        sampler.wrapper.sample.return_value = self._make_multi_kernel_raw()
+
+        results = sampler.sample("./app", kernel_filter="fp16")
+        assert len(results.kernels) == 1
+        assert results.kernels[0].name == "gemm_kernel_fp16"
+
+    def test_filter_no_match(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+        sampler.wrapper.sample.return_value = self._make_multi_kernel_raw()
+
+        results = sampler.sample("./app", kernel_filter="nonexistent")
+        assert len(results.kernels) == 0
+
+    def test_filter_regex(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+        sampler.wrapper.sample.return_value = self._make_multi_kernel_raw()
+
+        results = sampler.sample("./app", kernel_filter="fp(16|32)")
+        assert len(results.kernels) == 2
+
+    def test_filter_not_passed_to_wrapper(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+        sampler.wrapper.sample.return_value = self._make_multi_kernel_raw()
+
+        sampler.sample("./app", kernel_filter="gemm")
+        # kernel_filter should NOT be passed to wrapper.sample()
+        call_kwargs = sampler.wrapper.sample.call_args[1]
+        assert "kernel_filter" not in call_kwargs
+
+
 class TestHostTrapAnalysis:
     """Test analysis with host_trap samples (no stall/issued data)."""
 

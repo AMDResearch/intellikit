@@ -10,6 +10,7 @@ High-level Samplex API - PC sampling made simple.
         print(f"{kernel.name}: {kernel.top_instructions[0]}")
 """
 
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
@@ -119,7 +120,6 @@ class Samplex:
             command=command,
             interval=interval,
             method=method,
-            kernel_filter=kernel_filter,
             cwd=cwd,
             output_dir=output_dir,
         )
@@ -130,6 +130,11 @@ class Samplex:
         for d in raw.dispatches:
             dispatch_to_kernel[d.dispatch_id] = d.kernel_name
             dispatch_to_duration[d.dispatch_id] = d.duration_us
+
+        # Compile kernel filter regex if provided
+        # (rocprofv3 --kernel-include-regex only affects counter-collection
+        # and thread-trace, not PC sampling, so we filter post-collection)
+        kernel_re = re.compile(kernel_filter) if kernel_filter else None
 
         # Group samples by kernel name
         kernel_samples: Dict[str, List[PCSample]] = defaultdict(list)
@@ -142,9 +147,11 @@ class Samplex:
             kernel_samples[kernel_name].append(sample)
             kernel_dispatch_ids[kernel_name].add(sample.dispatch_id)
 
-        # Analyze each kernel
+        # Analyze each kernel (apply filter if provided)
         kernel_results = []
         for kernel_name, samples in kernel_samples.items():
+            if kernel_re and not kernel_re.search(kernel_name):
+                continue
             result = self._analyze_kernel(
                 kernel_name,
                 samples,

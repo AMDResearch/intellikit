@@ -112,7 +112,6 @@ class PCSamplingWrapper:
         command: str,
         interval: int = 65536,
         method: str = "stochastic",
-        kernel_filter: Optional[str] = None,
         output_dir: Optional[Path] = None,
         cwd: Optional[str] = None,
     ) -> PCSamplingResult:
@@ -126,7 +125,6 @@ class PCSamplingWrapper:
                       default 65536. Lower = more samples but higher overhead.
             method: Sampling method - "stochastic" (MI300+, richer data) or
                     "host_trap" (MI200+, broader support)
-            kernel_filter: Regex to filter kernels by name
             output_dir: Output directory (temp dir if None)
             cwd: Working directory for command execution
 
@@ -175,8 +173,9 @@ class PCSamplingWrapper:
                 "out",
             ]
 
-            if kernel_filter:
-                prof_cmd.extend(["--kernel-include-regex", kernel_filter])
+            # NOTE: --kernel-include-regex only affects counter-collection and
+            # thread-trace, NOT PC sampling. Kernel filtering is applied
+            # post-collection in the API layer (api.py).
 
             prof_cmd.append("--")
             prof_cmd.extend(command.split())
