@@ -64,7 +64,6 @@ def pc_sample(
             "duration_us": round(kernel.duration_us, 2),
             "full_mask_pct": round(kernel.full_mask_pct, 2),
             "issued_pct": round(kernel.issued_pct, 2),
-            "top_stall_reasons": kernel.top_stall_reasons,
             "top_instructions": [
                 {
                     "opcode": h.opcode,

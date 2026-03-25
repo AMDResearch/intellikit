@@ -44,7 +44,6 @@ class KernelSamplingResult:
     full_mask_pct: float = 0.0
     empty_instruction_count: int = 0
     issued_pct: float = 0.0
-    top_stall_reasons: Optional[Dict[str, float]] = None
 
 
 @dataclass
@@ -78,9 +77,9 @@ class Samplex:
             print(f"{kernel.name}: {kernel.total_samples} samples")
             for hotspot in kernel.top_instructions[:5]:
                 print(f"  {hotspot.percentage:.1f}% {hotspot.opcode}")
-            if kernel.top_stall_reasons:
-                for reason, pct in kernel.top_stall_reasons.items():
-                    print(f"  stall: {pct:.1f}% {reason}")
+                if hotspot.stall_reasons:
+                    for reason, count in hotspot.stall_reasons.items():
+                        print(f"    stall: {reason} ({count})")
     """
 
     def __init__(self, timeout_seconds: Optional[int] = 0):
@@ -189,23 +188,9 @@ class Samplex:
         full_mask = sum(1 for s in samples if s.exec_mask == 0xFFFFFFFFFFFFFFFF)
         empty_instr = sum(1 for s in samples if not s.instruction.strip())
 
-        # Stall analysis
+        # Issued/stalled stats
         issued = sum(1 for s in samples if s.wave_issued)
         issued_pct = (issued / total * 100) if total > 0 else 0.0
-
-        stall_counter = Counter()
-        for s in samples:
-            if not s.wave_issued and s.stall_reason:
-                reason = s.stall_reason.replace(
-                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_", ""
-                )
-                stall_counter[reason] += 1
-        stalled = total - issued
-        top_stall_reasons = None
-        if stalled > 0:
-            top_stall_reasons = {
-                r: count / stalled * 100 for r, count in stall_counter.most_common(10)
-            }
 
         return KernelSamplingResult(
             name=kernel_name,
@@ -216,7 +201,6 @@ class Samplex:
             full_mask_pct=(full_mask / total * 100) if total > 0 else 0.0,
             empty_instruction_count=empty_instr,
             issued_pct=issued_pct,
-            top_stall_reasons=top_stall_reasons,
         )
 
     def _compute_instruction_stats(

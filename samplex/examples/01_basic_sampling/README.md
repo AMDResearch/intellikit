@@ -51,12 +51,6 @@ Kernel: vector_add(float const*, float const*, float*, int)
   Duration:  32225.2 us
   Full mask: 100.0%
   Issued:    0.8%
-  Stall reasons:
-     61.2%  WAITCNT
-     30.9%  ARBITER_NOT_WIN
-      5.8%  ARBITER_WIN_EX_STALL
-      1.4%  ALU_DEPENDENCY
-      0.6%  NO_INSTRUCTION_AVAILABLE
   Top instructions:
      60.7%    382  s_waitcnt  [issued=1, stalled=381]
      28.0%    176  global_load_dword  [issued=4, stalled=172]

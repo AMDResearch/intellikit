@@ -106,9 +106,9 @@ class TestSamplexAnalysis:
         result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 300.0}, top_n=5)
 
         assert result.issued_pct == pytest.approx(33.33, abs=0.1)
-        assert result.top_stall_reasons is not None
-        assert "WAITCNT" in result.top_stall_reasons
-        assert "ALU_DEPENDENCY" in result.top_stall_reasons
+        # Stall reasons are on the per-instruction hotspots
+        waitcnt = result.top_instructions[0]
+        assert "WAITCNT" in waitcnt.stall_reasons or "ALU_DEPENDENCY" in waitcnt.stall_reasons
 
     def test_empty_instruction_holes(self):
         sampler = Samplex.__new__(Samplex)
@@ -245,8 +245,8 @@ class TestHostTrapAnalysis:
         assert result.total_samples == 4
         # No issued/stalled data for host_trap — all default to wave_issued=False
         assert result.issued_pct == 0.0
-        # No stall reasons populated (stall_reason is empty string for host_trap)
-        assert result.top_stall_reasons == {}
+        # No stall reasons on instructions (stall_reason is empty for host_trap)
+        assert result.top_instructions[0].stall_reasons == {}
 
     def test_host_trap_multiple_kernels(self):
         sampler = Samplex.__new__(Samplex)
@@ -273,8 +273,6 @@ class TestHostTrapAnalysis:
         assert len(results.kernels) == 2
         assert results.method == "host_trap"
         assert results.kernels[0].name == "kernel_A"
-        # No stall reasons populated for host_trap
-        assert results.kernels[0].top_stall_reasons == {}
 
     def test_host_trap_instruction_hotspots(self):
         sampler = Samplex.__new__(Samplex)

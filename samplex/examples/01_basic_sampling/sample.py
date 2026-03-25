@@ -129,11 +129,6 @@ def main():
                 print(f"  Full mask: {kernel.full_mask_pct:.1f}%")
                 print(f"  Issued:    {kernel.issued_pct:.1f}%")
 
-                if kernel.top_stall_reasons:
-                    print("  Stall reasons:")
-                    for reason, pct in kernel.top_stall_reasons.items():
-                        print(f"    {pct:5.1f}%  {reason}")
-
                 print("  Top instructions:")
                 for h in kernel.top_instructions:
                     print(

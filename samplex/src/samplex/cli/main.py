@@ -153,11 +153,6 @@ def format_text_output(results):
                 f"  Holes:       {kernel.empty_instruction_count} (idle/between-wave gaps)"
             )
 
-        if is_stochastic and kernel.top_stall_reasons:
-            lines.append("  Stall reasons:")
-            for reason, pct in kernel.top_stall_reasons.items():
-                lines.append(f"    {pct:5.1f}%  {reason}")
-
         lines.append("  Top instructions:")
         for h in kernel.top_instructions:
             instr_display = h.instruction[:60] if len(h.instruction) > 60 else h.instruction
@@ -197,7 +192,6 @@ def format_json_output(results):
                 "full_mask_pct": round(k.full_mask_pct, 2),
                 "empty_instruction_count": k.empty_instruction_count,
                 "issued_pct": round(k.issued_pct, 2),
-                "top_stall_reasons": k.top_stall_reasons,
                 "top_instructions": [
                     {
                         "opcode": h.opcode,

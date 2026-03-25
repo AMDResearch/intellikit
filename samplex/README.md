@@ -54,9 +54,9 @@ for kernel in results.kernels:
     for hotspot in kernel.top_instructions[:5]:
         print(f"  {hotspot.percentage:.1f}% {hotspot.opcode} "
               f"[issued={hotspot.issued_count}, stalled={hotspot.stalled_count}]")
-    if kernel.top_stall_reasons:
-        for reason, pct in kernel.top_stall_reasons.items():
-            print(f"  stall: {pct:.1f}% {reason}")
+        if hotspot.stall_reasons:
+            for reason, count in hotspot.stall_reasons.items():
+                print(f"    stall: {reason} ({count})")
 ```
 
 ## Sampling Methods
