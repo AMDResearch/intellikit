@@ -9,7 +9,7 @@ Usage:
         --ref-binary ./ref \\
         --opt-binary ./opt \\
         [--tolerance 1e-6] \\
-        [--atol 1e-6] [--rtol 1e-5] [--equal-nan] \\
+        [--atol 1e-6] [--rtol 0.0] [--equal-nan] \\
         [--timeout 30] \\
         [--working-dir .] \\
         [--kernel-args "input:const float*,output:float*"] \\
