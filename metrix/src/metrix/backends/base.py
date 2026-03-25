@@ -26,17 +26,8 @@ class DeviceSpecs:
 
     # Memory specs
     hbm_bandwidth_gbs: float = 0.0
-    l2_bandwidth_gbs: float = 0.0
     l2_size_mb: float = 0.0
     lds_size_per_cu_kb: float = 0.0
-
-    # Compute capabilities
-    fp32_tflops: float = 0.0
-    fp64_tflops: float = 0.0
-    int8_tops: float = 0.0
-
-    # Clock speeds
-    boost_clock_mhz: int = 0
 
 
 @dataclass
@@ -144,6 +135,7 @@ class CounterBackend(ABC):
 
         # Parse YAML and collect metrics matching this architecture first
         yaml_metrics = {}
+        yaml_unsupported = {}
         counters_section = yaml_data["rocprofiler-sdk"].get("counters", [])
 
         for counter_def in counters_section:
@@ -164,12 +156,15 @@ class CounterBackend(ABC):
             if definition is None:
                 continue
 
+            # Check if this metric is marked unsupported for this architecture
+            unsupported_reason = definition.get("unsupported_reason")
+            if unsupported_reason:
+                yaml_unsupported[counter_name] = unsupported_reason
+                continue
+
             # Register counters: derived, reduce(), and built-in
             if "expression" in definition:
                 expression = definition["expression"]
-
-                # Check if this is a simple reduce() expression
-                import re
 
                 reduce_match = re.match(
                     r"^reduce\([A-Z_0-9]+,\s*(?:sum|max|min)\)$", expression.strip()
@@ -193,14 +188,30 @@ class CounterBackend(ABC):
                     "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
                 }
 
-        if not yaml_metrics:
+        if not yaml_metrics and not yaml_unsupported:
             return
 
         # YAML metrics found for this arch -- replace @metric-based metrics
         self._metrics.clear()
         self._unsupported_metrics.clear()
         self._metrics.update(yaml_metrics)
+        self._unsupported_metrics.update(yaml_unsupported)
         print(f"✓ Loaded {len(self._metrics)} YAML-based metrics for {arch}")
+
+    @property
+    def _builtin_expression_vars(self) -> set:
+        """Variables injected into YAML expression namespace (not hardware counters).
+
+        Derived from DeviceSpecs fields + DURATION_US so it stays in sync
+        automatically when new spec fields are added.
+        """
+        import dataclasses
+
+        names = {f.name.upper() for f in dataclasses.fields(self.device_specs)}
+        names.discard("ARCH")
+        names.discard("NAME")
+        names.add("DURATION_US")
+        return names
 
     def _extract_counters_from_expression(self, expression: str) -> List[str]:
         """Extract counter names from YAML expression"""
@@ -212,10 +223,10 @@ class CounterBackend(ABC):
         for match in re.finditer(r"reduce\(([A-Z_0-9]+),\s*(?:sum|max|min)\)", expression):
             counters.add(match.group(1))
 
-        # Extract standalone counter names
+        # Extract standalone counter names (uppercase identifiers)
         for match in re.finditer(r"\b([A-Z][A-Z_0-9]*(?:_sum)?)\b", expression):
             counter_name = match.group(1)
-            if counter_name not in ["CU_NUM"]:
+            if counter_name not in self._builtin_expression_vars:
                 counters.add(counter_name)
 
         return sorted(list(counters))
@@ -225,8 +236,15 @@ class CounterBackend(ABC):
         import re
 
         def compute():
+            import dataclasses
+
             namespace = dict(self._raw_data)
-            namespace["CU_NUM"] = self.device_specs.num_cu
+
+            # Inject all DeviceSpecs fields as UPPER_CASE variables
+            for f in dataclasses.fields(self.device_specs):
+                if f.name not in ("arch", "name"):
+                    namespace[f.name.upper()] = getattr(self.device_specs, f.name)
+            namespace["DURATION_US"] = getattr(self, "_current_duration_us", 0.0)
 
             # Replace reduce(X, op) with X_op
             processed_expr = re.sub(
