@@ -698,8 +698,16 @@ class CounterBackend(ABC):
 
             # Merge counter data from this pass with previous passes
             for result in pass_results:
-                # Use (kernel_name, dispatch_id, replay_id) as key
-                key = (result.kernel_name, result.dispatch_id, getattr(result, "run_id", 0))
+                # Use (kernel_name, dispatch_id, replay_id, rank) as key.
+                # Including global_rank prevents dispatches from different
+                # ranks being silently merged when they share the same
+                # kernel_name and dispatch_id.
+                key = (
+                    result.kernel_name,
+                    result.dispatch_id,
+                    getattr(result, "run_id", 0),
+                    result.global_rank,
+                )
 
                 if key not in all_results_by_kernel:
                     all_results_by_kernel[key] = result
