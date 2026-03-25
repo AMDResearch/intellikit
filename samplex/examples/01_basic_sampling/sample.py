@@ -70,35 +70,88 @@ int main() {
 
 
 def main():
+    print("=" * 80)
+    print("Samplex Example: Basic PC Sampling")
+    print("=" * 80)
+    print()
+
     with tempfile.TemporaryDirectory(prefix="samplex_example_") as tmp_dir:
         tmp_path = Path(tmp_dir)
 
-        # Write and compile kernel
+        # Write kernel to file
+        print("Step 1: Writing kernel to /tmp...")
         kernel_file = tmp_path / "vector_add.hip"
         kernel_file.write_text(VECTOR_ADD_KERNEL)
+        print(f"  Wrote: {kernel_file}")
+        print()
 
+        # Compile kernel
+        print("Step 2: Compiling kernel...")
         binary_file = tmp_path / "vector_add"
-        result = subprocess.run(
-            ["hipcc", str(kernel_file), "-o", str(binary_file), "-O2"],
-            capture_output=True,
-            text=True,
-        )
+        cmd = ["hipcc", str(kernel_file), "-o", str(binary_file), "-O2"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
         if result.returncode != 0:
-            print(f"Compilation failed:\n{result.stderr}")
+            print(f"  Compilation failed:\n{result.stderr}")
             return 1
+        print(f"  Compiled: {binary_file}")
+        print()
 
         # Profile with samplex
-        from samplex import Samplex
-        from samplex.cli.main import format_text_output
+        print("Step 3: PC sampling with Samplex...")
 
-        sampler = Samplex()
-        results = sampler.sample(
-            command=str(binary_file),
-            kernel_filter="vector_add",
-            top_n=10,
-        )
+        try:
+            from samplex import Samplex
 
-        print(format_text_output(results))
+            sampler = Samplex()
+            results = sampler.sample(
+                command=str(binary_file),
+                kernel_filter="vector_add",
+                top_n=10,
+            )
+
+            print()
+            print("=" * 80)
+            print("PC SAMPLING RESULTS")
+            print("=" * 80)
+            print()
+            print(f"Method:     {results.method}")
+            print(f"Interval:   {results.interval} cycles")
+            print(f"Samples:    {results.total_samples}")
+            print(f"Dispatches: {results.total_dispatches}")
+
+            for kernel in results.kernels:
+                print()
+                print(f"Kernel: {kernel.name}")
+                print("-" * 70)
+                print(f"  Samples:   {kernel.total_samples}")
+                print(f"  Duration:  {kernel.duration_us:.1f} us")
+                print(f"  Full mask: {kernel.full_mask_pct:.1f}%")
+                print(f"  Issued:    {kernel.issued_pct:.1f}%")
+
+                if kernel.top_stall_reasons:
+                    print("  Stall reasons:")
+                    for reason, pct in kernel.top_stall_reasons.items():
+                        print(f"    {pct:5.1f}%  {reason}")
+
+                print("  Top instructions:")
+                for h in kernel.top_instructions:
+                    print(
+                        f"    {h.percentage:5.1f}%  {h.sample_count:5d}  {h.opcode}"
+                        f"  [issued={h.issued_count}, stalled={h.stalled_count}]"
+                    )
+
+            print()
+            print("=" * 80)
+
+        except Exception as e:
+            print(f"  Samplex profiling failed: {e}")
+            print("  Running kernel directly to verify compilation...")
+            result = subprocess.run([str(binary_file)], capture_output=True, text=True)
+            print(f"  {result.stdout.strip()}")
+            if result.returncode == 0:
+                print("  Kernel executed successfully")
+
         return 0
 
 
