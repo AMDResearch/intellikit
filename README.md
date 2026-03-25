@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./docs/intellikit.svg" alt="IntelliKit" width="200" />
+<img src="./docs/public/intellikit.svg" alt="IntelliKit" width="200" />
 
 # IntelliKit
 
