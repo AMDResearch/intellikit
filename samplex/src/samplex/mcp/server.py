@@ -16,7 +16,7 @@ mcp = FastMCP("IntelliKit Samplex")
 @mcp.tool()
 def pc_sample(
     command: str,
-    interval: int = 256,
+    interval: int = 65536,
     kernel_filter: str = None,
     top_n: int = 10,
 ) -> dict:
@@ -30,7 +30,7 @@ def pc_sample(
 
     Args:
         command: Command to profile (e.g., './app' or 'python3 bench.py')
-        interval: Sampling interval in cycles, power of 2 (min 256, default 256)
+        interval: Sampling interval in cycles, power of 2 (default 65536). Lower = more samples but higher overhead.
         kernel_filter: Regex to filter kernels by name
         top_n: Number of top instructions to report per kernel
 

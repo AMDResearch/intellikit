@@ -87,7 +87,7 @@ class Samplex:
     def sample(
         self,
         command: str,
-        interval: int = 256,
+        interval: int = 65536,
         kernel_filter: Optional[str] = None,
         top_n: int = 10,
         cwd: Optional[str] = None,
@@ -98,7 +98,8 @@ class Samplex:
 
         Args:
             command: Command to profile
-            interval: Sampling interval in cycles, must be power of 2 (min 256)
+            interval: Sampling interval in cycles, power of 2. Default 65536.
+                      Lower = more samples but higher overhead. 4096+ recommended.
             kernel_filter: Regex to filter kernels
             top_n: Number of top instructions to report per kernel
             cwd: Working directory

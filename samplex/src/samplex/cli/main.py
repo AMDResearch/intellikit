@@ -55,8 +55,8 @@ Examples:
     profile_parser.add_argument(
         "--interval", "-i",
         type=int,
-        default=256,
-        help="Sampling interval in cycles, must be power of 2 (default: 256, min: 256)",
+        default=65536,
+        help="Sampling interval in cycles, power of 2 (default: 65536). Lower = more samples but higher overhead. 4096+ recommended.",
     )
 
     profile_parser.add_argument(

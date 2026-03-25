@@ -100,7 +100,7 @@ class PCSamplingWrapper:
     def sample(
         self,
         command: str,
-        interval: int = 256,
+        interval: int = 65536,
         kernel_filter: Optional[str] = None,
         output_dir: Optional[Path] = None,
         cwd: Optional[str] = None,
@@ -110,7 +110,10 @@ class PCSamplingWrapper:
 
         Args:
             command: Command to profile (e.g., "./my_app" or "python3 bench.py")
-            interval: Sampling interval in cycles, must be power of 2 (min 256, max 2^31)
+            interval: Sampling interval in cycles, must be power of 2. Default 65536.
+                      Lower values = more samples but higher overhead (rocprofv3 may
+                      silently drop all samples if the interval is too low).
+                      Minimum: 256, but 4096+ recommended for reliable output.
             kernel_filter: Regex to filter kernels by name
             output_dir: Output directory (temp dir if None)
             cwd: Working directory for command execution
