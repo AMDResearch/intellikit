@@ -436,8 +436,8 @@ class ROCProfV3Wrapper:
                     counter_value = float(row["Counter_Value"])
                     dispatches[dispatch_id]["counters"][counter_name] = counter_value
 
-                except (KeyError, ValueError) as e:
-                    print(f"Warning: Failed to parse row: {e}: {row}")
+                except (KeyError, ValueError, TypeError) as e:
+                    # TypeError: int(None) from multi-process traces with null fields
                     continue
 
         # Convert to ProfileResult objects
@@ -501,8 +501,8 @@ class ROCProfV3Wrapper:
                     )
                     dispatches[dispatch_id] = result
 
-                except (KeyError, ValueError) as e:
-                    print(f"Warning: Failed to parse trace row: {e}")
+                except (KeyError, ValueError, TypeError) as e:
+                    # TypeError: int(None) from multi-process traces with null fields
                     continue
 
         return list(dispatches.values())
