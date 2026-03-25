@@ -29,10 +29,10 @@ Samplex Example: Basic PC Sampling
 ================================================================================
 
 Step 1: Writing kernel to /tmp...
-  Wrote: /tmp/samplex_example_bsximdrf/vector_add.hip
+  Wrote: /tmp/samplex_example_3gff9jbk/vector_add.hip
 
 Step 2: Compiling kernel...
-  Compiled: /tmp/samplex_example_bsximdrf/vector_add
+  Compiled: /tmp/samplex_example_3gff9jbk/vector_add
 
 Step 3: PC sampling with Samplex...
 
@@ -42,32 +42,32 @@ PC SAMPLING RESULTS
 
 Method:     stochastic
 Interval:   65536 cycles
-Samples:    629
+Samples:    600
 Dispatches: 100
 
 Kernel: vector_add(float const*, float const*, float*, int)
 ----------------------------------------------------------------------
-  Samples:   629
-  Duration:  32225.2 us
+  Samples:   600
+  Duration:  404.2 us
   Full mask: 100.0%
-  Issued:    0.8%
+  Issued:    9.7%
   Top instructions:
-     60.7%    382  s_waitcnt  [issued=1, stalled=381]
-     28.0%    176  global_load_dword  [issued=4, stalled=172]
-      8.4%     53  global_store_dword  [issued=0, stalled=53]
-      0.6%      4  v_ashrrev_i32_e32  [issued=0, stalled=4]
-      0.6%      4  s_and_saveexec_b64  [issued=0, stalled=4]
-      0.5%      3  v_lshl_add_u64  [issued=0, stalled=3]
-      0.3%      2  v_add_u32_e32  [issued=0, stalled=2]
-      0.3%      2  s_cbranch_execz  [issued=0, stalled=2]
-      0.3%      2  s_load_dword  [issued=0, stalled=2]
-      0.2%      1  s_load_dwordx4  [issued=0, stalled=1]
+     70.5%    423  s_waitcnt  [issued=0, stalled=423]
+      4.2%     25  global_load_dword  [issued=5, stalled=20]
+      3.5%     21  v_lshl_add_u64  [issued=11, stalled=10]
+      3.5%     21  s_load_dword  [issued=1, stalled=20]
+      3.3%     20  s_and_saveexec_b64  [issued=3, stalled=17]
+      3.0%     18  v_ashrrev_i32_e32  [issued=3, stalled=15]
+      3.0%     18  global_store_dword  [issued=3, stalled=15]
+      2.0%     12  v_add_u32_e32  [issued=3, stalled=9]
+      1.8%     11  v_lshlrev_b64  [issued=5, stalled=6]
+      1.3%      8  v_add_f32_e32  [issued=8, stalled=0]
 
 ================================================================================
 ```
 
-This vector_add kernel is **memory-bound**: 60.7% of samples are on `s_waitcnt` (waiting
-for memory), 28.0% on `global_load_dword` (loading data), and the top stall reason is
-WAITCNT at 61.2%. Only 0.8% of samples were issued (actively computing).
+This vector_add kernel is **memory-bound**: 70.5% of samples are on `s_waitcnt` (waiting
+for memory), and most instructions show high stalled counts relative to issued. Only 9.7%
+of samples were issued (actively computing).
 
 See [samplex documentation](../../README.md) for more details.
