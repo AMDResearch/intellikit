@@ -1,8 +1,8 @@
 """
 rocprofv3 PC sampling wrapper.
 
-Runs rocprofv3 with --pc-sampling-beta-enabled and parses the CSV output.
-Supports both host_trap (time-based) and stochastic (cycle-based) methods.
+Runs rocprofv3 with stochastic PC sampling (hardware-based, cycle-accurate,
+zero skid, provides stall reasons and instruction types). Requires MI300+.
 """
 
 import csv
@@ -17,7 +17,7 @@ from ..logger import logger
 
 @dataclass
 class PCSample:
-    """A single PC sample from rocprofv3."""
+    """A single PC sample from rocprofv3 stochastic sampling."""
 
     timestamp: int
     exec_mask: int
@@ -25,11 +25,10 @@ class PCSample:
     instruction: str
     instruction_comment: str
     correlation_id: int
-    # Stochastic-only fields
-    wave_issued: Optional[bool] = None
-    instruction_type: Optional[str] = None
-    stall_reason: Optional[str] = None
-    wave_count: Optional[int] = None
+    wave_issued: bool = False
+    instruction_type: str = ""
+    stall_reason: str = ""
+    wave_count: int = 0
 
 
 @dataclass
@@ -60,8 +59,6 @@ class PCSamplingResult:
     """Complete result from a PC sampling run."""
 
     command: str
-    method: str
-    unit: str
     interval: int
     samples: List[PCSample] = field(default_factory=list)
     dispatches: List[KernelDispatch] = field(default_factory=list)
@@ -69,11 +66,11 @@ class PCSamplingResult:
 
 class PCSamplingWrapper:
     """
-    Wrapper around rocprofv3 PC sampling.
+    Wrapper around rocprofv3 stochastic PC sampling.
 
-    Supports two sampling methods:
-    - host_trap: Software-based, time unit (microseconds). Works on MI200+.
-    - stochastic: Hardware-based, cycle unit. Provides stall reasons. MI300+.
+    Uses hardware-based sampling with cycle-accurate precision and zero skid.
+    Provides stall reasons, instruction types, and wave counts.
+    Requires MI300+ (gfx942 and later).
     """
 
     def __init__(self, timeout_seconds: Optional[int] = 0):
@@ -103,23 +100,17 @@ class PCSamplingWrapper:
     def sample(
         self,
         command: str,
-        method: str = "host_trap",
-        unit: Optional[str] = None,
-        interval: int = 1,
+        interval: int = 256,
         kernel_filter: Optional[str] = None,
         output_dir: Optional[Path] = None,
         cwd: Optional[str] = None,
     ) -> PCSamplingResult:
         """
-        Run PC sampling on a command.
+        Run stochastic PC sampling on a command.
 
         Args:
             command: Command to profile (e.g., "./my_app" or "python3 bench.py")
-            method: Sampling method - "host_trap" or "stochastic"
-            unit: Sampling unit - "time" for host_trap, "cycles" for stochastic.
-                  Auto-selected if None.
-            interval: Sampling interval. For host_trap: microseconds (default 1).
-                      For stochastic: cycles, must be power of 2 (default 256).
+            interval: Sampling interval in cycles, must be power of 2 (min 256, max 2^31)
             kernel_filter: Regex to filter kernels by name
             output_dir: Output directory (temp dir if None)
             cwd: Working directory for command execution
@@ -127,14 +118,15 @@ class PCSamplingWrapper:
         Returns:
             PCSamplingResult with samples and kernel dispatches
         """
-        # Auto-select unit based on method
-        if unit is None:
-            unit = "time" if method == "host_trap" else "cycles"
-
-        # Auto-adjust interval for stochastic
-        if method == "stochastic" and interval < 256:
-            logger.warning(f"Stochastic minimum interval is 256, adjusting from {interval}")
+        if interval < 256:
+            logger.warning(f"Minimum interval is 256 cycles, adjusting from {interval}")
             interval = 256
+
+        # Validate power of 2
+        if interval & (interval - 1) != 0:
+            next_pow2 = 1 << (interval - 1).bit_length()
+            logger.warning(f"Interval must be power of 2, adjusting {interval} -> {next_pow2}")
+            interval = next_pow2
 
         # Create output directory
         if output_dir is None:
@@ -145,12 +137,11 @@ class PCSamplingWrapper:
             output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Build rocprofv3 command
             prof_cmd = [
                 "rocprofv3",
                 "--pc-sampling-beta-enabled",
-                "--pc-sampling-method", method,
-                "--pc-sampling-unit", unit,
+                "--pc-sampling-method", "stochastic",
+                "--pc-sampling-unit", "cycles",
                 "--pc-sampling-interval", str(interval),
                 "--kernel-trace",
                 "--output-format", "csv",
@@ -164,7 +155,7 @@ class PCSamplingWrapper:
             prof_cmd.append("--")
             prof_cmd.extend(command.split())
 
-            logger.info(f"Running PC sampling ({method}, {unit}={interval}): {command}")
+            logger.info(f"Running stochastic PC sampling (interval={interval} cycles): {command}")
             logger.debug(f"Command: {' '.join(prof_cmd)}")
 
             result = subprocess.run(
@@ -181,16 +172,13 @@ class PCSamplingWrapper:
 
             logger.debug(f"rocprofv3 completed, parsing output from {output_dir}")
 
-            # Parse results
-            samples = self._parse_samples(output_dir, method)
+            samples = self._parse_samples(output_dir)
             dispatches = self._parse_kernel_trace(output_dir)
 
             logger.info(f"Collected {len(samples)} samples across {len(dispatches)} dispatches")
 
             return PCSamplingResult(
                 command=command,
-                method=method,
-                unit=unit,
                 interval=interval,
                 samples=samples,
                 dispatches=dispatches,
@@ -205,13 +193,10 @@ class PCSamplingWrapper:
                 import shutil
                 shutil.rmtree(output_dir, ignore_errors=True)
 
-    def _parse_samples(self, output_dir: Path, method: str) -> List[PCSample]:
-        """Parse PC sampling CSV output."""
-        # Find the samples file
-        pattern = f"*pc_sampling_{method}*.csv"
-        files = list(output_dir.glob(pattern))
+    def _parse_samples(self, output_dir: Path) -> List[PCSample]:
+        """Parse stochastic PC sampling CSV output."""
+        files = list(output_dir.glob("*pc_sampling_stochastic*.csv"))
         if not files:
-            # Try without method name
             files = list(output_dir.glob("*pc_sampling*.csv"))
         if not files:
             logger.warning(f"No PC sampling output file found in {output_dir}")
@@ -231,15 +216,11 @@ class PCSamplingWrapper:
                         instruction=row["Instruction"],
                         instruction_comment=row.get("Instruction_Comment", ""),
                         correlation_id=int(row["Correlation_Id"]),
+                        wave_issued=row.get("Wave_Issued_Instruction", "0") == "1",
+                        instruction_type=row.get("Instruction_Type", ""),
+                        stall_reason=row.get("Stall_Reason", ""),
+                        wave_count=int(row.get("Wave_Count", 0)),
                     )
-
-                    # Stochastic-only fields
-                    if "Wave_Issued_Instruction" in row:
-                        sample.wave_issued = row["Wave_Issued_Instruction"] == "1"
-                        sample.instruction_type = row.get("Instruction_Type", "")
-                        sample.stall_reason = row.get("Stall_Reason", "")
-                        sample.wave_count = int(row.get("Wave_Count", 0))
-
                     samples.append(sample)
                 except (KeyError, ValueError) as e:
                     logger.warning(f"Failed to parse sample row: {e}")

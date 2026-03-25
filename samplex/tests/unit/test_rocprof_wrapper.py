@@ -11,41 +11,6 @@ from samplex.profiler.rocprof_wrapper import PCSamplingWrapper, PCSample, Kernel
 class TestCSVParsing:
     """Test CSV parsing logic with synthetic files."""
 
-    def test_parse_host_trap_samples(self):
-        wrapper = PCSamplingWrapper.__new__(PCSamplingWrapper)
-        wrapper.timeout = None
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            csv_path = os.path.join(tmpdir, "out_pc_sampling_host_trap.csv")
-            with open(csv_path, "w", newline="") as f:
-                writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-                writer.writerow([
-                    "Sample_Timestamp", "Exec_Mask", "Dispatch_Id",
-                    "Instruction", "Instruction_Comment", "Correlation_Id",
-                ])
-                writer.writerow([
-                    "1000000", "18446744073709551615", "1",
-                    "s_waitcnt vmcnt(0)", "", "1",
-                ])
-                writer.writerow([
-                    "1000100", "255", "2",
-                    "global_load_dwordx4 v[0:3], v[4:5], off", "src.hip:42", "2",
-                ])
-
-            from pathlib import Path
-            samples = wrapper._parse_samples(Path(tmpdir), "host_trap")
-
-            assert len(samples) == 2
-            assert samples[0].timestamp == 1000000
-            assert samples[0].exec_mask == 18446744073709551615
-            assert samples[0].dispatch_id == 1
-            assert samples[0].instruction == "s_waitcnt vmcnt(0)"
-            assert samples[0].wave_issued is None  # host_trap has no wave_issued
-
-            assert samples[1].dispatch_id == 2
-            assert samples[1].exec_mask == 255
-            assert samples[1].instruction_comment == "src.hip:42"
-
     def test_parse_stochastic_samples(self):
         wrapper = PCSamplingWrapper.__new__(PCSamplingWrapper)
         wrapper.timeout = None
@@ -72,17 +37,31 @@ class TestCSVParsing:
                     "0", "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST",
                     "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT", "2",
                 ])
+                writer.writerow([
+                    "2000512", "255", "2",
+                    "global_load_dwordx4 v[0:3], v[4:5], off", "src.hip:42", "2",
+                    "1", "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VMEM",
+                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT", "1",
+                ])
 
             from pathlib import Path
-            samples = wrapper._parse_samples(Path(tmpdir), "stochastic")
+            samples = wrapper._parse_samples(Path(tmpdir))
 
-            assert len(samples) == 2
+            assert len(samples) == 3
+
+            assert samples[0].timestamp == 2000000
             assert samples[0].wave_issued is True
             assert samples[0].instruction_type == "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU"
             assert samples[0].wave_count == 3
 
             assert samples[1].wave_issued is False
             assert "WAITCNT" in samples[1].stall_reason
+            assert samples[1].wave_count == 2
+
+            assert samples[2].dispatch_id == 2
+            assert samples[2].exec_mask == 255
+            assert samples[2].instruction_comment == "src.hip:42"
+            assert samples[2].wave_issued is True
 
     def test_parse_kernel_trace(self):
         wrapper = PCSamplingWrapper.__new__(PCSamplingWrapper)
@@ -126,8 +105,18 @@ class TestCSVParsing:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             from pathlib import Path
-            samples = wrapper._parse_samples(Path(tmpdir), "host_trap")
+            samples = wrapper._parse_samples(Path(tmpdir))
             assert samples == []
 
             dispatches = wrapper._parse_kernel_trace(Path(tmpdir))
             assert dispatches == []
+
+    def test_interval_validation(self):
+        wrapper = PCSamplingWrapper.__new__(PCSamplingWrapper)
+        wrapper.timeout = None
+        # Can't easily test without rocprofv3, but we can verify the
+        # PCSamplingResult dataclass works with stochastic-only fields
+        from samplex.profiler.rocprof_wrapper import PCSamplingResult
+        result = PCSamplingResult(command="./app", interval=256)
+        assert result.interval == 256
+        assert result.samples == []

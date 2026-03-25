@@ -1,5 +1,5 @@
 """
-High-level Samplex API - PC sampling made simple.
+High-level Samplex API - Stochastic PC sampling made simple.
 
     sampler = Samplex()
     results = sampler.sample("./my_app")
@@ -23,7 +23,6 @@ class InstructionHotspot:
     opcode: str
     sample_count: int
     percentage: float
-    # Stochastic-only
     issued_count: int = 0
     stalled_count: int = 0
     stall_reasons: Dict[str, int] = field(default_factory=dict)
@@ -39,11 +38,9 @@ class KernelSamplingResult:
     total_samples: int
     duration_us: float
     top_instructions: List[InstructionHotspot]
-    # Exec mask stats
     full_mask_pct: float = 0.0
     empty_instruction_count: int = 0
-    # Stochastic-only aggregate
-    issued_pct: Optional[float] = None
+    issued_pct: float = 0.0
     top_stall_reasons: Optional[Dict[str, float]] = None
 
 
@@ -52,17 +49,20 @@ class SamplingResults:
     """Complete results from a samplex run."""
 
     command: str
-    method: str
     total_samples: int
     total_dispatches: int
+    interval: int
     kernels: List[KernelSamplingResult]
-    # Global instruction stats
     global_top_opcodes: List[InstructionHotspot]
 
 
 class Samplex:
     """
-    High-level PC sampling API.
+    High-level stochastic PC sampling API.
+
+    Uses hardware-based sampling with cycle-accurate precision and zero skid.
+    Provides stall reasons, instruction types, and wave counts.
+    Requires MI300+ (gfx942 and later).
 
     Usage:
         sampler = Samplex()
@@ -71,7 +71,10 @@ class Samplex:
         for kernel in results.kernels:
             print(f"{kernel.name}: {kernel.total_samples} samples")
             for hotspot in kernel.top_instructions[:5]:
-                print(f"  {hotspot.percentage:.1f}% {hotspot.opcode} - {hotspot.instruction}")
+                print(f"  {hotspot.percentage:.1f}% {hotspot.opcode}")
+            if kernel.top_stall_reasons:
+                for reason, pct in kernel.top_stall_reasons.items():
+                    print(f"  stall: {pct:.1f}% {reason}")
     """
 
     def __init__(self, timeout_seconds: Optional[int] = 0):
@@ -84,34 +87,28 @@ class Samplex:
     def sample(
         self,
         command: str,
-        method: str = "host_trap",
-        unit: Optional[str] = None,
-        interval: int = 1,
+        interval: int = 256,
         kernel_filter: Optional[str] = None,
         top_n: int = 10,
         cwd: Optional[str] = None,
         output_dir: Optional[str] = None,
     ) -> SamplingResults:
         """
-        Run PC sampling on a command and return analyzed results.
+        Run stochastic PC sampling on a command and return analyzed results.
 
         Args:
             command: Command to profile
-            method: "host_trap" (reliable, time-based) or "stochastic" (precise, cycle-based)
-            unit: Sampling unit (auto-selected if None)
-            interval: Sampling interval (1 us for host_trap, 256+ cycles for stochastic)
+            interval: Sampling interval in cycles, must be power of 2 (min 256)
             kernel_filter: Regex to filter kernels
             top_n: Number of top instructions to report per kernel
             cwd: Working directory
             output_dir: Output directory (temp dir if None)
 
         Returns:
-            SamplingResults with per-kernel analysis
+            SamplingResults with per-kernel analysis including stall reasons
         """
         raw = self.wrapper.sample(
             command=command,
-            method=method,
-            unit=unit,
             interval=interval,
             kernel_filter=kernel_filter,
             cwd=cwd,
@@ -139,7 +136,7 @@ class Samplex:
         for kernel_name, samples in kernel_samples.items():
             result = self._analyze_kernel(
                 kernel_name, samples, list(kernel_dispatch_ids[kernel_name]),
-                dispatch_to_duration, top_n, method
+                dispatch_to_duration, top_n,
             )
             kernel_results.append(result)
 
@@ -151,9 +148,9 @@ class Samplex:
 
         return SamplingResults(
             command=command,
-            method=method,
             total_samples=len(raw.samples),
             total_dispatches=len(raw.dispatches),
+            interval=raw.interval,
             kernels=kernel_results,
             global_top_opcodes=global_opcodes,
         )
@@ -165,40 +162,34 @@ class Samplex:
         dispatch_ids: List[int],
         dispatch_to_duration: Dict[int, float],
         top_n: int,
-        method: str,
     ) -> KernelSamplingResult:
         """Analyze PC samples for a single kernel."""
         total = len(samples)
 
-        # Total duration across all dispatches of this kernel
         duration_us = sum(dispatch_to_duration.get(d, 0.0) for d in dispatch_ids)
-
-        # Instruction hotspots
-        hotspots = self._compute_instruction_stats(samples, top_n, method)
+        hotspots = self._compute_instruction_stats(samples, top_n)
 
         # Exec mask stats
         full_mask = sum(1 for s in samples if s.exec_mask == 0xFFFFFFFFFFFFFFFF)
         empty_instr = sum(1 for s in samples if not s.instruction.strip())
 
-        # Stochastic aggregate stats
-        issued_pct = None
-        top_stall_reasons = None
-        if method == "stochastic" and samples[0].wave_issued is not None:
-            issued = sum(1 for s in samples if s.wave_issued)
-            issued_pct = (issued / total * 100) if total > 0 else 0.0
+        # Stall analysis
+        issued = sum(1 for s in samples if s.wave_issued)
+        issued_pct = (issued / total * 100) if total > 0 else 0.0
 
-            stall_counter = Counter()
-            for s in samples:
-                if not s.wave_issued and s.stall_reason:
-                    reason = s.stall_reason.replace(
-                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_", ""
-                    )
-                    stall_counter[reason] += 1
-            stalled = total - issued
-            if stalled > 0:
-                top_stall_reasons = {
-                    r: count / stalled * 100 for r, count in stall_counter.most_common(10)
-                }
+        stall_counter = Counter()
+        for s in samples:
+            if not s.wave_issued and s.stall_reason:
+                reason = s.stall_reason.replace(
+                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_", ""
+                )
+                stall_counter[reason] += 1
+        stalled = total - issued
+        top_stall_reasons = None
+        if stalled > 0:
+            top_stall_reasons = {
+                r: count / stalled * 100 for r, count in stall_counter.most_common(10)
+            }
 
         return KernelSamplingResult(
             name=kernel_name,
@@ -213,14 +204,13 @@ class Samplex:
         )
 
     def _compute_instruction_stats(
-        self, samples: List[PCSample], top_n: int, method: str
+        self, samples: List[PCSample], top_n: int,
     ) -> List[InstructionHotspot]:
         """Compute instruction-level hotspot statistics."""
         total = len(samples)
         instr_counter = Counter()
-        instr_full: Dict[str, str] = {}  # opcode -> full instruction (last seen)
+        instr_full: Dict[str, str] = {}
 
-        # For stochastic: per-instruction stall/issued breakdown
         instr_issued: Dict[str, int] = defaultdict(int)
         instr_stalled: Dict[str, int] = defaultdict(int)
         instr_stall_reasons: Dict[str, Counter] = defaultdict(Counter)
@@ -233,21 +223,20 @@ class Samplex:
             if parts:
                 instr_full[opcode] = s.instruction
 
-            if method == "stochastic" and s.wave_issued is not None:
-                if s.wave_issued:
-                    instr_issued[opcode] += 1
-                else:
-                    instr_stalled[opcode] += 1
-                if s.stall_reason:
-                    reason = s.stall_reason.replace(
-                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_", ""
-                    )
-                    instr_stall_reasons[opcode][reason] += 1
-                if s.instruction_type:
-                    itype = s.instruction_type.replace(
-                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_", ""
-                    )
-                    instr_types[opcode][itype] += 1
+            if s.wave_issued:
+                instr_issued[opcode] += 1
+            else:
+                instr_stalled[opcode] += 1
+            if s.stall_reason:
+                reason = s.stall_reason.replace(
+                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_", ""
+                )
+                instr_stall_reasons[opcode][reason] += 1
+            if s.instruction_type:
+                itype = s.instruction_type.replace(
+                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_", ""
+                )
+                instr_types[opcode][itype] += 1
 
         hotspots = []
         for opcode, count in instr_counter.most_common(top_n):

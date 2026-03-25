@@ -1,18 +1,21 @@
 ---
 name: samplex-pc-sampling
-description: PC sampling profiling for GPU kernels - find instruction-level hotspots and stall reasons
+description: Stochastic PC sampling for GPU kernels - find instruction-level hotspots, stall reasons, and wave utilization
 ---
 
 # Samplex: GPU PC Sampling
 
-Statistical instruction-level profiling via rocprofv3 PC sampling. Answers: "Where is my kernel stuck?"
+Hardware-based stochastic PC sampling via rocprofv3. Cycle-accurate, zero skid.
+Answers: "Where is my kernel stuck and why?"
+
+Requires MI300+ (gfx942 and later).
 
 ## When to Use
 
 - You need to find which **instructions** are bottlenecks in a GPU kernel
 - You want to understand **stall reasons** (memory waits, ALU dependencies, barriers)
 - You want a lightweight statistical profile (no replay overhead like counter collection)
-- You need to see the **exec mask** to check for divergent control flow
+- You need to see **wave occupancy** and **exec mask** divergence
 
 ## When NOT to Use
 
@@ -20,24 +23,17 @@ Statistical instruction-level profiling via rocprofv3 PC sampling. Answers: "Whe
 - You need **source-line mapping** - use **Linex** instead
 - You need **kernel dispatch timing** only - use Metrix with `--time-only`
 
-## Sampling Methods
-
-| Method | Unit | Hardware | Precision | Extra Info |
-|--------|------|----------|-----------|------------|
-| `host_trap` | microseconds | MI200+ | ~2 instruction skid | Reliable, more samples |
-| `stochastic` | cycles (power of 2) | MI300+ | Zero skid | Stall reasons, instruction types |
-
 ## CLI
 
 ```bash
-# Basic PC sampling (host_trap, 1us interval)
+# PC sampling (default interval = 256 cycles)
 samplex ./my_app
 
-# With kernel filter
-samplex --kernel "gemm.*" ./my_app
+# Coarser sampling (less overhead)
+samplex --interval 4096 ./my_app
 
-# Stochastic sampling (precise, with stall reasons)
-samplex --method stochastic --interval 256 ./my_app
+# Filter specific kernels
+samplex --kernel "gemm.*" ./my_app
 
 # JSON output
 samplex -o results.json ./my_app
@@ -56,34 +52,48 @@ results = sampler.sample("./my_app")
 
 for kernel in results.kernels:
     print(f"{kernel.name}: {kernel.total_samples} samples")
+    print(f"  Issued: {kernel.issued_pct:.1f}%")
     for hotspot in kernel.top_instructions[:5]:
-        print(f"  {hotspot.percentage:.1f}% {hotspot.opcode}")
+        print(f"  {hotspot.percentage:.1f}% {hotspot.opcode} "
+              f"[issued={hotspot.issued_count}, stalled={hotspot.stalled_count}]")
     if kernel.top_stall_reasons:
-        print(f"  Stall reasons: {kernel.top_stall_reasons}")
+        for reason, pct in kernel.top_stall_reasons.items():
+            print(f"  stall: {pct:.1f}% {reason}")
 ```
 
 ## Understanding the Output
 
 ### Key Opcodes
 
-- **`s_waitcnt`**: GPU is waiting for memory operations to complete. High percentage = memory-bound.
-- **`s_endpgm`**: End of program. High percentage = kernels are very short or GPU is underutilized.
-- **`s_barrier`**: Workgroup barrier synchronization. High percentage = load imbalance.
-- **`v_mfma_*`**: Matrix multiply-accumulate. Seeing these means compute is happening.
-- **`global_load_*`**: Global memory loads. Many samples here = memory-bound.
-- **`(empty)`**: No instruction captured ("holes"). Indicates idle GPU or between-dispatch gaps.
+- **`s_waitcnt`**: GPU waiting for memory ops. High % = memory-bound.
+- **`s_endpgm`**: End of program. High % = short kernels or GPU underutilized.
+- **`s_barrier`**: Workgroup barrier. High % = load imbalance.
+- **`v_mfma_*`**: Matrix multiply-accumulate. Compute is happening.
+- **`global_load_*`**: Global memory loads.
+- **`(empty)`**: No instruction captured ("holes") = idle GPU.
 
-### Stall Reasons (stochastic only)
+### Stall Reasons
 
-- **WAITCNT**: Waiting for memory operation (`s_waitcnt`)
+- **WAITCNT**: Waiting for memory operation (most common)
 - **ALU_DEPENDENCY**: Data dependency on ALU result
-- **OTHER_WAIT**: Other wait (barrier, LDS, etc.)
+- **OTHER_WAIT**: Barrier, LDS, or other synchronization
+- **INTERNAL**: Internal hardware stall
+
+### Issued vs Stalled
+
+Each sample tells you whether the wave **issued** the instruction or was **stalled**:
+- High issued % = GPU is actively computing
+- High stalled % = GPU is waiting (check stall reasons)
 
 ### Exec Mask
 
 - **Full mask (100%)**: All 64 SIMD lanes active. No divergence.
-- **Partial mask**: Some lanes masked off due to control flow divergence.
-- **Zero mask**: No lanes active (between-wave gaps).
+- **Partial mask**: Control flow divergence.
+
+### Wave Count
+
+Number of waves active on the compute unit when sampled.
+Low wave count with stalls = occupancy-limited.
 
 ## Install
 

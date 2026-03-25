@@ -1,13 +1,14 @@
 """Unit tests for samplex API (no GPU required)."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from samplex.api import Samplex, SamplingResults, KernelSamplingResult, InstructionHotspot
 from samplex.profiler.rocprof_wrapper import PCSample, KernelDispatch, PCSamplingResult
 
 
-def _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFFFFFFFFFFFFFFFF):
+def _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFFFFFFFFFFFFFFFF,
+                 wave_issued=False, stall_reason="", instruction_type="", wave_count=1):
     return PCSample(
         timestamp=1000000,
         exec_mask=exec_mask,
@@ -15,20 +16,11 @@ def _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFF
         instruction=instruction,
         instruction_comment="",
         correlation_id=dispatch_id,
+        wave_issued=wave_issued,
+        instruction_type=instruction_type,
+        stall_reason=stall_reason,
+        wave_count=wave_count,
     )
-
-
-def _make_stochastic_sample(
-    dispatch_id=1, instruction="s_waitcnt vmcnt(0)", wave_issued=False,
-    stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
-    instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST",
-):
-    sample = _make_sample(dispatch_id=dispatch_id, instruction=instruction)
-    sample.wave_issued = wave_issued
-    sample.stall_reason = stall_reason
-    sample.instruction_type = instruction_type
-    sample.wave_count = 2
-    return sample
 
 
 def _make_dispatch(dispatch_id=1, kernel_name="test_kernel"):
@@ -57,7 +49,7 @@ class TestSamplexAnalysis:
         ]
 
         result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 500.0}, top_n=5, method="host_trap"
+            "my_kernel", samples, [1], {1: 500.0}, top_n=5
         )
 
         assert result.name == "my_kernel"
@@ -69,18 +61,18 @@ class TestSamplexAnalysis:
         assert result.top_instructions[0].sample_count == 3
         assert result.top_instructions[0].percentage == 60.0
 
-    def test_analyze_kernel_stochastic(self):
+    def test_analyze_kernel_stall_reasons(self):
         sampler = Samplex.__new__(Samplex)
         sampler.wrapper = MagicMock()
 
         samples = [
-            _make_stochastic_sample(wave_issued=False, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT"),
-            _make_stochastic_sample(wave_issued=False, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_ALU_DEPENDENCY"),
-            _make_stochastic_sample(wave_issued=True, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT"),
+            _make_sample(wave_issued=False, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT"),
+            _make_sample(wave_issued=False, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_ALU_DEPENDENCY"),
+            _make_sample(wave_issued=True, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT"),
         ]
 
         result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 300.0}, top_n=5, method="stochastic"
+            "my_kernel", samples, [1], {1: 300.0}, top_n=5
         )
 
         assert result.issued_pct == pytest.approx(33.33, abs=0.1)
@@ -100,7 +92,7 @@ class TestSamplexAnalysis:
         ]
 
         result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 100.0}, top_n=5, method="host_trap"
+            "my_kernel", samples, [1], {1: 100.0}, top_n=5
         )
 
         assert result.empty_instruction_count == 2
@@ -117,7 +109,7 @@ class TestSamplexAnalysis:
         ]
 
         result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 100.0}, top_n=5, method="host_trap"
+            "my_kernel", samples, [1], {1: 100.0}, top_n=5
         )
 
         assert result.full_mask_pct == 50.0
@@ -144,9 +136,7 @@ class TestSamplexAnalysis:
 
         raw = PCSamplingResult(
             command="./app",
-            method="host_trap",
-            unit="time",
-            interval=1,
+            interval=256,
             samples=[
                 _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
                 _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
@@ -165,3 +155,34 @@ class TestSamplexAnalysis:
         assert results.kernels[0].total_samples == 2  # kernel_A has more samples
         assert results.kernels[0].name == "kernel_A"
         assert results.kernels[1].name == "kernel_B"
+        assert results.interval == 256
+
+    def test_issued_vs_stalled_per_instruction(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+
+        samples = [
+            _make_sample(instruction="s_waitcnt vmcnt(0)", wave_issued=False,
+                         stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
+                         instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST"),
+            _make_sample(instruction="s_waitcnt vmcnt(0)", wave_issued=False,
+                         stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
+                         instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST"),
+            _make_sample(instruction="v_mfma_f32_16x16x32_f16 a, v, v, a", wave_issued=True,
+                         instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU"),
+        ]
+
+        result = sampler._analyze_kernel(
+            "my_kernel", samples, [1], {1: 100.0}, top_n=5
+        )
+
+        waitcnt = result.top_instructions[0]
+        assert waitcnt.opcode == "s_waitcnt"
+        assert waitcnt.issued_count == 0
+        assert waitcnt.stalled_count == 2
+        assert "WAITCNT" in waitcnt.stall_reasons
+
+        mfma = result.top_instructions[1]
+        assert mfma.opcode == "v_mfma_f32_16x16x32_f16"
+        assert mfma.issued_count == 1
+        assert mfma.stalled_count == 0

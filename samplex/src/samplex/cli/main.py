@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Samplex CLI - PC sampling for GPU kernels.
+Samplex CLI - Stochastic PC sampling for GPU kernels.
 """
 
 import sys
@@ -17,11 +17,11 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic PC sampling (host_trap, 1us interval)
+  # PC sampling with default interval (256 cycles)
   samplex profile ./my_app
 
-  # Stochastic sampling (precise, with stall reasons)
-  samplex profile --method stochastic --interval 256 ./my_app
+  # Coarser sampling (less overhead, fewer samples)
+  samplex profile --interval 4096 ./my_app
 
   # Filter specific kernels
   samplex profile --kernel "gemm.*" ./my_app
@@ -44,7 +44,7 @@ Examples:
     # Profile command
     profile_parser = subparsers.add_parser(
         "profile",
-        help="Run PC sampling on a GPU application",
+        help="Run stochastic PC sampling on a GPU application",
     )
 
     profile_parser.add_argument(
@@ -53,24 +53,10 @@ Examples:
     )
 
     profile_parser.add_argument(
-        "--method", "-M",
-        choices=["host_trap", "stochastic"],
-        default="host_trap",
-        help="Sampling method (default: host_trap)",
-    )
-
-    profile_parser.add_argument(
-        "--unit", "-u",
-        choices=["time", "cycles"],
-        default=None,
-        help="Sampling unit (auto-selected based on method if not specified)",
-    )
-
-    profile_parser.add_argument(
         "--interval", "-i",
         type=int,
-        default=None,
-        help="Sampling interval (default: 1 for host_trap, 256 for stochastic)",
+        default=256,
+        help="Sampling interval in cycles, must be power of 2 (default: 256, min: 256)",
     )
 
     profile_parser.add_argument(
@@ -116,17 +102,16 @@ Examples:
 def format_text_output(results):
     """Format results as human-readable text."""
     lines = []
-    lines.append(f"Samplex PC Sampling Results")
-    lines.append(f"{'=' * 60}")
+    lines.append(f"Samplex PC Sampling Results (stochastic, interval={results.interval} cycles)")
+    lines.append(f"{'=' * 70}")
     lines.append(f"Command:    {results.command}")
-    lines.append(f"Method:     {results.method}")
     lines.append(f"Samples:    {results.total_samples}")
     lines.append(f"Dispatches: {results.total_dispatches}")
     lines.append("")
 
     # Global opcode breakdown
     lines.append(f"Global Instruction Breakdown")
-    lines.append(f"{'-' * 60}")
+    lines.append(f"{'-' * 70}")
     for h in results.global_top_opcodes:
         lines.append(f"  {h.percentage:5.1f}%  {h.sample_count:6d}  {h.opcode}")
     lines.append("")
@@ -134,24 +119,24 @@ def format_text_output(results):
     # Per-kernel results
     for kernel in results.kernels:
         lines.append(f"Kernel: {kernel.name}")
-        lines.append(f"{'-' * 60}")
+        lines.append(f"{'-' * 70}")
         lines.append(f"  Samples:     {kernel.total_samples}")
         lines.append(f"  Duration:    {kernel.duration_us:.1f} us")
         lines.append(f"  Full mask:   {kernel.full_mask_pct:.1f}%")
+        lines.append(f"  Issued:      {kernel.issued_pct:.1f}%")
         if kernel.empty_instruction_count > 0:
             lines.append(f"  Holes:       {kernel.empty_instruction_count} (idle/between-wave gaps)")
 
-        if kernel.issued_pct is not None:
-            lines.append(f"  Issued:      {kernel.issued_pct:.1f}%")
-            if kernel.top_stall_reasons:
-                lines.append(f"  Stall reasons:")
-                for reason, pct in kernel.top_stall_reasons.items():
-                    lines.append(f"    {pct:5.1f}%  {reason}")
+        if kernel.top_stall_reasons:
+            lines.append(f"  Stall reasons:")
+            for reason, pct in kernel.top_stall_reasons.items():
+                lines.append(f"    {pct:5.1f}%  {reason}")
 
         lines.append(f"  Top instructions:")
         for h in kernel.top_instructions:
-            instr_display = h.instruction[:70] if len(h.instruction) > 70 else h.instruction
-            lines.append(f"    {h.percentage:5.1f}%  {h.sample_count:5d}  {instr_display}")
+            instr_display = h.instruction[:60] if len(h.instruction) > 60 else h.instruction
+            issued_tag = f" [issued={h.issued_count}, stalled={h.stalled_count}]"
+            lines.append(f"    {h.percentage:5.1f}%  {h.sample_count:5d}  {instr_display}{issued_tag}")
         lines.append("")
 
     return "\n".join(lines)
@@ -161,7 +146,7 @@ def format_json_output(results):
     """Format results as JSON."""
     data = {
         "command": results.command,
-        "method": results.method,
+        "interval": results.interval,
         "total_samples": results.total_samples,
         "total_dispatches": results.total_dispatches,
         "global_top_opcodes": [
@@ -179,7 +164,7 @@ def format_json_output(results):
                 "duration_us": round(k.duration_us, 2),
                 "full_mask_pct": round(k.full_mask_pct, 2),
                 "empty_instruction_count": k.empty_instruction_count,
-                "issued_pct": round(k.issued_pct, 2) if k.issued_pct is not None else None,
+                "issued_pct": round(k.issued_pct, 2),
                 "top_stall_reasons": k.top_stall_reasons,
                 "top_instructions": [
                     {
@@ -187,7 +172,10 @@ def format_json_output(results):
                         "instruction": h.instruction,
                         "sample_count": h.sample_count,
                         "percentage": round(h.percentage, 2),
+                        "issued_count": h.issued_count,
+                        "stalled_count": h.stalled_count,
                         "stall_reasons": h.stall_reasons if h.stall_reasons else None,
+                        "instruction_types": h.instruction_types if h.instruction_types else None,
                     }
                     for h in k.top_instructions
                 ],
@@ -202,16 +190,9 @@ def profile_command(args):
     """Execute the profile command."""
     sampler = Samplex(timeout_seconds=args.timeout)
 
-    # Default intervals
-    interval = args.interval
-    if interval is None:
-        interval = 1 if args.method == "host_trap" else 256
-
     results = sampler.sample(
         command=args.target,
-        method=args.method,
-        unit=args.unit,
-        interval=interval,
+        interval=args.interval,
         kernel_filter=args.kernel,
         top_n=args.top,
     )
