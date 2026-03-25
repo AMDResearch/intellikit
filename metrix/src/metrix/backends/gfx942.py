@@ -3,7 +3,7 @@ GFX942 (MI300X) Backend
 
 Metrics are loaded from counter_defs.yaml.
 This file provides architecture-specific infrastructure only.
-Device specs are queried from rocminfo / rocm-smi at runtime.
+Device specs are queried from hipGetDeviceProperties at runtime.
 """
 
 from .base import CounterBackend, DeviceSpecs, ProfileResult

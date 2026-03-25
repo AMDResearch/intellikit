@@ -7,13 +7,43 @@ All metrics are loaded from counter_defs.yaml.
 """
 
 import pytest
+from unittest.mock import patch
 from metrix.backends import get_backend
+from metrix.backends.base import DeviceSpecs
+
+_TEST_SPECS = {
+    "gfx942": DeviceSpecs(
+        arch="gfx942",
+        name="AMD Instinct MI300X",
+        num_cu=304,
+        max_waves_per_cu=32,
+        wavefront_size=64,
+        base_clock_mhz=2100.0,
+        hbm_bandwidth_gbs=5300.0,
+        l2_size_mb=256.0,
+        lds_size_per_cu_kb=64.0,
+    ),
+    "gfx90a": DeviceSpecs(
+        arch="gfx90a",
+        name="AMD Instinct MI210",
+        num_cu=104,
+        max_waves_per_cu=32,
+        wavefront_size=64,
+        base_clock_mhz=1700.0,
+        hbm_bandwidth_gbs=1600.0,
+        l2_size_mb=8.0,
+        lds_size_per_cu_kb=64.0,
+    ),
+}
 
 
 @pytest.fixture(params=["gfx942", "gfx90a"])
 def backend(request):
     """Parametrized fixture that provides both gfx942 and gfx90a backends"""
-    return get_backend(request.param)
+    arch = request.param
+    patch_target = f"metrix.backends.{arch}.query_device_specs"
+    with patch(patch_target, return_value=_TEST_SPECS[arch]):
+        return get_backend(arch)
 
 
 def compute(backend, metric_name):
@@ -262,7 +292,12 @@ class TestAtomicLatency:
     @pytest.fixture(params=["gfx942"])
     def atomic_backend(self, request):
         """Only gfx942 supports atomic_latency (broken on gfx90a)"""
-        return get_backend(request.param)
+        arch = request.param
+        with patch(
+            f"metrix.backends.{arch}.query_device_specs",
+            return_value=_TEST_SPECS[arch],
+        ):
+            return get_backend(arch)
 
     def test_low_latency(self, atomic_backend):
         """10 cycles per atomic operation"""

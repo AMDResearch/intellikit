@@ -1,248 +1,185 @@
 """
-Dynamic GPU device info from rocminfo / rocm-smi + peak spec lookup table.
+Dynamic GPU device info via ``gpu_query`` HIP binary.
 
-Queryable values (num_cu, wavefront_size, etc.) are read from the live
-system so that one backend class works for every SKU in an architecture
-family (e.g. MI210 vs MI250X both use gfx90a).
+Ships ``gpu_query.hip`` as package data and compiles it on first use with
+``hipcc``.  The compiled binary is cached next to the source file so
+subsequent calls are instant.
 
-Theoretical peak values (TFLOPS, HBM bandwidth) that cannot be read from
-hardware are stored in a small per-chip-ID table with source links.
+Usage::
 
-When the requested arch does not match the GPU actually installed (e.g.
-unit tests creating a gfx942 backend on an MI210 machine), static
-fallback specs are used instead.
+    from .device_info import query_device_specs
+
+    specs = query_device_specs("gfx942")
 """
 
 from __future__ import annotations
 
-import re
+import json
+import logging
+import os
+import shutil
 import subprocess
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict
+from pathlib import Path
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from .base import DeviceSpecs
 
-
-# ---------------------------------------------------------------------------
-# Peak specs that cannot be queried from hardware.
-# Keyed by (gfx_arch, chip_id_hex) so different SKUs within the same arch
-# get correct values.  chip_id_hex = None acts as the arch-level default.
-#
-# Sources are listed per-entry so they can be verified / updated.
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Fallback specs used when the requested arch differs from the installed GPU
-# (e.g. unit tests) or when rocminfo is unavailable.
-#
-# Sources:
-#   HW specs:     https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html
-#   MI300X peaks: https://www.amd.com/en/products/accelerators/instinct/mi300/platform.html
-#   MI210 peaks:  https://www.amd.com/en/products/accelerators/instinct/mi200/mi210.html
-# ---------------------------------------------------------------------------
-def _fallback_specs() -> Dict[str, "DeviceSpecs"]:
-    from .base import DeviceSpecs
-
-    return {
-        "gfx942": DeviceSpecs(
-            arch="gfx942",
-            name="AMD Instinct MI300X",
-            num_cu=304,
-            max_waves_per_cu=32,
-            wavefront_size=64,
-            base_clock_mhz=2100.0,
-            hbm_bandwidth_gbs=5300.0,
-            l2_size_mb=256.0,
-            lds_size_per_cu_kb=64.0,
-        ),
-        "gfx90a": DeviceSpecs(
-            arch="gfx90a",
-            name="AMD Instinct MI210",
-            num_cu=104,
-            max_waves_per_cu=32,
-            wavefront_size=64,
-            base_clock_mhz=1700.0,
-            hbm_bandwidth_gbs=1600.0,
-            l2_size_mb=8.0,
-            lds_size_per_cu_kb=64.0,
-        ),
-    }
-
-
-# HBM peak bandwidth per arch (only value not queryable from hardware)
-_HBM_PEAK_GBS: Dict[str, float] = {
-    "gfx942": 5300.0,
-    "gfx90a": 1600.0,
-}
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# rocminfo parser — one call, structured results for the first GPU agent
+# gpu_query binary: locate source, compile on first use, cache
 # ---------------------------------------------------------------------------
-@dataclass
-class RocmInfoGPU:
-    """Parsed GPU agent block from rocminfo."""
-
-    arch: str = ""
-    marketing_name: str = ""
-    chip_id_hex: str = ""
-    num_cu: int = 0
-    simds_per_cu: int = 0
-    max_waves_per_cu: int = 0
-    wavefront_size: int = 64
-    max_clock_mhz: int = 0
-    l1_cache_kb: int = 0
-    l2_cache_kb: int = 0
-    lds_size_kb: int = 0
+_GPU_QUERY_SOURCE = "gpu_query.hip"
 
 
-def _parse_rocminfo() -> RocmInfoGPU:
-    """Run ``rocminfo`` and parse the first GPU agent."""
+def _find_hip_source() -> Optional[Path]:
+    """Locate gpu_query.hip shipped as package data."""
+    pkg_dir = Path(__file__).resolve().parent
+    src = pkg_dir / _GPU_QUERY_SOURCE
+    if src.is_file():
+        return src
+
+    # Editable installs: also search via package __path__
     try:
-        proc = subprocess.run(["rocminfo"], capture_output=True, text=True, timeout=10)
-    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError(f"rocminfo unavailable: {exc}") from exc
+        import metrix.backends as _pkg
+
+        for p in _pkg.__path__:
+            candidate = Path(p) / _GPU_QUERY_SOURCE
+            if candidate.is_file():
+                return candidate
+    except (ImportError, AttributeError):
+        pass
+
+    return None
+
+
+def _get_cache_dir() -> Path:
+    """Return a user-writable cache directory for compiled binaries."""
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".cache"
+    cache = base / "metrix"
+    cache.mkdir(parents=True, exist_ok=True)
+    return cache
+
+
+def _compile_gpu_query(source: Path) -> Path:
+    """Compile gpu_query.hip with hipcc if not already cached."""
+    cache = _get_cache_dir()
+    binary = cache / "gpu_query"
+
+    # Recompile if binary missing or source is newer
+    if binary.is_file() and binary.stat().st_mtime >= source.stat().st_mtime:
+        return binary
+
+    hipcc = shutil.which("hipcc")
+    if hipcc is None:
+        raise RuntimeError("hipcc not found on PATH. Install ROCm or add hipcc to PATH.")
+
+    logger.info("Compiling gpu_query.hip (first run only)...")
+    try:
+        proc = subprocess.run(
+            [hipcc, str(source), "-o", str(binary), "-O2"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"hipcc timed out compiling gpu_query: {exc}") from exc
 
     if proc.returncode != 0:
-        raise RuntimeError(f"rocminfo failed (rc={proc.returncode}): {proc.stderr}")
+        raise RuntimeError(f"hipcc failed (rc={proc.returncode}):\n{proc.stderr}")
 
-    gpu = RocmInfoGPU()
-    in_gpu_agent = False
-    in_cache = False
-    found_group_segment = False
+    return binary
 
-    pending_agent_name = ""
-    pending_marketing_name = ""
 
-    for line in proc.stdout.splitlines():
-        stripped = line.strip()
+def _run_gpu_query(device_id: Optional[int] = None) -> List[dict]:
+    """Run the gpu_query binary and return parsed JSON."""
+    source = _find_hip_source()
+    if source is None:
+        raise RuntimeError(
+            f"Cannot find {_GPU_QUERY_SOURCE} in metrix package data. "
+            "Reinstall metrix or check your installation."
+        )
 
-        if stripped.startswith("*******"):
-            if in_gpu_agent:
-                break
-            pending_agent_name = ""
-            pending_marketing_name = ""
-            continue
+    binary = _compile_gpu_query(source)
 
-        if stripped.startswith("Name:") and not in_gpu_agent:
-            pending_agent_name = stripped.split(":", 1)[1].strip()
-            continue
+    cmd = [str(binary)]
+    if device_id is not None:
+        cmd.append(str(device_id))
 
-        if stripped.startswith("Marketing Name:") and not in_gpu_agent:
-            pending_marketing_name = stripped.split(":", 1)[1].strip()
-            continue
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"gpu_query failed: {exc}") from exc
 
-        if "Device Type:" in stripped and "GPU" in stripped:
-            in_gpu_agent = True
-            in_cache = False
-            m = re.search(r"(gfx\w+)", pending_agent_name)
-            if m:
-                gpu.arch = m.group(1)
-            gpu.marketing_name = pending_marketing_name
-            continue
+    if proc.returncode != 0:
+        raise RuntimeError(f"gpu_query failed (rc={proc.returncode}): {proc.stderr}")
 
-        if not in_gpu_agent:
-            continue
-
-        if "Device Type:" in stripped and "GPU" not in stripped:
-            break
-
-        if "Cache Info:" in stripped:
-            in_cache = True
-            continue
-        if "Pool Info:" in stripped or "ISA Info:" in stripped:
-            in_cache = False
-
-        if in_cache:
-            m = re.match(r"L1:\s+(\d+)", stripped)
-            if m:
-                gpu.l1_cache_kb = int(m.group(1))
-            m = re.match(r"L2:\s+(\d+)", stripped)
-            if m:
-                gpu.l2_cache_kb = int(m.group(1))
-
-        if stripped.startswith("Chip ID:"):
-            m = re.search(r"\((0x[0-9a-fA-F]+)\)", stripped)
-            if m:
-                gpu.chip_id_hex = m.group(1).lower()
-        elif stripped.startswith("Compute Unit:"):
-            m = re.search(r"(\d+)", stripped.split(":")[1])
-            if m:
-                gpu.num_cu = int(m.group(1))
-        elif stripped.startswith("SIMDs per CU:"):
-            m = re.search(r"(\d+)", stripped.split(":")[1])
-            if m:
-                gpu.simds_per_cu = int(m.group(1))
-        elif stripped.startswith("Max Waves Per CU:"):
-            m = re.search(r"(\d+)", stripped.split(":")[1])
-            if m:
-                gpu.max_waves_per_cu = int(m.group(1))
-        elif stripped.startswith("Wavefront Size:"):
-            m = re.search(r"(\d+)", stripped.split(":")[1])
-            if m:
-                gpu.wavefront_size = int(m.group(1))
-        elif stripped.startswith("Max Clock Freq"):
-            m = re.search(r"(\d+)", stripped.split(":")[1])
-            if m:
-                gpu.max_clock_mhz = int(m.group(1))
-        elif "Segment:" in stripped and "GROUP" in stripped:
-            found_group_segment = True
-        elif found_group_segment and stripped.startswith("Size:"):
-            m = re.search(r"(\d+)", stripped.split(":")[1])
-            if m:
-                gpu.lds_size_kb = int(m.group(1))
-            found_group_segment = False
-
-    return gpu
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"gpu_query returned invalid JSON: {exc}\nOutput: {proc.stdout[:500]}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-def query_device_specs(arch: str) -> "DeviceSpecs":
+def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     """
-    Build a DeviceSpecs by querying rocminfo/rocm-smi for live values.
+    Build a DeviceSpecs by querying the GPU via a compiled HIP binary.
 
-    If the requested *arch* does not match the GPU actually installed
-    (common in unit tests), a static fallback is returned instead.
+    Raises RuntimeError if the requested *arch* does not match the
+    installed GPU or if hipcc / HIP is unavailable.
 
     Args:
         arch: GFX architecture string (e.g. "gfx90a", "gfx942")
+        device_id: HIP device index (default 0)
 
     Returns:
         Fully populated DeviceSpecs
     """
     from .base import DeviceSpecs
 
-    # Try live query
-    hw_arch = None
-    try:
-        gpu = _parse_rocminfo()
-        hw_arch = gpu.arch or None
-    except RuntimeError:
-        gpu = None
+    results = _run_gpu_query(device_id)
+    gpu = results[0]
+    hw_arch = gpu["gcn_arch_name"].split(":")[0]
 
-    # If the hardware matches the requested arch, use live values
-    if gpu and hw_arch == arch:
-        return DeviceSpecs(
-            arch=arch,
-            name=gpu.marketing_name or f"AMD GPU ({arch})",
-            num_cu=gpu.num_cu,
-            max_waves_per_cu=gpu.max_waves_per_cu,
-            wavefront_size=gpu.wavefront_size,
-            base_clock_mhz=float(gpu.max_clock_mhz),
-            hbm_bandwidth_gbs=_HBM_PEAK_GBS.get(arch, 0.0),
-            l2_size_mb=gpu.l2_cache_kb / 1024.0,
-            lds_size_per_cu_kb=float(gpu.lds_size_kb or 64),
+    if hw_arch != arch:
+        raise RuntimeError(
+            f"Architecture mismatch: requested {arch} but device {device_id} is {hw_arch}"
         )
 
-    # Arch mismatch or rocminfo unavailable — use static fallback
-    fallback = _fallback_specs()
-    if arch in fallback:
-        return fallback[arch]
+    # Convert raw HIP values to DeviceSpecs units
+    wavefront_size = gpu["wavefront_size"]
+    max_waves_per_cu = (
+        gpu["max_threads_per_multiprocessor"] // wavefront_size if wavefront_size > 0 else 0
+    )
+    base_clock_mhz = gpu["clock_rate_khz"] / 1000.0
+    l2_size_mb = gpu["l2_cache_size_bytes"] / (1024.0 * 1024.0)
+    lds_size_per_cu_kb = gpu["max_shared_memory_per_multiprocessor"] / 1024.0
+
+    # Compute theoretical bandwidth from memory clock + bus width
+    mem_clock = gpu["memory_clock_rate_khz"]
+    bus_width = gpu["memory_bus_width_bits"]
+    if mem_clock <= 0 or bus_width <= 0:
+        raise RuntimeError(
+            f"Device {device_id} ({arch}) reported invalid memory specs: "
+            f"memory_clock_rate_khz={mem_clock}, memory_bus_width_bits={bus_width}"
+        )
+    hbm_bw_gbs = 2.0 * mem_clock * 1e3 * bus_width / 8.0 / 1e9
 
     return DeviceSpecs(
         arch=arch,
-        name=f"AMD GPU ({arch})",
-        hbm_bandwidth_gbs=_HBM_PEAK_GBS.get(arch, 0.0),
+        name=gpu["name"],
+        num_cu=gpu["num_cu"],
+        max_waves_per_cu=max_waves_per_cu,
+        wavefront_size=wavefront_size,
+        base_clock_mhz=base_clock_mhz,
+        hbm_bandwidth_gbs=hbm_bw_gbs,
+        l2_size_mb=l2_size_mb,
+        lds_size_per_cu_kb=lds_size_per_cu_kb,
     )
