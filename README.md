@@ -21,12 +21,13 @@ Rough workflow: **isolate** a kernel → **profile** it (counters and/or source 
 | **[Kerncap](kerncap/)** | **Isolate** — capture dispatches and build **standalone reproducers** (HIP, Triton). | [README](kerncap/README.md) · [examples](kerncap/examples/) |
 | **[Metrix](metrix/)** | **Profile** — **human-readable** metrics from hardware counters (bandwidth, cache, etc.). | [README](metrix/README.md) · [examples](metrix/examples/) |
 | **[Linex](linex/)** | **Profile** — **source-line** timing and stalls (compile with `-g` for file:line mapping). | [README](linex/README.md) · [examples](linex/examples/) |
+| **[Samplex](samplex/)** | **Profile** — **PC sampling**: statistical instruction hotspots, stall reasons, issued vs stalled (MI300+/MI200+). | [README](samplex/README.md) · [examples](samplex/examples/) |
 | **[Nexus](nexus/)** | **Inspect** — from **HSA packets**, see what ran: source and assembly. | [README](nexus/README.md) · [examples](nexus/examples/) |
 | **[rocm_mcp](rocm_mcp/)** | **MCP** — HIP compile, HIP docs, **rocminfo**, and related servers for agents. | [README](rocm_mcp/README.md) · [examples](rocm_mcp/examples/) |
 | **[uprof_mcp](uprof_mcp/)** | **CPU** — MCP bridge to **AMD uProf** for host-side hotspots. | [README](uprof_mcp/README.md) · [examples](uprof_mcp/examples/) |
 | **[Accordo](accordo/)** | **Validate** — prove an optimized kernel still matches a reference. | [README](accordo/README.md) · [examples](accordo/examples/) |
 
-**Idea in one line:** pull a kernel out with Kerncap, understand it with Metrix and Linex, dig into execution with Nexus, wire agents with **MCP** and **skills**, add **uProf** when you care about the host, then lock in correctness with Accordo.
+**Idea in one line:** pull a kernel out with Kerncap, understand it with Metrix, Linex, and Samplex, dig into execution with Nexus, wire agents with **MCP** and **skills**, add **uProf** when you care about the host, then lock in correctness with Accordo.
 
 ---
 
@@ -95,6 +96,10 @@ With **uv** and a clone of this repo, you can point an MCP client at each packag
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/kerncap", "kerncap-mcp"]
     },
+    "samplex-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/samplex", "samplex-mcp"]
+    },
     "hip-compiler-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "hip-compiler-mcp"]
@@ -131,7 +136,7 @@ More servers and examples: [rocm_mcp/README.md](rocm_mcp/README.md), [AGENTS.md]
 
 ```bash
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"
-# accordo, kerncap, linex, nexus, rocm_mcp, uprof_mcp — same pattern
+# accordo, kerncap, linex, nexus, samplex, rocm_mcp, uprof_mcp — same pattern
 ```
 
 **Editable from clone**

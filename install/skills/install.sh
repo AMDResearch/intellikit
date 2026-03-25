@@ -10,7 +10,7 @@ set -e
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh"
 # Env default (--base-url overrides); use args when piping to bash so overrides apply
 BASE_URL="${INTELLIKIT_RAW_URL:-https://raw.githubusercontent.com/AMDResearch/intellikit/main}"
-TOOLS=(metrix accordo nexus linex kerncap)
+TOOLS=(metrix accordo nexus linex kerncap samplex)
 DRY_RUN=false
 GLOBAL=false
 TARGET="agents"

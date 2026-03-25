@@ -43,6 +43,8 @@ jobs:
               - 'nexus/**'
             rocm_mcp:
               - 'rocm_mcp/**'
+            samplex:
+              - 'samplex/**'
             uprof_mcp:
               - 'uprof_mcp/**'
             infra:
@@ -55,7 +57,7 @@ jobs:
       - name: Build package matrix
         id: build-matrix
         run: |
-          ALL='["accordo","kerncap","linex","metrix","nexus","rocm_mcp","uprof_mcp"]'
+          ALL='["accordo","kerncap","linex","metrix","nexus","rocm_mcp","samplex","uprof_mcp"]'
 
           # Infra changes or non-PR events → test everything
           if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
