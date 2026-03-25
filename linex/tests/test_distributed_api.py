@@ -106,15 +106,14 @@ def test_profile_with_launcher_builds_correct_command_order(tmp_path):
             output_dir=str(tmp_path / "out"),
         )
 
-    # Command should be: torchrun --nproc_per_node=4 rocprofv3 ... -- train.py --lr 0.01
-    assert captured_cmd[0] == "torchrun"
-    assert captured_cmd[1] == "--nproc_per_node=4"
-    rocprofv3_idx = captured_cmd.index("rocprofv3")
-    assert rocprofv3_idx == 2
+    # Command should be: rocprofv3 [opts] -- torchrun --nproc_per_node=4 train.py --lr 0.01
+    assert captured_cmd[0] == "rocprofv3"
     separator_idx = captured_cmd.index("--")
-    assert captured_cmd[separator_idx + 1] == "train.py"
-    assert captured_cmd[separator_idx + 2] == "--lr"
-    assert captured_cmd[separator_idx + 3] == "0.01"
+    assert captured_cmd[separator_idx + 1] == "torchrun"
+    assert captured_cmd[separator_idx + 2] == "--nproc_per_node=4"
+    assert captured_cmd[separator_idx + 3] == "train.py"
+    assert captured_cmd[separator_idx + 4] == "--lr"
+    assert captured_cmd[separator_idx + 5] == "0.01"
 
 
 def test_profile_without_launcher_uses_plain_rocprofv3(tmp_path):

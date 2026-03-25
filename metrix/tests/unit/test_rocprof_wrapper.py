@@ -383,13 +383,13 @@ class TestROCProfV3Wrapper:
                 launcher="torchrun --nproc_per_node=4",
             )
 
-        assert captured_cmd[0] == "torchrun"
-        assert captured_cmd[1] == "--nproc_per_node=4"
-        rocprofv3_idx = captured_cmd.index("rocprofv3")
-        assert rocprofv3_idx == 2
+        # rocprofv3 wraps the launcher: rocprofv3 [opts] -- launcher... command...
+        assert captured_cmd[0] == "rocprofv3"
         separator_idx = captured_cmd.index("--")
-        assert captured_cmd[separator_idx + 1] == "train.py"
-        assert captured_cmd[separator_idx + 2] == "--lr"
+        assert captured_cmd[separator_idx + 1] == "torchrun"
+        assert captured_cmd[separator_idx + 2] == "--nproc_per_node=4"
+        assert captured_cmd[separator_idx + 3] == "train.py"
+        assert captured_cmd[separator_idx + 4] == "--lr"
 
     def test_no_launcher_uses_plain_rocprofv3(self, wrapper_no_rocm_check):
         """Without launcher, command should start with rocprofv3."""
