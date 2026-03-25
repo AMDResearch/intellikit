@@ -104,9 +104,7 @@ class PCSamplingWrapper:
 
     def list_configs(self) -> str:
         """List available PC sampling configurations for all GPUs."""
-        result = subprocess.run(
-            ["rocprofv3", "-L"], capture_output=True, timeout=10, text=True
-        )
+        result = subprocess.run(["rocprofv3", "-L"], capture_output=True, timeout=10, text=True)
         return result.stdout + result.stderr
 
     def sample(
@@ -162,13 +160,19 @@ class PCSamplingWrapper:
             prof_cmd = [
                 "rocprofv3",
                 "--pc-sampling-beta-enabled",
-                "--pc-sampling-method", method,
-                "--pc-sampling-unit", unit,
-                "--pc-sampling-interval", str(interval),
+                "--pc-sampling-method",
+                method,
+                "--pc-sampling-unit",
+                unit,
+                "--pc-sampling-interval",
+                str(interval),
                 "--kernel-trace",
-                "--output-format", "csv",
-                "-d", str(output_dir),
-                "-o", "out",
+                "--output-format",
+                "csv",
+                "-d",
+                str(output_dir),
+                "-o",
+                "out",
             ]
 
             if kernel_filter:
@@ -178,7 +182,9 @@ class PCSamplingWrapper:
             prof_cmd.extend(command.split())
 
             unit_label = "cycles" if method == "stochastic" else "ns"
-            logger.info(f"Running {method} PC sampling (interval={interval} {unit_label}): {command}")
+            logger.info(
+                f"Running {method} PC sampling (interval={interval} {unit_label}): {command}"
+            )
             logger.debug(f"Command: {' '.join(prof_cmd)}")
 
             result = subprocess.run(
@@ -215,6 +221,7 @@ class PCSamplingWrapper:
         finally:
             if output_dir.name.startswith("samplex_"):
                 import shutil
+
                 shutil.rmtree(output_dir, ignore_errors=True)
 
     def _parse_samples(self, output_dir: Path, method: str = "stochastic") -> List[PCSample]:

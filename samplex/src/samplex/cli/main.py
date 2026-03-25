@@ -59,21 +59,24 @@ Examples:
     )
 
     profile_parser.add_argument(
-        "--method", "-m",
+        "--method",
+        "-m",
         choices=["stochastic", "host_trap"],
         default="stochastic",
         help="Sampling method (default: stochastic). stochastic = hardware-based, cycle-accurate, MI300+. host_trap = software-based, time-based, MI200+.",
     )
 
     profile_parser.add_argument(
-        "--interval", "-i",
+        "--interval",
+        "-i",
         type=int,
         default=65536,
         help="Sampling interval (default: 65536). For stochastic: cycles (power of 2). For host_trap: nanoseconds.",
     )
 
     profile_parser.add_argument(
-        "--kernel", "-k",
+        "--kernel",
+        "-k",
         help="Filter kernels by name (regex)",
     )
 
@@ -85,7 +88,8 @@ Examples:
     )
 
     profile_parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Output file (.json or .csv). Prints to stdout if not specified.",
     )
 
@@ -97,7 +101,8 @@ Examples:
     )
 
     profile_parser.add_argument(
-        "--log", "-l",
+        "--log",
+        "-l",
         choices=["debug", "info", "warning", "error"],
         default="warning",
         help="Log level (default: warning)",
@@ -116,7 +121,9 @@ def format_text_output(results):
     """Format results as human-readable text."""
     lines = []
     unit_label = "cycles" if results.method == "stochastic" else "ns"
-    lines.append(f"Samplex PC Sampling Results ({results.method}, interval={results.interval} {unit_label})")
+    lines.append(
+        f"Samplex PC Sampling Results ({results.method}, interval={results.interval} {unit_label})"
+    )
     lines.append(f"{'=' * 70}")
     lines.append(f"Command:    {results.command}")
     lines.append(f"Method:     {results.method}")
@@ -142,7 +149,9 @@ def format_text_output(results):
         if is_stochastic:
             lines.append(f"  Issued:      {kernel.issued_pct:.1f}%")
         if kernel.empty_instruction_count > 0:
-            lines.append(f"  Holes:       {kernel.empty_instruction_count} (idle/between-wave gaps)")
+            lines.append(
+                f"  Holes:       {kernel.empty_instruction_count} (idle/between-wave gaps)"
+            )
 
         if is_stochastic and kernel.top_stall_reasons:
             lines.append("  Stall reasons:")
@@ -156,7 +165,9 @@ def format_text_output(results):
                 issued_tag = f" [issued={h.issued_count}, stalled={h.stalled_count}]"
             else:
                 issued_tag = ""
-            lines.append(f"    {h.percentage:5.1f}%  {h.sample_count:5d}  {instr_display}{issued_tag}")
+            lines.append(
+                f"    {h.percentage:5.1f}%  {h.sample_count:5d}  {instr_display}{issued_tag}"
+            )
         lines.append("")
 
     return "\n".join(lines)
@@ -246,7 +257,11 @@ def main():
 
     # Allow: samplex ./app  (implicit profile)
     if len(sys.argv) > 1 and sys.argv[1] not in [
-        "profile", "list-configs", "--version", "-h", "--help",
+        "profile",
+        "list-configs",
+        "--version",
+        "-h",
+        "--help",
     ]:
         sys.argv.insert(1, "profile")
 
@@ -274,6 +289,7 @@ def main():
         print(f"\nError: {e}", file=sys.stderr)
         if hasattr(args, "log") and args.log == "debug":
             import traceback
+
             traceback.print_exc()
         return 1
 

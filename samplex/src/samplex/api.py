@@ -137,7 +137,9 @@ class Samplex:
         kernel_dispatch_ids: Dict[str, set] = defaultdict(set)
 
         for sample in raw.samples:
-            kernel_name = dispatch_to_kernel.get(sample.dispatch_id, f"unknown_dispatch_{sample.dispatch_id}")
+            kernel_name = dispatch_to_kernel.get(
+                sample.dispatch_id, f"unknown_dispatch_{sample.dispatch_id}"
+            )
             kernel_samples[kernel_name].append(sample)
             kernel_dispatch_ids[kernel_name].add(sample.dispatch_id)
 
@@ -145,8 +147,11 @@ class Samplex:
         kernel_results = []
         for kernel_name, samples in kernel_samples.items():
             result = self._analyze_kernel(
-                kernel_name, samples, list(kernel_dispatch_ids[kernel_name]),
-                dispatch_to_duration, top_n,
+                kernel_name,
+                samples,
+                list(kernel_dispatch_ids[kernel_name]),
+                dispatch_to_duration,
+                top_n,
             )
             kernel_results.append(result)
 
@@ -215,7 +220,9 @@ class Samplex:
         )
 
     def _compute_instruction_stats(
-        self, samples: List[PCSample], top_n: int,
+        self,
+        samples: List[PCSample],
+        top_n: int,
     ) -> List[InstructionHotspot]:
         """Compute instruction-level hotspot statistics."""
         total = len(samples)
@@ -244,9 +251,7 @@ class Samplex:
                 )
                 instr_stall_reasons[opcode][reason] += 1
             if s.instruction_type:
-                itype = s.instruction_type.replace(
-                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_", ""
-                )
+                itype = s.instruction_type.replace("ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_", "")
                 instr_types[opcode][itype] += 1
 
         hotspots = []

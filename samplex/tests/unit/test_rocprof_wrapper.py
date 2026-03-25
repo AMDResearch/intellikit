@@ -22,32 +22,65 @@ class TestCSVParsing:
             csv_path = os.path.join(tmpdir, "out_pc_sampling_stochastic.csv")
             with open(csv_path, "w", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-                writer.writerow([
-                    "Sample_Timestamp", "Exec_Mask", "Dispatch_Id",
-                    "Instruction", "Instruction_Comment", "Correlation_Id",
-                    "Wave_Issued_Instruction", "Instruction_Type",
-                    "Stall_Reason", "Wave_Count",
-                ])
-                writer.writerow([
-                    "2000000", "18446744073709551615", "1",
-                    "v_pk_mul_f32 v[0:1], s[2:3], v[0:1]", "", "1",
-                    "1", "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU",
-                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT", "3",
-                ])
-                writer.writerow([
-                    "2000256", "18446744073709551615", "1",
-                    "s_waitcnt lgkmcnt(0)", "", "1",
-                    "0", "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST",
-                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT", "2",
-                ])
-                writer.writerow([
-                    "2000512", "255", "2",
-                    "global_load_dwordx4 v[0:3], v[4:5], off", "src.hip:42", "2",
-                    "1", "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VMEM",
-                    "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT", "1",
-                ])
+                writer.writerow(
+                    [
+                        "Sample_Timestamp",
+                        "Exec_Mask",
+                        "Dispatch_Id",
+                        "Instruction",
+                        "Instruction_Comment",
+                        "Correlation_Id",
+                        "Wave_Issued_Instruction",
+                        "Instruction_Type",
+                        "Stall_Reason",
+                        "Wave_Count",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        "2000000",
+                        "18446744073709551615",
+                        "1",
+                        "v_pk_mul_f32 v[0:1], s[2:3], v[0:1]",
+                        "",
+                        "1",
+                        "1",
+                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU",
+                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT",
+                        "3",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        "2000256",
+                        "18446744073709551615",
+                        "1",
+                        "s_waitcnt lgkmcnt(0)",
+                        "",
+                        "1",
+                        "0",
+                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST",
+                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
+                        "2",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        "2000512",
+                        "255",
+                        "2",
+                        "global_load_dwordx4 v[0:3], v[4:5], off",
+                        "src.hip:42",
+                        "2",
+                        "1",
+                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VMEM",
+                        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT",
+                        "1",
+                    ]
+                )
 
             from pathlib import Path
+
             samples = wrapper._parse_samples(Path(tmpdir))
 
             assert len(samples) == 3
@@ -74,24 +107,61 @@ class TestCSVParsing:
             csv_path = os.path.join(tmpdir, "out_kernel_trace.csv")
             with open(csv_path, "w", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-                writer.writerow([
-                    "Kind", "Agent_Id", "Queue_Id", "Stream_Id", "Thread_Id",
-                    "Dispatch_Id", "Kernel_Id", "Kernel_Name", "Correlation_Id",
-                    "Start_Timestamp", "End_Timestamp", "LDS_Block_Size",
-                    "Scratch_Size", "VGPR_Count", "Accum_VGPR_Count", "SGPR_Count",
-                    "Workgroup_Size_X", "Workgroup_Size_Y", "Workgroup_Size_Z",
-                    "Grid_Size_X", "Grid_Size_Y", "Grid_Size_Z",
-                ])
-                writer.writerow([
-                    "KERNEL_DISPATCH", "Agent 6", "16", "0", "8",
-                    "1", "42", "test_gemm_kernel", "1",
-                    "1000000", "2000000", "0",
-                    "0", "128", "0", "64",
-                    "256", "1", "1",
-                    "65536", "1", "1",
-                ])
+                writer.writerow(
+                    [
+                        "Kind",
+                        "Agent_Id",
+                        "Queue_Id",
+                        "Stream_Id",
+                        "Thread_Id",
+                        "Dispatch_Id",
+                        "Kernel_Id",
+                        "Kernel_Name",
+                        "Correlation_Id",
+                        "Start_Timestamp",
+                        "End_Timestamp",
+                        "LDS_Block_Size",
+                        "Scratch_Size",
+                        "VGPR_Count",
+                        "Accum_VGPR_Count",
+                        "SGPR_Count",
+                        "Workgroup_Size_X",
+                        "Workgroup_Size_Y",
+                        "Workgroup_Size_Z",
+                        "Grid_Size_X",
+                        "Grid_Size_Y",
+                        "Grid_Size_Z",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        "KERNEL_DISPATCH",
+                        "Agent 6",
+                        "16",
+                        "0",
+                        "8",
+                        "1",
+                        "42",
+                        "test_gemm_kernel",
+                        "1",
+                        "1000000",
+                        "2000000",
+                        "0",
+                        "0",
+                        "128",
+                        "0",
+                        "64",
+                        "256",
+                        "1",
+                        "1",
+                        "65536",
+                        "1",
+                        "1",
+                    ]
+                )
 
             from pathlib import Path
+
             dispatches = wrapper._parse_kernel_trace(Path(tmpdir))
 
             assert len(dispatches) == 1
@@ -108,6 +178,7 @@ class TestCSVParsing:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             from pathlib import Path
+
             samples = wrapper._parse_samples(Path(tmpdir))
             assert samples == []
 
@@ -123,24 +194,49 @@ class TestCSVParsing:
             csv_path = os.path.join(tmpdir, "out_pc_sampling_host_trap.csv")
             with open(csv_path, "w", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-                writer.writerow([
-                    "Sample_Timestamp", "Exec_Mask", "Dispatch_Id",
-                    "Instruction", "Instruction_Comment", "Correlation_Id",
-                ])
-                writer.writerow([
-                    "3000000", "18446744073709551615", "1",
-                    "v_mfma_f32_16x16x32_f16 a[0:3], v[0:1], v[2:3], a[0:3]", "", "1",
-                ])
-                writer.writerow([
-                    "3001000", "18446744073709551615", "1",
-                    "s_waitcnt lgkmcnt(0)", "", "1",
-                ])
-                writer.writerow([
-                    "3002000", "255", "2",
-                    "global_load_dwordx4 v[0:3], v[4:5], off", "src.hip:42", "2",
-                ])
+                writer.writerow(
+                    [
+                        "Sample_Timestamp",
+                        "Exec_Mask",
+                        "Dispatch_Id",
+                        "Instruction",
+                        "Instruction_Comment",
+                        "Correlation_Id",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        "3000000",
+                        "18446744073709551615",
+                        "1",
+                        "v_mfma_f32_16x16x32_f16 a[0:3], v[0:1], v[2:3], a[0:3]",
+                        "",
+                        "1",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        "3001000",
+                        "18446744073709551615",
+                        "1",
+                        "s_waitcnt lgkmcnt(0)",
+                        "",
+                        "1",
+                    ]
+                )
+                writer.writerow(
+                    [
+                        "3002000",
+                        "255",
+                        "2",
+                        "global_load_dwordx4 v[0:3], v[4:5], off",
+                        "src.hip:42",
+                        "2",
+                    ]
+                )
 
             from pathlib import Path
+
             samples = wrapper._parse_samples(Path(tmpdir), method="host_trap")
 
             assert len(samples) == 3
@@ -161,6 +257,7 @@ class TestCSVParsing:
         wrapper.timeout = None
         # Verify the PCSamplingResult dataclass works
         from samplex.profiler.rocprof_wrapper import PCSamplingResult
+
         result = PCSamplingResult(command="./app", interval=256)
         assert result.interval == 256
         assert result.method == "stochastic"  # default
@@ -168,6 +265,7 @@ class TestCSVParsing:
 
     def test_method_in_result(self):
         from samplex.profiler.rocprof_wrapper import PCSamplingResult
+
         stochastic = PCSamplingResult(command="./app", interval=65536, method="stochastic")
         assert stochastic.method == "stochastic"
 

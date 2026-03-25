@@ -10,8 +10,15 @@ from samplex.api import Samplex, SamplingResults, KernelSamplingResult, Instruct
 from samplex.profiler.rocprof_wrapper import PCSample, KernelDispatch, PCSamplingResult
 
 
-def _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFFFFFFFFFFFFFFFF,
-                 wave_issued=False, stall_reason="", instruction_type="", wave_count=1):
+def _make_sample(
+    dispatch_id=1,
+    instruction="s_waitcnt vmcnt(0)",
+    exec_mask=0xFFFFFFFFFFFFFFFF,
+    wave_issued=False,
+    stall_reason="",
+    instruction_type="",
+    wave_count=1,
+):
     """Create a stochastic-style sample with all fields."""
     return PCSample(
         timestamp=1000000,
@@ -27,8 +34,9 @@ def _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFF
     )
 
 
-def _make_host_trap_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)",
-                           exec_mask=0xFFFFFFFFFFFFFFFF):
+def _make_host_trap_sample(
+    dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFFFFFFFFFFFFFFFF
+):
     """Create a host_trap-style sample (no stall/issued/type fields)."""
     return PCSample(
         timestamp=1000000,
@@ -65,9 +73,7 @@ class TestSamplexAnalysis:
             _make_sample(instruction="v_mfma_f32_16x16x32_f16 a[0:3], v[0:1], v[2:3], a[0:3]"),
         ]
 
-        result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 500.0}, top_n=5
-        )
+        result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 500.0}, top_n=5)
 
         assert result.name == "my_kernel"
         assert result.total_samples == 5
@@ -83,14 +89,21 @@ class TestSamplexAnalysis:
         sampler.wrapper = MagicMock()
 
         samples = [
-            _make_sample(wave_issued=False, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT"),
-            _make_sample(wave_issued=False, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_ALU_DEPENDENCY"),
-            _make_sample(wave_issued=True, stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT"),
+            _make_sample(
+                wave_issued=False,
+                stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
+            ),
+            _make_sample(
+                wave_issued=False,
+                stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_ALU_DEPENDENCY",
+            ),
+            _make_sample(
+                wave_issued=True,
+                stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER_WAIT",
+            ),
         ]
 
-        result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 300.0}, top_n=5
-        )
+        result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 300.0}, top_n=5)
 
         assert result.issued_pct == pytest.approx(33.33, abs=0.1)
         assert result.top_stall_reasons is not None
@@ -108,9 +121,7 @@ class TestSamplexAnalysis:
             _make_sample(instruction="v_mov_b32_e32 v0, 0"),
         ]
 
-        result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 100.0}, top_n=5
-        )
+        result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 100.0}, top_n=5)
 
         assert result.empty_instruction_count == 2
 
@@ -125,9 +136,7 @@ class TestSamplexAnalysis:
             _make_sample(exec_mask=0x0),
         ]
 
-        result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 100.0}, top_n=5
-        )
+        result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 100.0}, top_n=5)
 
         assert result.full_mask_pct == 50.0
 
@@ -181,19 +190,26 @@ class TestSamplexAnalysis:
         sampler.wrapper = MagicMock()
 
         samples = [
-            _make_sample(instruction="s_waitcnt vmcnt(0)", wave_issued=False,
-                         stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
-                         instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST"),
-            _make_sample(instruction="s_waitcnt vmcnt(0)", wave_issued=False,
-                         stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
-                         instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST"),
-            _make_sample(instruction="v_mfma_f32_16x16x32_f16 a, v, v, a", wave_issued=True,
-                         instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU"),
+            _make_sample(
+                instruction="s_waitcnt vmcnt(0)",
+                wave_issued=False,
+                stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
+                instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST",
+            ),
+            _make_sample(
+                instruction="s_waitcnt vmcnt(0)",
+                wave_issued=False,
+                stall_reason="ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_WAITCNT",
+                instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_NO_INST",
+            ),
+            _make_sample(
+                instruction="v_mfma_f32_16x16x32_f16 a, v, v, a",
+                wave_issued=True,
+                instruction_type="ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU",
+            ),
         ]
 
-        result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 100.0}, top_n=5
-        )
+        result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 100.0}, top_n=5)
 
         waitcnt = result.top_instructions[0]
         assert waitcnt.opcode == "s_waitcnt"
@@ -218,12 +234,12 @@ class TestHostTrapAnalysis:
             _make_host_trap_sample(instruction="s_waitcnt vmcnt(0)"),
             _make_host_trap_sample(instruction="s_waitcnt vmcnt(0)"),
             _make_host_trap_sample(instruction="global_load_dwordx4 v[0:3], v[4:5], off"),
-            _make_host_trap_sample(instruction="v_mfma_f32_16x16x32_f16 a[0:3], v[0:1], v[2:3], a[0:3]"),
+            _make_host_trap_sample(
+                instruction="v_mfma_f32_16x16x32_f16 a[0:3], v[0:1], v[2:3], a[0:3]"
+            ),
         ]
 
-        result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 500.0}, top_n=5
-        )
+        result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 500.0}, top_n=5)
 
         assert result.name == "my_kernel"
         assert result.total_samples == 4
@@ -271,9 +287,7 @@ class TestHostTrapAnalysis:
             _make_host_trap_sample(instruction="v_mov_b32_e32 v0, 0"),
         ]
 
-        result = sampler._analyze_kernel(
-            "my_kernel", samples, [1], {1: 100.0}, top_n=5
-        )
+        result = sampler._analyze_kernel("my_kernel", samples, [1], {1: 100.0}, top_n=5)
 
         # s_waitcnt appears 3 times (grouped by opcode)
         assert result.top_instructions[0].opcode == "s_waitcnt"
