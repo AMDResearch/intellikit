@@ -18,9 +18,10 @@ import time
 from textwrap import dedent
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from accordo import Accordo
+from accordo import Accordo, Snapshot
 from accordo.exceptions import AccordoKernelNeverDispatched
 
 # -----------------------------------------------------------------------------
@@ -189,6 +190,49 @@ int main() {
 }
 """
 
+MULTI_DISPATCH_KERNEL = """
+__global__ void scale_values_dispatch(const float* input, float* output, float factor, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < N) output[idx] = input[idx] * factor;
+}
+"""
+
+
+def _multi_dispatch_source(second_factor: str, second_launch: bool = True) -> str:
+    """Build a source that launches the same kernel one or two times."""
+    second_launch_code = (
+        f"hipLaunchKernelGGL(scale_values_dispatch, dim3((N + 255) / 256), dim3(256), 0, 0, d_in, d_out, {second_factor}, N);\n"
+        "    hipDeviceSynchronize();\n"
+        if second_launch
+        else ""
+    )
+    return f"""
+#include <hip/hip_runtime.h>
+#include <stdio.h>
+#include <stdlib.h>
+{MULTI_DISPATCH_KERNEL}
+
+int main() {{
+    const int N = 256;
+    size_t bytes = N * sizeof(float);
+    float *d_in, *d_out;
+    hipMalloc(&d_in, bytes);
+    hipMalloc(&d_out, bytes);
+    float* h_in = (float*)malloc(bytes);
+    for (int i = 0; i < N; i++) h_in[i] = (float)(i + 1);
+    hipMemcpy(d_in, h_in, bytes, hipMemcpyHostToDevice);
+
+    hipLaunchKernelGGL(scale_values_dispatch, dim3((N + 255) / 256), dim3(256), 0, 0, d_in, d_out, 2.0f, N);
+    hipDeviceSynchronize();
+    {second_launch_code}
+
+    free(h_in);
+    hipFree(d_in);
+    hipFree(d_out);
+    return 0;
+}}
+"""
+
 
 def _compile_hip(kernel_code: str, name: str, tmp_dir: Path) -> Path:
     """Write HIP source, compile with hipcc, return path to binary."""
@@ -355,6 +399,156 @@ def test_validation_result_summary():
     assert pass_result.is_valid
     assert pass_result.summary()
     assert "pass" in pass_result.summary().lower() or "match" in pass_result.summary().lower()
+
+
+def test_compare_snapshots_supports_rtol():
+    """Relative tolerance should allow proportional differences when atol is zero."""
+    with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        bin_path = _compile_hip(_reduce_source(REDUCE_KERNEL_BASELINE), "baseline", tmp_path)
+        validator = Accordo(
+            binary=str(bin_path),
+            kernel_name="reduce_sum",
+            working_directory=str(tmp_path),
+        )
+
+        ref_arr = np.array([1000.0], dtype=np.float32)
+        opt_arr = np.array([1000.5], dtype=np.float32)
+        ref = Snapshot(
+            arrays=[ref_arr],
+            dispatch_arrays=[[ref_arr]],
+            execution_time_ms=1.0,
+            binary=[str(bin_path)],
+            working_directory=str(tmp_path),
+        )
+        opt = Snapshot(
+            arrays=[opt_arr],
+            dispatch_arrays=[[opt_arr]],
+            execution_time_ms=1.0,
+            binary=[str(bin_path)],
+            working_directory=str(tmp_path),
+        )
+
+        strict = validator.compare_snapshots(ref, opt, atol=0.0, rtol=0.0)
+        relaxed = validator.compare_snapshots(ref, opt, atol=0.0, rtol=1e-3)
+
+    assert not strict.is_valid
+    assert relaxed.is_valid
+
+
+def test_compare_snapshots_equal_nan_toggle():
+    """NaN equality should honor equal_nan flag."""
+    with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        bin_path = _compile_hip(_reduce_source(REDUCE_KERNEL_BASELINE), "baseline", tmp_path)
+        validator = Accordo(
+            binary=str(bin_path),
+            kernel_name="reduce_sum",
+            working_directory=str(tmp_path),
+        )
+
+        ref_arr = np.array([1.0, np.nan, 3.0], dtype=np.float32)
+        opt_arr = np.array([1.0, np.nan, 3.0], dtype=np.float32)
+        ref = Snapshot(
+            arrays=[ref_arr],
+            dispatch_arrays=[[ref_arr]],
+            execution_time_ms=1.0,
+            binary=[str(bin_path)],
+            working_directory=str(tmp_path),
+        )
+        opt = Snapshot(
+            arrays=[opt_arr],
+            dispatch_arrays=[[opt_arr]],
+            execution_time_ms=1.0,
+            binary=[str(bin_path)],
+            working_directory=str(tmp_path),
+        )
+
+        strict = validator.compare_snapshots(ref, opt, equal_nan=False)
+        nan_equal = validator.compare_snapshots(ref, opt, equal_nan=True)
+
+    assert not strict.is_valid
+    assert nan_equal.is_valid
+
+
+def test_compare_snapshots_tolerance_backward_compatibility():
+    """Legacy tolerance argument should continue to work as absolute tolerance."""
+    with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        bin_path = _compile_hip(_reduce_source(REDUCE_KERNEL_BASELINE), "baseline", tmp_path)
+        validator = Accordo(
+            binary=str(bin_path),
+            kernel_name="reduce_sum",
+            working_directory=str(tmp_path),
+        )
+        ref_arr = np.array([1.0], dtype=np.float32)
+        opt_arr = np.array([1.00009], dtype=np.float32)
+        ref = Snapshot(
+            arrays=[ref_arr],
+            dispatch_arrays=[[ref_arr]],
+            execution_time_ms=1.0,
+            binary=[str(bin_path)],
+            working_directory=str(tmp_path),
+        )
+        opt = Snapshot(
+            arrays=[opt_arr],
+            dispatch_arrays=[[opt_arr]],
+            execution_time_ms=1.0,
+            binary=[str(bin_path)],
+            working_directory=str(tmp_path),
+        )
+        result = validator.compare_snapshots(ref, opt, tolerance=1e-4)
+    assert result.is_valid
+
+
+def test_multi_dispatch_second_dispatch_mismatch_detected():
+    """Validation should compare all dispatches, not only the first one."""
+    with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        ref_bin = _compile_hip(
+            _multi_dispatch_source("3.0f", second_launch=True), "ref_multi", tmp_path
+        )
+        bad_bin = _compile_hip(
+            _multi_dispatch_source("4.0f", second_launch=True), "bad_multi", tmp_path
+        )
+        validator = Accordo(
+            binary=str(ref_bin),
+            kernel_name="scale_values_dispatch",
+            working_directory=str(tmp_path),
+        )
+        ref_snap = validator.capture_snapshot(binary=str(ref_bin), timeout_seconds=30)
+        bad_snap = validator.capture_snapshot(binary=str(bad_bin), timeout_seconds=30)
+        result = validator.compare_snapshots(ref_snap, bad_snap, tolerance=1e-6)
+
+    assert len(ref_snap.dispatch_arrays or []) == 2
+    assert len(bad_snap.dispatch_arrays or []) == 2
+    assert not result.is_valid
+    assert any(m.dispatch_index == 1 for m in result.mismatches)
+
+
+def test_multi_dispatch_count_mismatch_fails():
+    """Validation should fail clearly when dispatch counts differ."""
+    with tempfile.TemporaryDirectory(prefix="accordo_test_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        ref_bin = _compile_hip(
+            _multi_dispatch_source("3.0f", second_launch=True), "ref_multi", tmp_path
+        )
+        one_dispatch_bin = _compile_hip(
+            _multi_dispatch_source("3.0f", second_launch=False), "one_dispatch", tmp_path
+        )
+        validator = Accordo(
+            binary=str(ref_bin),
+            kernel_name="scale_values_dispatch",
+            working_directory=str(tmp_path),
+        )
+        ref_snap = validator.capture_snapshot(binary=str(ref_bin), timeout_seconds=30)
+        one_snap = validator.capture_snapshot(binary=str(one_dispatch_bin), timeout_seconds=30)
+        result = validator.compare_snapshots(ref_snap, one_snap, tolerance=1e-6)
+
+    assert len(ref_snap.dispatch_arrays or []) == 2
+    assert len(one_snap.dispatch_arrays or []) == 1
+    assert not result.is_valid
+    assert result.error_message and "Dispatch count mismatch" in result.error_message
 
 
 # -----------------------------------------------------------------------------

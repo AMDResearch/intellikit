@@ -16,8 +16,8 @@ Quick Example:
     >>> ref = validator.capture_snapshot(binary="./app_ref")
     >>> opt = validator.capture_snapshot(binary="./app_opt")
     >>>
-    >>> # Compare with specified tolerance
-    >>> result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
+    >>> # Compare with configurable allclose-style tolerances
+    >>> result = validator.compare_snapshots(ref, opt, atol=1e-6, rtol=1e-5, equal_nan=False)
     >>> print(f"Valid: {result.is_valid}")
 
 Efficient Example (multiple comparisons):
@@ -30,7 +30,7 @@ Efficient Example (multiple comparisons):
     >>> # Compare against multiple optimizations
     >>> for opt_bin in ["./opt1", "./opt2", "./opt3"]:
     ...     opt = validator.capture_snapshot(binary=opt_bin)
-    ...     result = validator.compare_snapshots(ref, opt, tolerance=1e-6)
+    ...     result = validator.compare_snapshots(ref, opt, atol=1e-6, rtol=1e-5)
     ...     print(f"{opt_bin}: {'PASS' if result.is_valid else 'FAIL'}")
 
 Multiple Kernels:

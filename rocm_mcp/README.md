@@ -71,6 +71,6 @@ This project uses `uv` for dependency management.
 
 3. **Run tests:**
 
-  ```bash
-  pytest
-  ```
+   ```bash
+   pytest
+   ```

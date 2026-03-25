@@ -15,7 +15,9 @@ authors = [
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = ["mcp[cli]"]
+dependencies = [
+    "fastmcp>=2.0.0",
+]
 
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -57,7 +59,7 @@ where = ["src"]
 
 # ---- Ruff configuration ----
 [tool.ruff]
-extend = "../pyproject.toml"
+extend = "../ruff.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

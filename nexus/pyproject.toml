@@ -15,7 +15,9 @@ authors = [
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = ["mcp[cli]"]
+dependencies = [
+    "fastmcp>=2.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/AMDResearch/intellikit/tree/main/nexus"
@@ -47,7 +49,7 @@ root = ".."                       # Look for git repo in parent directory
 
 # ---- Ruff configuration ----
 [tool.ruff]
-extend = "../pyproject.toml"
+extend = "../ruff.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

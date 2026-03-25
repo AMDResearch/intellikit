@@ -18,7 +18,7 @@ python3 trace.py
 ## Requirements
 
 - ROCm and `hipcc` installed
-- Nexus installed: `pip install git+https://github.com/AMDResearch/nexus.git#egg=intellikit[nexus]`
+- Nexus installed: `pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"`
 
 See [nexus documentation](../../README.md) for more details.
 

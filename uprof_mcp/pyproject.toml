@@ -16,7 +16,7 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp[cli]>=1.21.0",
+    "fastmcp>=2.0.0",
 ]
 
 [project.scripts]
@@ -37,7 +37,7 @@ examples = [
 
 # ---- Ruff configuration ----
 [tool.ruff]
-extend = "../pyproject.toml"
+extend = "../ruff.toml"
 
 # ---- UV configuration ----
 [tool.uv]

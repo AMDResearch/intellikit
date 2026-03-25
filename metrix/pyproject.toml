@@ -17,7 +17,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "pandas>=1.5.0",
-    "mcp[cli]",
+    "fastmcp>=2.0.0",
 ]
 
 classifiers = [
@@ -60,7 +60,7 @@ where = ["src"]
 
 # ---- Ruff configuration ----
 [tool.ruff]
-extend = "../pyproject.toml"
+extend = "../ruff.toml"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
