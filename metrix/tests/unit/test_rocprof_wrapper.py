@@ -290,6 +290,144 @@ class TestROCProfV3Wrapper:
         assert len(results) == 1
         assert results[0].kernel_name == "my_kernel(float*, int)"
 
+    def test_command_string_uses_shlex_parsing(self, wrapper_no_rocm_check):
+        """Quoted command arguments are preserved via shlex parsing."""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command='python -c "print(1 + 2)"',
+                counters=[],
+                output_dir=Path(tmpdir),
+            )
+
+        assert "--" in captured_cmd
+        idx = captured_cmd.index("--")
+        assert captured_cmd[idx + 1 : idx + 4] == ["python", "-c", "print(1 + 2)"]
+
+    def test_profile_sets_distributed_rank_fields(self, wrapper_no_rocm_check):
+        """ProfileResult receives distributed rank metadata from env."""
+        wrapper = wrapper_no_rocm_check
+
+        parsed = [
+            ProfileResult(
+                dispatch_id=1,
+                kernel_name="my_kernel",
+                gpu_id=0,
+                duration_ns=1000,
+                grid_size=(256, 1, 1),
+                workgroup_size=(64, 1, 1),
+                counters={},
+            )
+        ]
+
+        def fake_run(cmd, **kwargs):
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = ""
+            m.stderr = ""
+            return m
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=parsed),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            results = wrapper.profile(
+                command="true",
+                counters=[],
+                output_dir=Path(tmpdir),
+                env={"RANK": "3", "LOCAL_RANK": "1", "WORLD_SIZE": "8"},
+            )
+
+        assert len(results) == 1
+        assert results[0].global_rank == 3
+        assert results[0].local_rank == 1
+        assert results[0].world_size == 8
+
+    def test_launcher_param_builds_wrapper_command(self, wrapper_no_rocm_check):
+        """Launcher uses per-rank wrapper: launcher python wrapper.py <dir> [rocprof_args] -- app."""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            # Create a rank_0 subdir so _parse_output can find it
+            rank_dir = Path(tmpdir) / "rank_0"
+            rank_dir.mkdir()
+            # Create an empty kernel trace to satisfy parsing
+            trace_file = rank_dir / "0_kernel_trace.csv"
+            trace_file.write_text("Kernel_Name,Start_Timestamp,End_Timestamp\n")
+
+            wrapper.profile(
+                command="train.py --lr 0.01",
+                counters=[],
+                output_dir=Path(tmpdir),
+                launcher="torchrun --nproc_per_node=4",
+            )
+
+        # With launcher, command starts with launcher, then wrapper script
+        assert captured_cmd[0] == "torchrun"
+        assert captured_cmd[1] == "--nproc_per_node=4"
+        # Wrapper script path (no explicit python3 — torchrun invokes it)
+        assert "_metrix_rank_wrapper.py" in captured_cmd[2]
+        # After the -- separator, the user command appears
+        separator_idx = captured_cmd.index("--")
+        assert captured_cmd[separator_idx + 1] == "train.py"
+        assert captured_cmd[separator_idx + 2] == "--lr"
+        assert captured_cmd[separator_idx + 3] == "0.01"
+
+    def test_no_launcher_uses_plain_rocprofv3(self, wrapper_no_rocm_check):
+        """Without launcher, command should start with rocprofv3."""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command="./my_app --size 1024",
+                counters=[],
+                output_dir=Path(tmpdir),
+            )
+
+        assert captured_cmd[0] == "rocprofv3"
+        separator_idx = captured_cmd.index("--")
+        assert captured_cmd[separator_idx + 1] == "./my_app"
+
     def test_parse_missing_optional_fields(self, wrapper):
         """Handle missing optional fields gracefully"""
         row = {

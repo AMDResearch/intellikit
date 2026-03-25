@@ -47,6 +47,29 @@ metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
 metrix -o results.json ./my_app
 ```
 
+## Distributed Launchers
+
+Metrix supports distributed profiling with launchers like `torchrun`, `mpirun`,
+`srun`, and `horovodrun`. Use `--launcher` to specify the launcher command
+separately from the application, ensuring the correct invocation order
+(`launcher rocprofv3 ... -- app`).
+
+```bash
+# Torch distributed
+metrix profile --launcher "torchrun --nproc_per_node=8" -- train.py
+
+# MPI
+metrix profile --launcher "mpirun -np 8" -- ./my_app --problem-size 4096
+
+# Slurm
+metrix profile --launcher "srun -N 2 -n 16" -- ./my_app
+```
+
+When distributed rank variables are present (`RANK`, `OMPI_COMM_WORLD_RANK`,
+`SLURM_PROCID`, etc.), Metrix emits per-rank metadata and automatically suffixes
+`--output/-o` files with a rank tag (for example, `results.rank0003.json`) to avoid
+cross-rank clobbering.
+
 ## Python API
 
 ```python

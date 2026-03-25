@@ -52,8 +52,21 @@ Examples:
     )
 
     profile_parser.add_argument(
+        "--launcher",
+        default=None,
+        help=(
+            "Distributed launcher command to wrap rocprofv3 "
+            "(e.g., 'torchrun --nproc_per_node=8' or 'mpirun -np 4')"
+        ),
+    )
+
+    profile_parser.add_argument(
         "target",
-        help="Target application command (e.g., ./my_app or './my_app arg1 arg2')",
+        nargs=argparse.REMAINDER,
+        help=(
+            "Target application command. Use '--' before the command for complex launch lines "
+            "(e.g., metrix profile -- torchrun --nproc_per_node=8 train.py)"
+        ),
     )
 
     profile_group = profile_parser.add_mutually_exclusive_group()

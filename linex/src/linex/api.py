@@ -6,11 +6,54 @@ Linex API - Source-level GPU performance profiling
 """
 
 import json
+import os
 import subprocess
+import textwrap
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
+
+from .distributed import DistributedContext, detect_distributed_context, normalize_command_argv
+
+
+# Python wrapper script that torchrun launches per-worker.  Each worker
+# reads its RANK / LOCAL_RANK from the environment, creates a rank-specific
+# output directory, then runs rocprofv3 ATT tracing on the user command.
+#
+# Argv layout:
+#   wrapper.py <base_output_dir> [rocprof_args...] -- <user_command...>
+_RANK_WRAPPER_SCRIPT = textwrap.dedent(
+    """\
+    import os, sys, subprocess, shlex
+
+    rank = int(os.environ.get("RANK", os.environ.get("OMPI_COMM_WORLD_RANK", "0")))
+    local_rank = int(os.environ.get("LOCAL_RANK", os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", "0")))
+    world_size = int(os.environ.get("WORLD_SIZE", os.environ.get("OMPI_COMM_WORLD_SIZE", "1")))
+
+    try:
+        sep_idx = sys.argv.index("--")
+        base_output_dir = sys.argv[1]
+        rocprof_extra = sys.argv[2:sep_idx]
+        user_cmd = sys.argv[sep_idx + 1:]
+    except (ValueError, IndexError):
+        print(f"Usage: {sys.argv[0]} <output_dir> [rocprof_args...] -- <command...>", file=sys.stderr)
+        sys.exit(1)
+
+    # Handle single-element user_cmd containing spaces (torchrun passes
+    # quoted commands as one argv element via argparse.REMAINDER).
+    if len(user_cmd) == 1 and " " in user_cmd[0]:
+        user_cmd = shlex.split(user_cmd[0])
+
+    rank_output_dir = os.path.join(base_output_dir, f"rank_{rank}")
+    os.makedirs(rank_output_dir, exist_ok=True)
+
+    cmd = ["rocprofv3"] + rocprof_extra + ["-d", rank_output_dir, "--"] + user_cmd
+    print(f"[Rank {rank}/{world_size}] {' '.join(cmd)}", file=sys.stderr)
+    result = subprocess.run(cmd, env=os.environ)
+    sys.exit(result.returncode)
+    """
+)
 
 
 @dataclass
@@ -99,6 +142,21 @@ class SourceLine:
         return 100.0 * self.stall_cycles / self.total_cycles if self.total_cycles > 0 else 0.0
 
 
+@dataclass
+class RankProfile:
+    """Per-rank trace data produced by a Linex profiling run."""
+
+    rank_key: str
+    global_rank: int
+    local_rank: int
+    world_size: int
+    hostname: str
+    launcher: str
+    ui_output_dir: str
+    source_lines: List[SourceLine]
+    instructions: List[InstructionData]
+
+
 class Linex:
     """
     Linex - Source-Level GPU Performance Profiler
@@ -143,6 +201,8 @@ class Linex:
         # Data storage
         self._instructions: List[InstructionData] = []
         self._source_lines: Dict[str, SourceLine] = {}
+        self._rank_profiles: Dict[str, RankProfile] = {}
+        self._distributed_context: DistributedContext = DistributedContext()
 
     def _ensure_decoder(self) -> Path:
         """Ensure decoder library is available, download if needed."""
@@ -158,10 +218,12 @@ class Linex:
 
     def profile(
         self,
-        command: str,
+        command: str | Sequence[str],
         output_dir: Optional[str] = None,
         kernel_filter: Optional[str] = None,
         force_cu_mask: bool = True,
+        env: Optional[Dict[str, str]] = None,
+        launcher: Optional[str | Sequence[str]] = None,
     ) -> "Linex":
         """
         Profile an application and collect source-level performance data.
@@ -177,18 +239,36 @@ class Linex:
             kernel_filter: Regex filter for kernel names (default: None = all kernels)
             force_cu_mask: Force waves to target CU using HSA_CU_MASK (default: True)
 
+        Note:
+            When ``launcher`` is specified, the final command is structured as
+            ``rocprofv3 [options] -- launcher... command...`` so that rocprofv3
+            traces the entire process tree (launcher + all workers). For
+            example, with ``launcher="torchrun --nproc_per_node=2"`` the
+            executed command becomes:
+            ``rocprofv3 --att ... -- torchrun --nproc_per_node=2 python3 app.py``
+
         Returns:
             self for chaining
         """
-        import os
         import tempfile
 
         # Use temp directory if not specified
         if output_dir is None:
-            output_dir = tempfile.mkdtemp(prefix="linex_")
+            base_output_dir = Path(tempfile.mkdtemp(prefix="linex_"))
+        else:
+            base_output_dir = Path(output_dir)
 
-        cmd = [
-            "rocprofv3",
+        run_env = os.environ.copy()
+        if env:
+            run_env.update(env)
+
+        base_output_dir.mkdir(parents=True, exist_ok=True)
+
+        command_argv = normalize_command_argv(command)
+        use_wrapper = launcher is not None
+
+        # Build rocprofv3 ATT arguments (shared between direct and wrapper modes)
+        rocprof_args = [
             "--att",
             "--att-library-path",
             str(self.decoder_lib.parent),
@@ -198,38 +278,146 @@ class Linex:
             str(self.target_cu),
             "--att-shader-engine-mask",
             self.shader_engine_mask,
-            "-d",
-            output_dir,
         ]
 
         if kernel_filter:
-            cmd.extend(["--kernel-include-regex", kernel_filter])
+            rocprof_args.extend(["--kernel-include-regex", kernel_filter])
 
-        cmd.extend(["--", *command.split()])
+        if use_wrapper:
+            # Per-rank wrapper mode: the launcher spawns one Python wrapper
+            # per worker.  Each wrapper reads RANK from its environment and
+            # runs its own rocprofv3 with a rank-specific output directory.
+            wrapper_path = base_output_dir / "_linex_rank_wrapper.py"
+            wrapper_path.write_text(_RANK_WRAPPER_SCRIPT)
 
-        env = os.environ.copy()
-        if force_cu_mask:
-            env["HSA_CU_MASK"] = "0x1"  # Force to CU 0
+            launcher_argv = normalize_command_argv(launcher)
 
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            # Build: launcher... wrapper.py <output_dir> [rocprof_args...] -- command...
+            # Note: no explicit "python3" — torchrun and similar launchers
+            # already invoke the script with the Python interpreter.
+            cmd = (
+                launcher_argv
+                + [str(wrapper_path), str(base_output_dir)]
+                + rocprof_args
+                + ["--"]
+                + command_argv
+            )
+        else:
+            # Direct mode: rocprofv3 [options] -d <output_dir> -- command...
+            dist_context = detect_distributed_context(run_env)
+            self._distributed_context = dist_context
+
+            output_path = base_output_dir
+            if dist_context.is_distributed:
+                output_path = base_output_dir / dist_context.rank_tag
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            cmd = ["rocprofv3"] + rocprof_args + ["-d", str(output_path)]
+            cmd.append("--")
+            cmd.extend(command_argv)
+
+        if force_cu_mask and "HSA_CU_MASK" not in run_env:
+            run_env["HSA_CU_MASK"] = "0x1"
+
+        result = subprocess.run(cmd, env=run_env, capture_output=True, text=True)
 
         if result.returncode != 0:
-            # Include stderr in error message for debugging
             raise RuntimeError(f"rocprofv3 failed with code {result.returncode}\n{result.stderr}")
 
-        # Find generated ui_output directory
-        output_path = Path(output_dir)
-        ui_dirs = list(output_path.glob("ui_output_*"))
+        self._rank_profiles = {}
 
-        if not ui_dirs:
-            raise RuntimeError(f"No ui_output directories found in {output_dir}")
+        if use_wrapper:
+            # Collect per-rank results from rank_N/ subdirectories
+            rank_dirs = sorted(base_output_dir.glob("rank_*"))
+            if not rank_dirs:
+                raise RuntimeError(
+                    f"No rank_* subdirectories found in {base_output_dir}. "
+                    "The launcher wrapper may not have executed."
+                )
 
-        # Load the first dispatch
-        self._load_ui_output(ui_dirs[0])
+            world_size = len(rank_dirs)
+            self._distributed_context = DistributedContext(
+                global_rank=0,
+                local_rank=0,
+                world_size=world_size,
+                launcher="torchrun",
+            )
+
+            for rank_dir in rank_dirs:
+                rank_num = int(rank_dir.name.split("_")[1])
+                ui_dirs = sorted(rank_dir.glob("ui_output_*"), key=lambda p: p.name)
+                if not ui_dirs:
+                    continue
+
+                for idx, ui_dir in enumerate(ui_dirs):
+                    instructions, source_lines = self._load_ui_output_data(ui_dir)
+                    if idx == 0:
+                        rank_key = f"rank{rank_num:04d}"
+                    else:
+                        rank_key = f"rank{rank_num:04d}_dispatch{idx + 1:03d}"
+                    self._rank_profiles[rank_key] = RankProfile(
+                        rank_key=rank_key,
+                        global_rank=rank_num,
+                        local_rank=rank_num,
+                        world_size=world_size,
+                        hostname="",
+                        launcher="torchrun",
+                        ui_output_dir=str(ui_dir),
+                        source_lines=sorted(
+                            source_lines.values(),
+                            key=lambda x: x.total_cycles,
+                            reverse=True,
+                        ),
+                        instructions=instructions,
+                    )
+        else:
+            # Direct mode: parse output from single output path
+            dist_context = self._distributed_context
+            output_path = base_output_dir
+            if dist_context.is_distributed:
+                output_path = base_output_dir / dist_context.rank_tag
+
+            ui_dirs = sorted(output_path.glob("ui_output_*"), key=lambda p: p.name)
+            if not ui_dirs:
+                raise RuntimeError(f"No ui_output directories found in {output_path}")
+
+            for idx, ui_dir in enumerate(ui_dirs):
+                instructions, source_lines = self._load_ui_output_data(ui_dir)
+                if idx == 0:
+                    rank_key = dist_context.rank_tag
+                else:
+                    rank_key = f"{dist_context.rank_tag}_dispatch{idx + 1:03d}"
+                self._rank_profiles[rank_key] = RankProfile(
+                    rank_key=rank_key,
+                    global_rank=dist_context.global_rank,
+                    local_rank=dist_context.local_rank,
+                    world_size=dist_context.world_size,
+                    hostname=dist_context.hostname,
+                    launcher=dist_context.launcher,
+                    ui_output_dir=str(ui_dir),
+                    source_lines=sorted(
+                        source_lines.values(),
+                        key=lambda x: x.total_cycles,
+                        reverse=True,
+                    ),
+                    instructions=instructions,
+                )
+
+        if not self._rank_profiles:
+            raise RuntimeError("No profile data found in any rank output directory")
+
+        # Preserve existing API behavior by exposing the first rank profile as top-level fields.
+        primary_rank = next(iter(self._rank_profiles.values()))
+        self._instructions = primary_rank.instructions
+        self._source_lines = {
+            line.source_location: line for line in primary_rank.source_lines if line.source_location
+        }
         return self
 
-    def _load_ui_output(self, ui_output_dir: Path) -> None:
-        """Internal: Load performance trace from ui_output directory."""
+    def _load_ui_output_data(
+        self, ui_output_dir: Path
+    ) -> tuple[List[InstructionData], Dict[str, SourceLine]]:
+        """Internal: Load performance trace data from ui_output directory."""
         code_file = ui_output_dir / "code.json"
 
         if not code_file.exists():
@@ -244,7 +432,7 @@ class Linex:
             )
 
         # Parse instructions
-        self._instructions = []
+        instructions: List[InstructionData] = []
         for entry in data["code"]:
             inst = InstructionData(
                 isa=entry[0],
@@ -257,21 +445,27 @@ class Linex:
                 stall_cycles=entry[8],
                 idle_cycles=entry[9],
             )
-            self._instructions.append(inst)
+            instructions.append(inst)
 
-        # Aggregate by source line
-        self._aggregate_source_lines()
+        return instructions, self._aggregate_source_lines(instructions)
 
-    def _aggregate_source_lines(self):
+    def _load_ui_output(self, ui_output_dir: Path) -> None:
+        """Backward-compatible loader for a single ui_output directory."""
+        instructions, source_lines = self._load_ui_output_data(ui_output_dir)
+        self._instructions = instructions
+        self._source_lines = source_lines
+
+    def _aggregate_source_lines(self, instructions: Optional[List[InstructionData]] = None):
         """Aggregate instruction data by source line."""
-        self._source_lines = {}
+        source_lines: Dict[str, SourceLine] = {}
+        instructions_to_aggregate = self._instructions if instructions is None else instructions
 
-        for inst in self._instructions:
+        for inst in instructions_to_aggregate:
             source = inst.source_location
             if not source or source.startswith(";"):
                 continue
 
-            if source not in self._source_lines:
+            if source not in source_lines:
                 # Parse file:line from source
                 if ":" in source:
                     parts = source.rsplit(":", 1)
@@ -285,7 +479,7 @@ class Linex:
                     file = source
                     line = 0
 
-                self._source_lines[source] = SourceLine(
+                source_lines[source] = SourceLine(
                     file=file,
                     line_number=line,
                     source_location=source,
@@ -296,12 +490,15 @@ class Linex:
                     instructions=[],
                 )
 
-            sl = self._source_lines[source]
+            sl = source_lines[source]
             sl.execution_count += inst.execution_count
             sl.total_cycles += inst.latency_cycles
             sl.stall_cycles += inst.stall_cycles
             sl.idle_cycles += inst.idle_cycles
             sl.instructions.append(inst)
+        if instructions is None:
+            self._source_lines = source_lines
+        return source_lines
 
     @property
     def source_lines(self) -> List[SourceLine]:
@@ -312,3 +509,13 @@ class Linex:
     def instructions(self) -> List[InstructionData]:
         """Get all instructions."""
         return self._instructions
+
+    @property
+    def rank_profiles(self) -> Dict[str, RankProfile]:
+        """Get per-rank profiles for distributed runs."""
+        return self._rank_profiles
+
+    @property
+    def distributed_context(self) -> DistributedContext:
+        """Get distributed runtime metadata detected for this profile run."""
+        return self._distributed_context

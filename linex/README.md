@@ -24,6 +24,29 @@ for line in profiler.source_lines[:5]:
     print(f"  {line.total_cycles:,} cycles ({line.stall_percent:.1f}% stalled)")
 ```
 
+## Distributed Launchers
+
+Linex supports distributed profiling with launchers like `torchrun`, `mpirun`,
+`srun`, and `horovodrun`. Pass the launcher separately so Linex builds the
+correct command order (`launcher rocprofv3 ... -- app`).
+
+```python
+profiler = Linex()
+profiler.profile(
+    command="train.py",
+    launcher="torchrun --nproc_per_node=8",
+    output_dir="linex_sqtt",
+)
+
+print(profiler.distributed_context.global_rank)
+for rank_key, rank_profile in profiler.rank_profiles.items():
+    print(rank_key, len(rank_profile.source_lines))
+```
+
+In distributed mode, Linex writes traces into rank-specific subdirectories
+(`.../rank0000`, `.../rank0001`, ...) to avoid collisions. Rank metadata is
+automatically detected from environment variables set by the launcher.
+
 ## What You Get
 
 **Instruction-level metrics mapped to source lines:**
@@ -66,6 +89,8 @@ profiler = Linex(
 **Properties:**
 - `source_lines` - List[SourceLine] sorted by total_cycles
 - `instructions` - List[InstructionData]
+- `rank_profiles` - Per-rank profiling data for distributed runs
+- `distributed_context` - Detected launcher/rank metadata
 
 ### SourceLine
 

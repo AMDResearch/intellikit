@@ -6,15 +6,77 @@ Clean, robust interface - regex-free CSV parsing (uses the csv module).
 import re
 import subprocess
 import tempfile
+import textwrap
 import csv
 import os
 import yaml
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Sequence
 
 # Import ProfileResult from backends to avoid duplication
 from ..backends.base import ProfileResult
 from ..logger import logger
+from ..utils.distributed import detect_distributed_context, normalize_command_argv
+
+
+# Python wrapper script that torchrun launches per-worker.  Each worker
+# reads its RANK / LOCAL_RANK from the environment (set by torchrun),
+# creates a rank-specific output directory, then runs rocprofv3 on the
+# actual user command.
+#
+# Argv layout:
+#   wrapper.py <base_output_dir> [rocprof_args...] -- <user_command...>
+_RANK_WRAPPER_SCRIPT = textwrap.dedent(
+    """\
+    import os, sys, subprocess, shlex, yaml, copy
+
+    rank = int(os.environ.get("RANK", os.environ.get("OMPI_COMM_WORLD_RANK", "0")))
+    local_rank = int(os.environ.get("LOCAL_RANK", os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", "0")))
+    world_size = int(os.environ.get("WORLD_SIZE", os.environ.get("OMPI_COMM_WORLD_SIZE", "1")))
+
+    try:
+        sep_idx = sys.argv.index("--")
+        base_output_dir = sys.argv[1]
+        rocprof_extra = sys.argv[2:sep_idx]
+        user_cmd = sys.argv[sep_idx + 1:]
+    except (ValueError, IndexError):
+        print(f"Usage: {sys.argv[0]} <output_dir> [rocprof_args...] -- <command...>", file=sys.stderr)
+        sys.exit(1)
+
+    # Handle single-element user_cmd containing spaces (torchrun passes
+    # quoted commands as one argv element via argparse.REMAINDER).
+    if len(user_cmd) == 1 and " " in user_cmd[0]:
+        user_cmd = shlex.split(user_cmd[0])
+
+    rank_output_dir = os.path.join(base_output_dir, f"rank_{rank}")
+    os.makedirs(rank_output_dir, exist_ok=True)
+
+    # Rewrite the --input YAML so output_directory points to the rank-specific
+    # dir.  This avoids the "conflicting value for output_directory" error when
+    # both --input YAML and -d are provided to rocprofv3.
+    rewritten_args = []
+    for i, arg in enumerate(rocprof_extra):
+        if arg == "--input" and i + 1 < len(rocprof_extra):
+            orig_yaml = rocprof_extra[i + 1]
+            rank_yaml = os.path.join(rank_output_dir, "rocprof_input.yaml")
+            with open(orig_yaml) as f:
+                cfg = yaml.safe_load(f)
+            for job in cfg.get("jobs", []):
+                job["output_directory"] = rank_output_dir
+            with open(rank_yaml, "w") as f:
+                yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            rewritten_args.extend(["--input", rank_yaml])
+        elif i > 0 and rocprof_extra[i - 1] == "--input":
+            continue  # already handled
+        else:
+            rewritten_args.append(arg)
+
+    cmd = ["rocprofv3"] + rewritten_args + ["--"] + user_cmd
+    print(f"[Rank {rank}/{world_size}] {' '.join(cmd)}", file=sys.stderr)
+    result = subprocess.run(cmd, env=os.environ)
+    sys.exit(result.returncode)
+    """
+)
 
 
 class ROCProfV3Wrapper:
@@ -70,7 +132,7 @@ class ROCProfV3Wrapper:
 
     def profile(
         self,
-        command: str,
+        command: str | Sequence[str],
         counters: List[str],
         output_dir: Optional[Path] = None,
         kernel_filter: Optional[str] = None,
@@ -78,6 +140,8 @@ class ROCProfV3Wrapper:
         kernel_iteration_range: Optional[str] = None,
         extra_counters_path: Optional[Path] = None,
         arch: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
+        launcher: Optional[str | Sequence[str]] = None,
     ) -> List[ProfileResult]:
         """
         Profile a command with specified counters (single pass).
@@ -142,103 +206,144 @@ class ROCProfV3Wrapper:
                 arch=arch,
             )
 
-            # Build rocprofv3 command
-            prof_cmd = ["rocprofv3"]
+            # Build rocprofv3 arguments (shared between direct and wrapper modes)
+            rocprof_args = []
 
             if not counters:
-                # Timing-only mode: --kernel-trace for dispatch timestamps.
-                # Still use --input YAML for kernel_include_regex filter + output config.
-                prof_cmd.append("--kernel-trace")
+                rocprof_args.append("--kernel-trace")
 
-            # Use --input for the combined YAML file
-            prof_cmd.extend(["--input", str(input_yaml)])
+            rocprof_args.extend(["--input", str(input_yaml)])
 
-            # Pass custom counter definitions via --extra-counters only if the
-            # file defines hardware-level counters (block+event).  Files that
-            # only contain Python-evaluated expressions don't need this flag
-            # because their underlying raw counters are already built-in.
             if counter_defs_file and self._needs_extra_counters(counter_defs_file):
-                prof_cmd.extend(["--extra-counters", str(counter_defs_file)])
+                rocprof_args.extend(["--extra-counters", str(counter_defs_file)])
                 logger.debug(f"Using --extra-counters: {counter_defs_file.name}")
 
-            # Add kernel filter if specified
             if kernel_filter:
-                prof_cmd.extend(["--kernel-include-regex", kernel_filter])
+                rocprof_args.extend(["--kernel-include-regex", kernel_filter])
 
-            # Add target command
-            prof_cmd.append("--")
-            prof_cmd.extend(command.split())
+            command_argv = normalize_command_argv(command)
 
-            logger.debug(f"rocprofv3 command: {' '.join(prof_cmd)}")
-            logger.info(f"Starting rocprofv3 with {len(counters)} counters")
-            logger.debug(f"Python process cwd: {os.getcwd()}")
+            run_env = os.environ.copy()
+            if env:
+                run_env.update(env)
+
+            use_wrapper = launcher is not None
+
+            if use_wrapper:
+                # Per-rank wrapper mode: the launcher (e.g. torchrun) spawns
+                # one Python wrapper per worker.  Each wrapper reads RANK from
+                # its environment and runs its own rocprofv3 with a rank-
+                # specific output directory.
+                wrapper_path = output_dir / "_metrix_rank_wrapper.py"
+                wrapper_path.write_text(_RANK_WRAPPER_SCRIPT)
+
+                launcher_argv = normalize_command_argv(launcher)
+
+                # Build: launcher... wrapper.py <output_dir> [rocprof_args...] -- command...
+                # Note: no explicit "python3" — torchrun and similar launchers
+                # already invoke the script with the Python interpreter.
+                prof_cmd = (
+                    launcher_argv
+                    + [str(wrapper_path), str(output_dir)]
+                    + rocprof_args
+                    + ["--"]
+                    + command_argv
+                )
+            else:
+                # Direct mode: rocprofv3 [options] -- command...
+                prof_cmd = ["rocprofv3"] + rocprof_args + ["-d", str(output_dir)]
+                prof_cmd.append("--")
+                prof_cmd.extend(command_argv)
+
+            logger.debug(f"Profile command: {' '.join(prof_cmd)}")
+            logger.info(f"Starting profiling with {len(counters)} counters (wrapper={use_wrapper})")
             logger.debug(f"Output directory: {output_dir}")
             logger.info(f"subprocess will run from: {cwd if cwd else os.getcwd()}")
 
-            # Run profiling with timeout
-            logger.info("Calling subprocess.run...")
-            logger.debug(f"Full command: {' '.join(prof_cmd)}")
-            logger.debug(f"Timeout: {self.timeout}")
-            logger.debug(f"CWD: {cwd}")
-
+            # Run profiling
             result = subprocess.run(
-                prof_cmd, capture_output=True, timeout=self.timeout, text=True, cwd=cwd
+                prof_cmd,
+                capture_output=True,
+                timeout=self.timeout,
+                text=True,
+                cwd=cwd,
+                env=run_env,
             )
-            logger.info("subprocess.run returned!")
 
-            logger.info("subprocess.run returned successfully")
-            logger.debug(f"Exit code: {result.returncode}")
+            logger.info(f"Profiling completed (exit code: {result.returncode})")
             logger.debug(f"stdout length: {len(result.stdout)} chars")
             logger.debug(f"stderr length: {len(result.stderr)} chars")
 
-            logger.info(f"rocprofv3 completed (exit code: {result.returncode})")
-
             if result.returncode != 0:
-                logger.error(f"rocprofv3 failed with exit code {result.returncode}")
+                logger.error(f"Profiling failed with exit code {result.returncode}")
                 logger.error(f"stdout: {result.stdout}")
                 logger.error(f"stderr: {result.stderr}")
                 raise RuntimeError(
-                    f"rocprofv3 failed with exit code {result.returncode}\n"
+                    f"Profiling failed with exit code {result.returncode}\n"
                     f"stdout: {result.stdout}\n"
                     f"stderr: {result.stderr}"
                 )
 
-            # Log stdout/stderr even on success for debugging
             if result.stdout:
-                logger.debug(f"rocprofv3 stdout: {result.stdout[:500]}")  # First 500 chars
+                logger.debug(f"stdout: {result.stdout[:500]}")
             if result.stderr:
-                logger.debug(f"rocprofv3 stderr: {result.stderr[:500]}")
+                logger.debug(f"stderr: {result.stderr[:500]}")
 
-            # Parse output CSV files
-            logger.debug(f"Parsing CSV files from {output_dir}")
-            results = self._parse_output(output_dir)
-            logger.info(f"Successfully parsed {len(results)} kernel dispatch(es)")
+            # Parse output — either per-rank subdirectories or single output dir
+            results: List[ProfileResult] = []
 
-            # rocprofv3 --kernel-trace ignores kernel_include_regex, so filter here
-            if not counters and kernel_filter and results:
-                pat = re.compile(kernel_filter)
-                before = len(results)
-                results = [r for r in results if pat.search(r.kernel_name)]
-                if len(results) < before:
-                    logger.debug(
-                        f"Filtered {before} -> {len(results)} dispatches by kernel_filter={kernel_filter!r}"
+            if use_wrapper:
+                # Collect per-rank results from rank_N/ subdirectories
+                rank_dirs = sorted(output_dir.glob("rank_*"))
+                if not rank_dirs:
+                    raise RuntimeError(
+                        f"No rank_* subdirectories found in {output_dir}. "
+                        "The launcher wrapper may not have executed."
                     )
 
-            # Post-filter only in timing-only mode:
-            # - For counter collection, rocprofv3 already applies kernel filters to
-            #   the collected data.
-            # - For timing-only mode (kernel trace), the CSV still contains all
-            #   dispatches (e.g. __amd_rocclr_copyBuffer), so we filter here to
-            #   match the documented kernel_filter semantics.
-            if kernel_filter and not counters:
+                logger.info(f"Found {len(rank_dirs)} rank output directories")
+                for rank_dir in rank_dirs:
+                    rank_num = int(rank_dir.name.split("_")[1])
+                    try:
+                        rank_results = self._parse_output(rank_dir)
+                    except RuntimeError:
+                        logger.warning(f"No output CSV in {rank_dir}, skipping")
+                        continue
+
+                    for pr in rank_results:
+                        pr.global_rank = rank_num
+                        pr.local_rank = rank_num  # Approximation for single-node
+                        pr.world_size = len(rank_dirs)
+                        pr.launcher = "torchrun"
+
+                    results.extend(rank_results)
+                    logger.info(f"  rank_{rank_num}: {len(rank_results)} dispatch(es)")
+            else:
+                results = self._parse_output(output_dir)
+                logger.info(f"Parsed {len(results)} kernel dispatch(es)")
+
+            # Post-filter in timing-only mode (kernel-trace ignores regex)
+            if not counters and kernel_filter and results:
                 try:
                     pattern = re.compile(kernel_filter)
                 except re.error as exc:
                     raise RuntimeError(
-                        f"Invalid kernel_filter regular expression '{kernel_filter}': {exc}"
+                        f"Invalid kernel_filter regex '{kernel_filter}': {exc}"
                     ) from exc
+                before = len(results)
                 results = [r for r in results if pattern.search(r.kernel_name)]
-                logger.info(f"After kernel filter '{kernel_filter}': {len(results)} dispatch(es)")
+                logger.info(f"Filtered {before} -> {len(results)} dispatches by kernel_filter")
+
+            # Populate distributed context for non-wrapper mode
+            if not use_wrapper:
+                dist_context = detect_distributed_context(run_env)
+                for profile_result in results:
+                    profile_result.global_rank = dist_context.global_rank
+                    profile_result.local_rank = dist_context.local_rank
+                    profile_result.world_size = dist_context.world_size
+                    profile_result.node_rank = dist_context.node_rank
+                    profile_result.hostname = dist_context.hostname
+                    profile_result.launcher = dist_context.launcher
 
             return results
 
@@ -408,8 +513,8 @@ class ROCProfV3Wrapper:
                     counter_value = float(row["Counter_Value"])
                     dispatches[dispatch_id]["counters"][counter_name] = counter_value
 
-                except (KeyError, ValueError) as e:
-                    print(f"Warning: Failed to parse row: {e}: {row}")
+                except (KeyError, ValueError, TypeError) as e:
+                    # TypeError: int(None) from multi-process traces with null fields
                     continue
 
         # Convert to ProfileResult objects
@@ -473,8 +578,8 @@ class ROCProfV3Wrapper:
                     )
                     dispatches[dispatch_id] = result
 
-                except (KeyError, ValueError) as e:
-                    print(f"Warning: Failed to parse trace row: {e}")
+                except (KeyError, ValueError, TypeError) as e:
+                    # TypeError: int(None) from multi-process traces with null fields
                     continue
 
         return list(dispatches.values())

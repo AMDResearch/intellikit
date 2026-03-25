@@ -6,7 +6,7 @@ Counter names appear EXACTLY ONCE - as function parameter names.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Sequence
 from dataclasses import dataclass
 from collections import defaultdict
 
@@ -66,6 +66,12 @@ class ProfileResult:
     arch_vgpr: int = 0
     accum_vgpr: int = 0
     sgpr: int = 0
+    global_rank: int = 0
+    local_rank: int = 0
+    world_size: int = 1
+    node_rank: int = 0
+    hostname: str = ""
+    launcher: str = "single"
 
 
 class CounterBackend(ABC):
@@ -465,10 +471,11 @@ class CounterBackend(ABC):
 
     def profile(
         self,
-        command: str,
+        command: str | Sequence[str],
         metrics: List[str],
         num_replays: int = 5,
         aggregate_by_kernel: bool = False,
+        launcher: Optional[str | Sequence[str]] = None,
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = 0,
@@ -547,6 +554,7 @@ class CounterBackend(ABC):
                     metrics=batch_metrics,
                     num_replays=num_replays,
                     aggregate_by_kernel=aggregate_by_kernel,
+                    launcher=launcher,
                     kernel_filter=kernel_filter,
                     cwd=cwd,
                     timeout_seconds=timeout_seconds,
@@ -639,6 +647,7 @@ class CounterBackend(ABC):
                     pass_counters,
                     kernel_filter,
                     cwd=cwd,
+                    launcher=launcher,
                     timeout_seconds=timeout_seconds,
                     kernel_iteration_range=iteration_range,
                 )
@@ -660,6 +669,7 @@ class CounterBackend(ABC):
                         pass_counters,
                         kernel_filter,
                         cwd=cwd,
+                        launcher=launcher,
                         timeout_seconds=timeout_seconds,
                     )
                     # Tag with replay_id for debugging
@@ -688,8 +698,16 @@ class CounterBackend(ABC):
 
             # Merge counter data from this pass with previous passes
             for result in pass_results:
-                # Use (kernel_name, dispatch_id, replay_id) as key
-                key = (result.kernel_name, result.dispatch_id, getattr(result, "run_id", 0))
+                # Use (kernel_name, dispatch_id, replay_id, rank) as key.
+                # Including global_rank prevents dispatches from different
+                # ranks being silently merged when they share the same
+                # kernel_name and dispatch_id.
+                key = (
+                    result.kernel_name,
+                    result.dispatch_id,
+                    getattr(result, "run_id", 0),
+                    result.global_rank,
+                )
 
                 if key not in all_results_by_kernel:
                     all_results_by_kernel[key] = result
@@ -774,10 +792,11 @@ class CounterBackend(ABC):
     @abstractmethod
     def _run_rocprof(
         self,
-        command: str,
+        command: str | Sequence[str],
         counters: List[str],
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
+        launcher: Optional[str | Sequence[str]] = None,
         timeout_seconds: Optional[int] = 0,
         kernel_iteration_range: Optional[str] = None,
     ) -> List[ProfileResult]:
@@ -807,7 +826,12 @@ class CounterBackend(ABC):
         # Group by dispatch_id:kernel_name
         groups = defaultdict(list)
         for result in results:
-            key = f"dispatch_{result.dispatch_id}:{result.kernel_name}"
+            if result.world_size > 1:
+                key = (
+                    f"rank_{result.global_rank}:dispatch_{result.dispatch_id}:{result.kernel_name}"
+                )
+            else:
+                key = f"dispatch_{result.dispatch_id}:{result.kernel_name}"
             groups[key].append(result)
 
         # Compute stats for each group
@@ -841,7 +865,11 @@ class CounterBackend(ABC):
         # Now aggregate merged results across replays
         groups = defaultdict(list)
         for merged in merged_replays:
-            groups[merged.kernel_name].append(merged)
+            if merged.world_size > 1:
+                key = f"rank_{merged.global_rank}:{merged.kernel_name}"
+            else:
+                key = merged.kernel_name
+            groups[key].append(merged)
 
         aggregated = {}
         for kernel_name, dispatches in groups.items():
@@ -945,6 +973,12 @@ class CounterBackend(ABC):
             arch_vgpr=first.arch_vgpr,
             accum_vgpr=first.accum_vgpr,
             sgpr=first.sgpr,
+            global_rank=first.global_rank,
+            local_rank=first.local_rank,
+            world_size=first.world_size,
+            node_rank=first.node_rank,
+            hostname=first.hostname,
+            launcher=first.launcher,
         )
         merged._num_dispatches = len(dispatches)
         return merged
