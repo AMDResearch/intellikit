@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
-"""MCP Server for Samplex - GPU Stochastic PC Sampling."""
+"""MCP Server for Samplex - GPU PC Sampling."""
 
 import argparse
 
@@ -16,36 +16,41 @@ mcp = FastMCP("IntelliKit Samplex")
 @mcp.tool()
 def pc_sample(
     command: str,
+    method: str = "stochastic",
     interval: int = 65536,
     kernel_filter: str = None,
     top_n: int = 10,
 ) -> dict:
     """
-    Run stochastic PC sampling on a GPU application to find instruction-level hotspots.
+    Run PC sampling on a GPU application to find instruction-level hotspots.
 
-    Uses hardware-based sampling with cycle-accurate precision and zero skid.
-    Shows which instructions the GPU spends the most time on, stall reasons
-    (memory waits, ALU dependencies, barriers), and instruction types.
-    Requires MI300+ (gfx942 and later).
+    Two methods available:
+      - stochastic (default): Hardware-based, cycle-accurate, zero skid. Shows
+        stall reasons, instruction types, wave counts. Requires MI300+.
+      - host_trap: Software-based, time-based. Broader support (MI200+). No
+        stall reasons or instruction types.
 
     Args:
         command: Command to profile (e.g., './app' or 'python3 bench.py')
-        interval: Sampling interval in cycles, power of 2 (default 65536). Lower = more samples but higher overhead.
+        method: "stochastic" (MI300+, richer data) or "host_trap" (MI200+)
+        interval: Sampling interval (default 65536). Stochastic: cycles. Host_trap: nanoseconds.
         kernel_filter: Regex to filter kernels by name
         top_n: Number of top instructions to report per kernel
 
     Returns:
-        Dictionary with per-kernel instruction hotspots and stall analysis
+        Dictionary with per-kernel instruction hotspots and analysis
     """
     sampler = Samplex()
     results = sampler.sample(
         command=command,
         interval=interval,
+        method=method,
         kernel_filter=kernel_filter,
         top_n=top_n,
     )
 
     output = {
+        "method": results.method,
         "total_samples": results.total_samples,
         "total_dispatches": results.total_dispatches,
         "interval": results.interval,

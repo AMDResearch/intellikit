@@ -1,14 +1,15 @@
 ---
 name: samplex-pc-sampling
-description: Stochastic PC sampling for GPU kernels - find instruction-level hotspots, stall reasons, and wave utilization
+description: PC sampling for GPU kernels - find instruction-level hotspots, stall reasons, and wave utilization
 ---
 
 # Samplex: GPU PC Sampling
 
-Hardware-based stochastic PC sampling via rocprofv3. Cycle-accurate, zero skid.
-Answers: "Where is my kernel stuck and why?"
+PC sampling via rocprofv3. Answers: "Where is my kernel stuck and why?"
 
-Requires MI300+ (gfx942 and later).
+Two methods:
+- **stochastic** (default): Hardware-based, cycle-accurate, zero skid. Provides stall reasons, instruction types, wave counts. Requires MI300+ (gfx942+).
+- **host_trap**: Software-based, time-based. Broader GPU support (MI200+). No stall reasons or instruction types.
 
 ## When to Use
 
@@ -26,8 +27,11 @@ Requires MI300+ (gfx942 and later).
 ## CLI
 
 ```bash
-# PC sampling (default interval = 256 cycles)
+# Stochastic PC sampling (default, MI300+)
 samplex ./my_app
+
+# Host-trap PC sampling (MI200+)
+samplex --method host_trap ./my_app
 
 # Coarser sampling (less overhead)
 samplex --interval 4096 ./my_app
@@ -48,7 +52,8 @@ samplex list-configs
 from samplex import Samplex
 
 sampler = Samplex()
-results = sampler.sample("./my_app")
+results = sampler.sample("./my_app")  # stochastic by default
+# or: results = sampler.sample("./my_app", method="host_trap")
 
 for kernel in results.kernels:
     print(f"{kernel.name}: {kernel.total_samples} samples")
@@ -72,14 +77,14 @@ for kernel in results.kernels:
 - **`global_load_*`**: Global memory loads.
 - **`(empty)`**: No instruction captured ("holes") = idle GPU.
 
-### Stall Reasons
+### Stall Reasons (stochastic only)
 
 - **WAITCNT**: Waiting for memory operation (most common)
 - **ALU_DEPENDENCY**: Data dependency on ALU result
 - **OTHER_WAIT**: Barrier, LDS, or other synchronization
 - **INTERNAL**: Internal hardware stall
 
-### Issued vs Stalled
+### Issued vs Stalled (stochastic only)
 
 Each sample tells you whether the wave **issued** the instruction or was **stalled**:
 - High issued % = GPU is actively computing

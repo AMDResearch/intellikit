@@ -1,5 +1,5 @@
 """
-High-level Samplex API - Stochastic PC sampling made simple.
+High-level Samplex API - PC sampling made simple.
 
     sampler = Samplex()
     results = sampler.sample("./my_app")
@@ -52,21 +52,24 @@ class SamplingResults:
     total_samples: int
     total_dispatches: int
     interval: int
+    method: str
     kernels: List[KernelSamplingResult]
     global_top_opcodes: List[InstructionHotspot]
 
 
 class Samplex:
     """
-    High-level stochastic PC sampling API.
+    High-level PC sampling API.
 
-    Uses hardware-based sampling with cycle-accurate precision and zero skid.
-    Provides stall reasons, instruction types, and wave counts.
-    Requires MI300+ (gfx942 and later).
+    Supports two methods:
+      - stochastic (default): Hardware-based, cycle-accurate, zero skid.
+        Provides stall reasons, instruction types, wave counts. MI300+.
+      - host_trap: Software-based, time-based. Broader support (MI200+).
+        No stall reasons or instruction types.
 
     Usage:
         sampler = Samplex()
-        results = sampler.sample("./my_app")
+        results = sampler.sample("./my_app")  # stochastic by default
 
         for kernel in results.kernels:
             print(f"{kernel.name}: {kernel.total_samples} samples")
@@ -88,29 +91,32 @@ class Samplex:
         self,
         command: str,
         interval: int = 65536,
+        method: str = "stochastic",
         kernel_filter: Optional[str] = None,
         top_n: int = 10,
         cwd: Optional[str] = None,
         output_dir: Optional[str] = None,
     ) -> SamplingResults:
         """
-        Run stochastic PC sampling on a command and return analyzed results.
+        Run PC sampling on a command and return analyzed results.
 
         Args:
             command: Command to profile
-            interval: Sampling interval in cycles, power of 2. Default 65536.
-                      Lower = more samples but higher overhead. 4096+ recommended.
+            interval: Sampling interval. For stochastic: cycles (power of 2,
+                      default 65536). For host_trap: nanoseconds (default 65536).
+            method: "stochastic" (MI300+, richer data) or "host_trap" (MI200+)
             kernel_filter: Regex to filter kernels
             top_n: Number of top instructions to report per kernel
             cwd: Working directory
             output_dir: Output directory (temp dir if None)
 
         Returns:
-            SamplingResults with per-kernel analysis including stall reasons
+            SamplingResults with per-kernel analysis
         """
         raw = self.wrapper.sample(
             command=command,
             interval=interval,
+            method=method,
             kernel_filter=kernel_filter,
             cwd=cwd,
             output_dir=output_dir,
@@ -152,6 +158,7 @@ class Samplex:
             total_samples=len(raw.samples),
             total_dispatches=len(raw.dispatches),
             interval=raw.interval,
+            method=raw.method,
             kernels=kernel_results,
             global_top_opcodes=global_opcodes,
         )

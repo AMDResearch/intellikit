@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Samplex CLI - Stochastic PC sampling for GPU kernels.
+Samplex CLI - PC sampling for GPU kernels.
 """
 
 import sys
@@ -17,8 +17,11 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # PC sampling with default interval (256 cycles)
+  # Stochastic PC sampling (default, MI300+)
   samplex profile ./my_app
+
+  # Host-trap PC sampling (MI200+)
+  samplex profile --method host_trap ./my_app
 
   # Coarser sampling (less overhead, fewer samples)
   samplex profile --interval 4096 ./my_app
@@ -44,7 +47,7 @@ Examples:
     # Profile command
     profile_parser = subparsers.add_parser(
         "profile",
-        help="Run stochastic PC sampling on a GPU application",
+        help="Run PC sampling on a GPU application",
     )
 
     profile_parser.add_argument(
@@ -53,10 +56,17 @@ Examples:
     )
 
     profile_parser.add_argument(
+        "--method", "-m",
+        choices=["stochastic", "host_trap"],
+        default="stochastic",
+        help="Sampling method (default: stochastic). stochastic = hardware-based, cycle-accurate, MI300+. host_trap = software-based, time-based, MI200+.",
+    )
+
+    profile_parser.add_argument(
         "--interval", "-i",
         type=int,
         default=65536,
-        help="Sampling interval in cycles, power of 2 (default: 65536). Lower = more samples but higher overhead. 4096+ recommended.",
+        help="Sampling interval (default: 65536). For stochastic: cycles (power of 2). For host_trap: nanoseconds.",
     )
 
     profile_parser.add_argument(
@@ -102,9 +112,11 @@ Examples:
 def format_text_output(results):
     """Format results as human-readable text."""
     lines = []
-    lines.append(f"Samplex PC Sampling Results (stochastic, interval={results.interval} cycles)")
+    unit_label = "cycles" if results.method == "stochastic" else "ns"
+    lines.append(f"Samplex PC Sampling Results ({results.method}, interval={results.interval} {unit_label})")
     lines.append(f"{'=' * 70}")
     lines.append(f"Command:    {results.command}")
+    lines.append(f"Method:     {results.method}")
     lines.append(f"Samples:    {results.total_samples}")
     lines.append(f"Dispatches: {results.total_dispatches}")
     lines.append("")
@@ -117,17 +129,19 @@ def format_text_output(results):
     lines.append("")
 
     # Per-kernel results
+    is_stochastic = results.method == "stochastic"
     for kernel in results.kernels:
         lines.append(f"Kernel: {kernel.name}")
         lines.append(f"{'-' * 70}")
         lines.append(f"  Samples:     {kernel.total_samples}")
         lines.append(f"  Duration:    {kernel.duration_us:.1f} us")
         lines.append(f"  Full mask:   {kernel.full_mask_pct:.1f}%")
-        lines.append(f"  Issued:      {kernel.issued_pct:.1f}%")
+        if is_stochastic:
+            lines.append(f"  Issued:      {kernel.issued_pct:.1f}%")
         if kernel.empty_instruction_count > 0:
             lines.append(f"  Holes:       {kernel.empty_instruction_count} (idle/between-wave gaps)")
 
-        if kernel.top_stall_reasons:
+        if is_stochastic and kernel.top_stall_reasons:
             lines.append(f"  Stall reasons:")
             for reason, pct in kernel.top_stall_reasons.items():
                 lines.append(f"    {pct:5.1f}%  {reason}")
@@ -135,7 +149,10 @@ def format_text_output(results):
         lines.append(f"  Top instructions:")
         for h in kernel.top_instructions:
             instr_display = h.instruction[:60] if len(h.instruction) > 60 else h.instruction
-            issued_tag = f" [issued={h.issued_count}, stalled={h.stalled_count}]"
+            if is_stochastic:
+                issued_tag = f" [issued={h.issued_count}, stalled={h.stalled_count}]"
+            else:
+                issued_tag = ""
             lines.append(f"    {h.percentage:5.1f}%  {h.sample_count:5d}  {instr_display}{issued_tag}")
         lines.append("")
 
@@ -146,6 +163,7 @@ def format_json_output(results):
     """Format results as JSON."""
     data = {
         "command": results.command,
+        "method": results.method,
         "interval": results.interval,
         "total_samples": results.total_samples,
         "total_dispatches": results.total_dispatches,
@@ -193,6 +211,7 @@ def profile_command(args):
     results = sampler.sample(
         command=args.target,
         interval=args.interval,
+        method=args.method,
         kernel_filter=args.kernel,
         top_n=args.top,
     )

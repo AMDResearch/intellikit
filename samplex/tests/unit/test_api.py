@@ -9,6 +9,7 @@ from samplex.profiler.rocprof_wrapper import PCSample, KernelDispatch, PCSamplin
 
 def _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFFFFFFFFFFFFFFFF,
                  wave_issued=False, stall_reason="", instruction_type="", wave_count=1):
+    """Create a stochastic-style sample with all fields."""
     return PCSample(
         timestamp=1000000,
         exec_mask=exec_mask,
@@ -20,6 +21,19 @@ def _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)", exec_mask=0xFF
         instruction_type=instruction_type,
         stall_reason=stall_reason,
         wave_count=wave_count,
+    )
+
+
+def _make_host_trap_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)",
+                           exec_mask=0xFFFFFFFFFFFFFFFF):
+    """Create a host_trap-style sample (no stall/issued/type fields)."""
+    return PCSample(
+        timestamp=1000000,
+        exec_mask=exec_mask,
+        dispatch_id=dispatch_id,
+        instruction=instruction,
+        instruction_comment="",
+        correlation_id=dispatch_id,
     )
 
 
@@ -137,6 +151,7 @@ class TestSamplexAnalysis:
         raw = PCSamplingResult(
             command="./app",
             interval=256,
+            method="stochastic",
             samples=[
                 _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
                 _make_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
@@ -156,6 +171,7 @@ class TestSamplexAnalysis:
         assert results.kernels[0].name == "kernel_A"
         assert results.kernels[1].name == "kernel_B"
         assert results.interval == 256
+        assert results.method == "stochastic"
 
     def test_issued_vs_stalled_per_instruction(self):
         sampler = Samplex.__new__(Samplex)
@@ -186,3 +202,80 @@ class TestSamplexAnalysis:
         assert mfma.opcode == "v_mfma_f32_16x16x32_f16"
         assert mfma.issued_count == 1
         assert mfma.stalled_count == 0
+
+
+class TestHostTrapAnalysis:
+    """Test analysis with host_trap samples (no stall/issued data)."""
+
+    def test_host_trap_basic_analysis(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+
+        samples = [
+            _make_host_trap_sample(instruction="s_waitcnt vmcnt(0)"),
+            _make_host_trap_sample(instruction="s_waitcnt vmcnt(0)"),
+            _make_host_trap_sample(instruction="global_load_dwordx4 v[0:3], v[4:5], off"),
+            _make_host_trap_sample(instruction="v_mfma_f32_16x16x32_f16 a[0:3], v[0:1], v[2:3], a[0:3]"),
+        ]
+
+        result = sampler._analyze_kernel(
+            "my_kernel", samples, [1], {1: 500.0}, top_n=5
+        )
+
+        assert result.name == "my_kernel"
+        assert result.total_samples == 4
+        # No issued/stalled data for host_trap — all default to wave_issued=False
+        assert result.issued_pct == 0.0
+        # No stall reasons populated (stall_reason is empty string for host_trap)
+        assert result.top_stall_reasons == {}
+
+    def test_host_trap_multiple_kernels(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+
+        raw = PCSamplingResult(
+            command="./app",
+            interval=1000,
+            method="host_trap",
+            samples=[
+                _make_host_trap_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
+                _make_host_trap_sample(dispatch_id=1, instruction="s_waitcnt vmcnt(0)"),
+                _make_host_trap_sample(dispatch_id=2, instruction="v_mov_b32_e32 v0, 0"),
+            ],
+            dispatches=[
+                _make_dispatch(dispatch_id=1, kernel_name="kernel_A"),
+                _make_dispatch(dispatch_id=2, kernel_name="kernel_B"),
+            ],
+        )
+
+        sampler.wrapper.sample.return_value = raw
+        results = sampler.sample("./app", method="host_trap")
+
+        assert len(results.kernels) == 2
+        assert results.method == "host_trap"
+        assert results.kernels[0].name == "kernel_A"
+        # No stall reasons populated for host_trap
+        assert results.kernels[0].top_stall_reasons == {}
+
+    def test_host_trap_instruction_hotspots(self):
+        sampler = Samplex.__new__(Samplex)
+        sampler.wrapper = MagicMock()
+
+        samples = [
+            _make_host_trap_sample(instruction="s_waitcnt vmcnt(0)"),
+            _make_host_trap_sample(instruction="s_waitcnt vmcnt(0)"),
+            _make_host_trap_sample(instruction="s_waitcnt lgkmcnt(0)"),
+            _make_host_trap_sample(instruction="v_mov_b32_e32 v0, 0"),
+        ]
+
+        result = sampler._analyze_kernel(
+            "my_kernel", samples, [1], {1: 100.0}, top_n=5
+        )
+
+        # s_waitcnt appears 3 times (grouped by opcode)
+        assert result.top_instructions[0].opcode == "s_waitcnt"
+        assert result.top_instructions[0].sample_count == 3
+        # issued_count and stalled_count should be 0 and 3 respectively
+        # (default wave_issued=False means all counted as stalled)
+        assert result.top_instructions[0].issued_count == 0
+        assert result.top_instructions[0].stalled_count == 3
