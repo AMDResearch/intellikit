@@ -5,7 +5,7 @@
 # Built-in variables available in expressions (from DeviceSpecs):
 #   NUM_CU, MAX_WAVES_PER_CU, WAVEFRONT_SIZE, BASE_CLOCK_MHZ,
 #   HBM_BANDWIDTH_GBS, L2_SIZE_MB, LDS_SIZE_PER_CU_KB,
-#   BOOST_CLOCK_MHZ, DURATION_US
+#   DURATION_US
 
 rocprofiler-sdk:
   counters:

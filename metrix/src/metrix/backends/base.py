@@ -29,9 +29,6 @@ class DeviceSpecs:
     l2_size_mb: float = 0.0
     lds_size_per_cu_kb: float = 0.0
 
-    # Clock speeds
-    boost_clock_mhz: int = 0
-
 
 @dataclass
 class Statistics:

@@ -54,7 +54,6 @@ def _fallback_specs() -> Dict[str, "DeviceSpecs"]:
             hbm_bandwidth_gbs=5300.0,
             l2_size_mb=256.0,
             lds_size_per_cu_kb=64.0,
-            boost_clock_mhz=2100,
         ),
         "gfx90a": DeviceSpecs(
             arch="gfx90a",
@@ -66,7 +65,6 @@ def _fallback_specs() -> Dict[str, "DeviceSpecs"]:
             hbm_bandwidth_gbs=1600.0,
             l2_size_mb=8.0,
             lds_size_per_cu_kb=64.0,
-            boost_clock_mhz=1600,
         ),
     }
 
@@ -198,41 +196,6 @@ def _parse_rocminfo() -> RocmInfoGPU:
     return gpu
 
 
-def _parse_rocm_smi_json() -> dict:
-    """Run ``rocm-smi --json`` with relevant flags and return first card."""
-    try:
-        proc = subprocess.run(
-            [
-                "rocm-smi",
-                "--showproductname",
-                "--showsclkrange",
-                "--showmclkrange",
-                "--showmeminfo",
-                "all",
-                "--json",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return {}
-
-    if proc.returncode != 0:
-        return {}
-
-    import json
-
-    try:
-        data = json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        return {}
-
-    for key in sorted(data.keys()):
-        if key.startswith("card"):
-            return data[key]
-    return {}
-
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -262,14 +225,6 @@ def query_device_specs(arch: str) -> "DeviceSpecs":
 
     # If the hardware matches the requested arch, use live values
     if gpu and hw_arch == arch:
-        smi = _parse_rocm_smi_json()
-
-        boost_clock_mhz = 0
-        mclk_range = smi.get("Valid mclk range", "")
-        m = re.search(r"(\d+)\s*Mhz\s*$", mclk_range)
-        if m:
-            boost_clock_mhz = int(m.group(1))
-
         return DeviceSpecs(
             arch=arch,
             name=gpu.marketing_name or f"AMD GPU ({arch})",
@@ -280,7 +235,6 @@ def query_device_specs(arch: str) -> "DeviceSpecs":
             hbm_bandwidth_gbs=_HBM_PEAK_GBS.get(arch, 0.0),
             l2_size_mb=gpu.l2_cache_kb / 1024.0,
             lds_size_per_cu_kb=float(gpu.lds_size_kb or 64),
-            boost_clock_mhz=boost_clock_mhz or gpu.max_clock_mhz,
         )
 
     # Arch mismatch or rocminfo unavailable — use static fallback
