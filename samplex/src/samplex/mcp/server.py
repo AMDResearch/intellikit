@@ -64,13 +64,17 @@ def pc_sample(
             "duration_us": round(kernel.duration_us, 2),
             "full_mask_pct": round(kernel.full_mask_pct, 2),
             "issued_pct": round(kernel.issued_pct, 2),
+            "empty_instruction_count": kernel.empty_instruction_count,
             "top_instructions": [
                 {
                     "opcode": h.opcode,
+                    "instruction": h.instruction,
                     "percentage": round(h.percentage, 2),
                     "sample_count": h.sample_count,
                     "issued_count": h.issued_count,
                     "stalled_count": h.stalled_count,
+                    "stall_reasons": h.stall_reasons if h.stall_reasons else None,
+                    "instruction_types": h.instruction_types if h.instruction_types else None,
                 }
                 for h in kernel.top_instructions
             ],

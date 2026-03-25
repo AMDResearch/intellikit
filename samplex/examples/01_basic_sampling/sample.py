@@ -128,6 +128,8 @@ def main():
                 print(f"  Duration:  {kernel.duration_us:.1f} us")
                 print(f"  Full mask: {kernel.full_mask_pct:.1f}%")
                 print(f"  Issued:    {kernel.issued_pct:.1f}%")
+                if kernel.empty_instruction_count > 0:
+                    print(f"  Holes:     {kernel.empty_instruction_count}")
 
                 print("  Top instructions:")
                 for h in kernel.top_instructions:
