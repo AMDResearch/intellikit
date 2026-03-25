@@ -358,8 +358,8 @@ class TestROCProfV3Wrapper:
         assert results[0].local_rank == 1
         assert results[0].world_size == 8
 
-    def test_launcher_param_builds_correct_order(self, wrapper_no_rocm_check):
-        """Explicit launcher param should produce: launcher rocprofv3 ... -- app."""
+    def test_launcher_param_builds_wrapper_command(self, wrapper_no_rocm_check):
+        """Launcher uses per-rank wrapper: launcher python wrapper.py <dir> [rocprof_args] -- app."""
         wrapper = wrapper_no_rocm_check
         captured_cmd = []
 
@@ -373,9 +373,15 @@ class TestROCProfV3Wrapper:
 
         with (
             patch("subprocess.run", side_effect=fake_run),
-            patch.object(wrapper, "_parse_output", return_value=[]),
             tempfile.TemporaryDirectory() as tmpdir,
         ):
+            # Create a rank_0 subdir so _parse_output can find it
+            rank_dir = Path(tmpdir) / "rank_0"
+            rank_dir.mkdir()
+            # Create an empty kernel trace to satisfy parsing
+            trace_file = rank_dir / "0_kernel_trace.csv"
+            trace_file.write_text("Kernel_Name,Start_Timestamp,End_Timestamp\n")
+
             wrapper.profile(
                 command="train.py --lr 0.01",
                 counters=[],
@@ -383,13 +389,17 @@ class TestROCProfV3Wrapper:
                 launcher="torchrun --nproc_per_node=4",
             )
 
-        # rocprofv3 wraps the launcher: rocprofv3 [opts] -- launcher... command...
-        assert captured_cmd[0] == "rocprofv3"
+        # With launcher, command starts with launcher, then python wrapper
+        assert captured_cmd[0] == "torchrun"
+        assert captured_cmd[1] == "--nproc_per_node=4"
+        assert captured_cmd[2] == "python3"
+        # Wrapper script path
+        assert "_metrix_rank_wrapper.py" in captured_cmd[3]
+        # After the -- separator, the user command appears
         separator_idx = captured_cmd.index("--")
-        assert captured_cmd[separator_idx + 1] == "torchrun"
-        assert captured_cmd[separator_idx + 2] == "--nproc_per_node=4"
-        assert captured_cmd[separator_idx + 3] == "train.py"
-        assert captured_cmd[separator_idx + 4] == "--lr"
+        assert captured_cmd[separator_idx + 1] == "train.py"
+        assert captured_cmd[separator_idx + 2] == "--lr"
+        assert captured_cmd[separator_idx + 3] == "0.01"
 
     def test_no_launcher_uses_plain_rocprofv3(self, wrapper_no_rocm_check):
         """Without launcher, command should start with rocprofv3."""

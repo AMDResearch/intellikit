@@ -74,9 +74,9 @@ def test_profile_uses_rank_scoped_output_and_loads_deterministic_ui_dir(tmp_path
     assert len(profiler.rank_profiles) == 2
 
 
-def test_profile_with_launcher_builds_correct_command_order(tmp_path):
+def test_profile_with_launcher_builds_wrapper_command(tmp_path):
     """When launcher is provided, the subprocess command should be
-    launcher_argv + rocprofv3 ... -- app_argv."""
+    launcher_argv + python wrapper.py <dir> [rocprof_args] -- app_argv."""
     dummy_decoder = tmp_path / "decoder" / "librocprof-trace-decoder.so"
     dummy_decoder.parent.mkdir(parents=True, exist_ok=True)
     dummy_decoder.write_text("placeholder")
@@ -85,8 +85,10 @@ def test_profile_with_launcher_builds_correct_command_order(tmp_path):
 
     def fake_run(cmd, **kwargs):
         captured_cmd.extend(cmd)
-        output_dir = Path(cmd[cmd.index("-d") + 1])
-        ui_dir = output_dir / "ui_output_000"
+        # With wrapper mode, create rank_0/ subdir with ui_output
+        output_dir = tmp_path / "out"
+        rank_dir = output_dir / "rank_0"
+        ui_dir = rank_dir / "ui_output_000"
         ui_dir.mkdir(parents=True, exist_ok=True)
         code = {"code": [["s_nop 0", 0, 0, "test.hip:1", 1, 0x1000, 4, 10, 2, 0]]}
         (ui_dir / "code.json").write_text(json.dumps(code))
@@ -106,14 +108,19 @@ def test_profile_with_launcher_builds_correct_command_order(tmp_path):
             output_dir=str(tmp_path / "out"),
         )
 
-    # Command should be: rocprofv3 [opts] -- torchrun --nproc_per_node=4 train.py --lr 0.01
-    assert captured_cmd[0] == "rocprofv3"
+    # With launcher, command starts with launcher, then python wrapper
+    assert captured_cmd[0] == "torchrun"
+    assert captured_cmd[1] == "--nproc_per_node=4"
+    assert captured_cmd[2] == "python3"
+    assert "_linex_rank_wrapper.py" in captured_cmd[3]
+    # After the -- separator, the user command appears
     separator_idx = captured_cmd.index("--")
-    assert captured_cmd[separator_idx + 1] == "torchrun"
-    assert captured_cmd[separator_idx + 2] == "--nproc_per_node=4"
-    assert captured_cmd[separator_idx + 3] == "train.py"
-    assert captured_cmd[separator_idx + 4] == "--lr"
-    assert captured_cmd[separator_idx + 5] == "0.01"
+    assert captured_cmd[separator_idx + 1] == "train.py"
+    assert captured_cmd[separator_idx + 2] == "--lr"
+    assert captured_cmd[separator_idx + 3] == "0.01"
+    # Verify per-rank profiles were collected
+    assert profiler.distributed_context.world_size == 1
+    assert len(profiler.rank_profiles) == 1
 
 
 def test_profile_without_launcher_uses_plain_rocprofv3(tmp_path):

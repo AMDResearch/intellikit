@@ -8,12 +8,47 @@ Linex API - Source-level GPU performance profiling
 import json
 import os
 import subprocess
+import textwrap
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 from .distributed import DistributedContext, detect_distributed_context, normalize_command_argv
+
+
+# Python wrapper script that torchrun launches per-worker.  Each worker
+# reads its RANK / LOCAL_RANK from the environment, creates a rank-specific
+# output directory, then runs rocprofv3 ATT tracing on the user command.
+#
+# Argv layout:
+#   wrapper.py <base_output_dir> [rocprof_args...] -- <user_command...>
+_RANK_WRAPPER_SCRIPT = textwrap.dedent(
+    """\
+    import os, sys, subprocess
+
+    rank = int(os.environ.get("RANK", os.environ.get("OMPI_COMM_WORLD_RANK", "0")))
+    local_rank = int(os.environ.get("LOCAL_RANK", os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK", "0")))
+    world_size = int(os.environ.get("WORLD_SIZE", os.environ.get("OMPI_COMM_WORLD_SIZE", "1")))
+
+    try:
+        sep_idx = sys.argv.index("--")
+        base_output_dir = sys.argv[1]
+        rocprof_extra = sys.argv[2:sep_idx]
+        user_cmd = sys.argv[sep_idx + 1:]
+    except (ValueError, IndexError):
+        print(f"Usage: {sys.argv[0]} <output_dir> [rocprof_args...] -- <command...>", file=sys.stderr)
+        sys.exit(1)
+
+    rank_output_dir = os.path.join(base_output_dir, f"rank_{rank}")
+    os.makedirs(rank_output_dir, exist_ok=True)
+
+    cmd = ["rocprofv3"] + rocprof_extra + ["-d", rank_output_dir, "--"] + user_cmd
+    print(f"[Rank {rank}/{world_size}] {' '.join(cmd)}", file=sys.stderr)
+    result = subprocess.run(cmd, env=os.environ)
+    sys.exit(result.returncode)
+    """
+)
 
 
 @dataclass
@@ -222,18 +257,13 @@ class Linex:
         if env:
             run_env.update(env)
 
-        dist_context = detect_distributed_context(run_env)
-        self._distributed_context = dist_context
-
-        output_path = base_output_dir
-        if dist_context.is_distributed:
-            output_path = base_output_dir / dist_context.rank_tag
-        output_path.mkdir(parents=True, exist_ok=True)
+        base_output_dir.mkdir(parents=True, exist_ok=True)
 
         command_argv = normalize_command_argv(command)
+        use_wrapper = launcher is not None
 
-        cmd = [
-            "rocprofv3",
+        # Build rocprofv3 ATT arguments (shared between direct and wrapper modes)
+        rocprof_args = [
             "--att",
             "--att-library-path",
             str(self.decoder_lib.parent),
@@ -243,58 +273,131 @@ class Linex:
             str(self.target_cu),
             "--att-shader-engine-mask",
             self.shader_engine_mask,
-            "-d",
-            str(output_path),
         ]
 
         if kernel_filter:
-            cmd.extend(["--kernel-include-regex", kernel_filter])
+            rocprof_args.extend(["--kernel-include-regex", kernel_filter])
 
-        # Add target command (with optional launcher)
-        # Command structure: rocprofv3 [options] -- [launcher...] command...
-        # rocprofv3 traces the entire process tree, so the launcher (e.g.
-        # torchrun) and all its worker processes are profiled.
-        cmd.append("--")
-        if launcher is not None:
+        if use_wrapper:
+            # Per-rank wrapper mode: the launcher spawns one Python wrapper
+            # per worker.  Each wrapper reads RANK from its environment and
+            # runs its own rocprofv3 with a rank-specific output directory.
+            wrapper_path = base_output_dir / "_linex_rank_wrapper.py"
+            wrapper_path.write_text(_RANK_WRAPPER_SCRIPT)
+
             launcher_argv = normalize_command_argv(launcher)
-            cmd.extend(launcher_argv)
-        cmd.extend(command_argv)
+
+            # Build: launcher... python wrapper.py <output_dir> [rocprof_args...] -- command...
+            cmd = (
+                launcher_argv
+                + ["python3", str(wrapper_path), str(base_output_dir)]
+                + rocprof_args
+                + ["--"]
+                + command_argv
+            )
+        else:
+            # Direct mode: rocprofv3 [options] -d <output_dir> -- command...
+            dist_context = detect_distributed_context(run_env)
+            self._distributed_context = dist_context
+
+            output_path = base_output_dir
+            if dist_context.is_distributed:
+                output_path = base_output_dir / dist_context.rank_tag
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            cmd = ["rocprofv3"] + rocprof_args + ["-d", str(output_path)]
+            cmd.append("--")
+            cmd.extend(command_argv)
 
         if force_cu_mask and "HSA_CU_MASK" not in run_env:
-            run_env["HSA_CU_MASK"] = "0x1"  # Force to CU 0 unless caller already set a mask
+            run_env["HSA_CU_MASK"] = "0x1"
 
         result = subprocess.run(cmd, env=run_env, capture_output=True, text=True)
 
         if result.returncode != 0:
-            # Include stderr in error message for debugging
             raise RuntimeError(f"rocprofv3 failed with code {result.returncode}\n{result.stderr}")
 
-        # Find generated ui_output directory
-        ui_dirs = sorted(output_path.glob("ui_output_*"), key=lambda p: p.name)
-
-        if not ui_dirs:
-            raise RuntimeError(f"No ui_output directories found in {output_path}")
-
         self._rank_profiles = {}
-        for idx, ui_dir in enumerate(ui_dirs):
-            instructions, source_lines = self._load_ui_output_data(ui_dir)
-            if idx == 0:
-                rank_key = dist_context.rank_tag
-            else:
-                rank_key = f"{dist_context.rank_tag}_dispatch{idx + 1:03d}"
-            self._rank_profiles[rank_key] = RankProfile(
-                rank_key=rank_key,
-                global_rank=dist_context.global_rank,
-                local_rank=dist_context.local_rank,
-                world_size=dist_context.world_size,
-                hostname=dist_context.hostname,
-                launcher=dist_context.launcher,
-                ui_output_dir=str(ui_dir),
-                source_lines=sorted(
-                    source_lines.values(), key=lambda x: x.total_cycles, reverse=True
-                ),
-                instructions=instructions,
+
+        if use_wrapper:
+            # Collect per-rank results from rank_N/ subdirectories
+            rank_dirs = sorted(base_output_dir.glob("rank_*"))
+            if not rank_dirs:
+                raise RuntimeError(
+                    f"No rank_* subdirectories found in {base_output_dir}. "
+                    "The launcher wrapper may not have executed."
+                )
+
+            world_size = len(rank_dirs)
+            self._distributed_context = DistributedContext(
+                global_rank=0,
+                local_rank=0,
+                world_size=world_size,
+                launcher="torchrun",
             )
+
+            for rank_dir in rank_dirs:
+                rank_num = int(rank_dir.name.split("_")[1])
+                ui_dirs = sorted(rank_dir.glob("ui_output_*"), key=lambda p: p.name)
+                if not ui_dirs:
+                    continue
+
+                for idx, ui_dir in enumerate(ui_dirs):
+                    instructions, source_lines = self._load_ui_output_data(ui_dir)
+                    if idx == 0:
+                        rank_key = f"rank{rank_num:04d}"
+                    else:
+                        rank_key = f"rank{rank_num:04d}_dispatch{idx + 1:03d}"
+                    self._rank_profiles[rank_key] = RankProfile(
+                        rank_key=rank_key,
+                        global_rank=rank_num,
+                        local_rank=rank_num,
+                        world_size=world_size,
+                        hostname="",
+                        launcher="torchrun",
+                        ui_output_dir=str(ui_dir),
+                        source_lines=sorted(
+                            source_lines.values(),
+                            key=lambda x: x.total_cycles,
+                            reverse=True,
+                        ),
+                        instructions=instructions,
+                    )
+        else:
+            # Direct mode: parse output from single output path
+            dist_context = self._distributed_context
+            output_path = base_output_dir
+            if dist_context.is_distributed:
+                output_path = base_output_dir / dist_context.rank_tag
+
+            ui_dirs = sorted(output_path.glob("ui_output_*"), key=lambda p: p.name)
+            if not ui_dirs:
+                raise RuntimeError(f"No ui_output directories found in {output_path}")
+
+            for idx, ui_dir in enumerate(ui_dirs):
+                instructions, source_lines = self._load_ui_output_data(ui_dir)
+                if idx == 0:
+                    rank_key = dist_context.rank_tag
+                else:
+                    rank_key = f"{dist_context.rank_tag}_dispatch{idx + 1:03d}"
+                self._rank_profiles[rank_key] = RankProfile(
+                    rank_key=rank_key,
+                    global_rank=dist_context.global_rank,
+                    local_rank=dist_context.local_rank,
+                    world_size=dist_context.world_size,
+                    hostname=dist_context.hostname,
+                    launcher=dist_context.launcher,
+                    ui_output_dir=str(ui_dir),
+                    source_lines=sorted(
+                        source_lines.values(),
+                        key=lambda x: x.total_cycles,
+                        reverse=True,
+                    ),
+                    instructions=instructions,
+                )
+
+        if not self._rank_profiles:
+            raise RuntimeError("No profile data found in any rank output directory")
 
         # Preserve existing API behavior by exposing the first rank profile as top-level fields.
         primary_rank = next(iter(self._rank_profiles.values()))
