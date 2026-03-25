@@ -17,9 +17,9 @@ def run_validate_kernel_correctness(
     kernel_name: str,
     reference_command: list[str],
     optimized_command: list[str],
-    tolerance: float = 1e-6,
-    atol: Optional[float] = None,
-    rtol: float = 0.0,
+    tolerance: Optional[float] = None,
+    atol: float = 1e-08,
+    rtol: float = 1e-05,
     equal_nan: bool = False,
     working_directory: str = ".",
 ) -> dict:
@@ -54,9 +54,9 @@ def validate_kernel_correctness(
     kernel_name: str,
     reference_command: list[str],
     optimized_command: list[str],
-    tolerance: float = 1e-6,
-    atol: Optional[float] = None,
-    rtol: float = 0.0,
+    tolerance: Optional[float] = None,
+    atol: float = 1e-08,
+    rtol: float = 1e-05,
     equal_nan: bool = False,
     working_directory: str = ".",
 ) -> dict:
@@ -66,13 +66,15 @@ def validate_kernel_correctness(
     Captures outputs from both versions and compares them for correctness.
     Use this to verify kernel optimizations don't break functionality.
 
+    Matching semantics: |a - b| <= atol + rtol * |b| (same as torch.allclose).
+
     Args:
         kernel_name: Name of the kernel to validate
         reference_command: Command for reference version as list (e.g., ['./ref'])
         optimized_command: Command for optimized version as list (e.g., ['./opt'])
-        tolerance: Numerical tolerance for comparisons (default: 1e-6)
-        atol: Absolute tolerance (overrides tolerance if provided)
-        rtol: Relative tolerance for comparisons (default: 0.0)
+        tolerance: Legacy alias for atol (overrides atol when set)
+        atol: Absolute tolerance (default: 1e-08)
+        rtol: Relative tolerance (default: 1e-05)
         equal_nan: Whether NaN values should compare equal (default: False)
         working_directory: Working directory for commands (default: '.')
 

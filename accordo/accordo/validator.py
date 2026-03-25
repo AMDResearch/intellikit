@@ -313,31 +313,34 @@ class Accordo:
         self,
         reference_snapshot: Snapshot,
         optimized_snapshot: Snapshot,
-        tolerance: Optional[float] = 1e-6,
+        tolerance: Optional[float] = None,
         *,
-        atol: Optional[float] = None,
-        rtol: float = 0.0,
+        atol: float = 1e-08,
+        rtol: float = 1e-05,
         equal_nan: bool = False,
     ) -> ValidationResult:
         """Compare two snapshots and validate their arrays.
 
+        Matching semantics: ``|a - b| <= atol + rtol * |b|``
+        (same as ``torch.allclose`` / ``numpy.allclose``).
+
         Args:
                 reference_snapshot: Snapshot from reference binary
                 optimized_snapshot: Snapshot from optimized binary
-                tolerance: Legacy absolute tolerance (backward-compatible alias for atol)
-                atol: Absolute tolerance for array comparison
-                rtol: Relative tolerance for array comparison
-                equal_nan: If True, NaN values compare equal (torch.isclose-like behavior)
+                tolerance: Legacy alias for atol (overrides atol when set)
+                atol: Absolute tolerance (default: 1e-08)
+                rtol: Relative tolerance (default: 1e-05)
+                equal_nan: If True, NaN values compare equal
 
         Returns:
                 ValidationResult with validation status and details
 
         Example:
-                >>> result = validator.compare_snapshots(ref, opt, tolerance=1e-4, rtol=1e-5, equal_nan=False)
+                >>> result = validator.compare_snapshots(ref, opt, atol=1e-4)
                 >>> if result.is_valid:
                 ...     print(f"✓ PASS: {result.num_arrays_validated} arrays matched")
         """
-        effective_atol = atol if atol is not None else (1e-6 if tolerance is None else tolerance)
+        effective_atol = tolerance if tolerance is not None else atol
         reference_dispatches = (
             reference_snapshot.dispatch_arrays
             if reference_snapshot.dispatch_arrays is not None
