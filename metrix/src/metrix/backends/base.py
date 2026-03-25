@@ -647,6 +647,7 @@ class CounterBackend(ABC):
                     pass_counters,
                     kernel_filter,
                     cwd=cwd,
+                    launcher=launcher,
                     timeout_seconds=timeout_seconds,
                     kernel_iteration_range=iteration_range,
                 )
@@ -668,6 +669,7 @@ class CounterBackend(ABC):
                         pass_counters,
                         kernel_filter,
                         cwd=cwd,
+                        launcher=launcher,
                         timeout_seconds=timeout_seconds,
                     )
                     # Tag with replay_id for debugging

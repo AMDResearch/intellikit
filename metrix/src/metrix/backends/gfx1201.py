@@ -68,6 +68,7 @@ class GFX1201Backend(CounterBackend):
             counters=counters,
             kernel_filter=kernel_filter,
             cwd=cwd,
+            launcher=launcher,
             kernel_iteration_range=kernel_iteration_range,
             extra_counters_path=extra_counters_path if extra_counters_path.exists() else None,
             arch=self.device_specs.arch,

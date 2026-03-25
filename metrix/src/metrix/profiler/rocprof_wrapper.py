@@ -168,15 +168,16 @@ class ROCProfV3Wrapper:
             if kernel_filter:
                 prof_cmd.extend(["--kernel-include-regex", kernel_filter])
 
-            # Add target command
+            # Add target command (with optional launcher)
+            # Command structure: rocprofv3 [options] -- [launcher...] command...
+            # rocprofv3 traces the entire process tree, so the launcher (e.g.
+            # torchrun) and all its worker processes are profiled.
             command_argv = normalize_command_argv(command)
             prof_cmd.append("--")
-            prof_cmd.extend(command_argv)
-
-            # If a launcher is specified, prepend it: launcher rocprofv3 ... -- app
             if launcher is not None:
                 launcher_argv = normalize_command_argv(launcher)
-                prof_cmd = launcher_argv + prof_cmd
+                prof_cmd.extend(launcher_argv)
+            prof_cmd.extend(command_argv)
 
             logger.debug(f"rocprofv3 command: {' '.join(prof_cmd)}")
             logger.info(f"Starting rocprofv3 with {len(counters)} counters")

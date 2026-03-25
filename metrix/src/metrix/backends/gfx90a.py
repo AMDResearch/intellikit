@@ -103,7 +103,7 @@ class GFX90aBackend(CounterBackend):
     ) -> List[ProfileResult]:
         """Run rocprofv3 and return results (single pass only - base class handles multi-pass)"""
         wrapper = ROCProfV3Wrapper(timeout_seconds=timeout_seconds)
-        return wrapper.profile(command, counters, kernel_filter=kernel_filter, cwd=cwd)
+        return wrapper.profile(command, counters, kernel_filter=kernel_filter, cwd=cwd, launcher=launcher)
 
     # Memory bandwidth metrics
 
