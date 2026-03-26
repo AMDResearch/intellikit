@@ -70,10 +70,15 @@
 
 /* IntelliKit title: "Intelli" in blue, "Kit" in red */
 .hero h1#_top {
-  background: linear-gradient(90deg, #4a9eed 7ch, #ed1c24 7ch);
+  background: linear-gradient(90deg, #4a9eed 67%, #ed1c24 67%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   width: fit-content;
   margin-inline: auto;
+}
+
+/* Left-justify all content below the hero */
+.sl-markdown-content {
+  text-align: left;
 }
