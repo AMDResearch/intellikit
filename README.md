@@ -4,7 +4,7 @@
 
 # IntelliKit
 
-**Profiling and analysis for AMD software — GPU, host CPU, and LLM workflows**
+**Agent-first tooling for AMD hardware**
 
 </div>
 
