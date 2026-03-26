@@ -164,11 +164,11 @@ _CAPTURE_HOOK = textwrap.dedent('''\
         the original view via torch.as_strided.
         """
         import torch
-        import numpy as np
         cpu_tensor = tensor.detach().cpu()
         storage = cpu_tensor.untyped_storage()
-        raw = np.frombuffer(bytes(storage), dtype=np.uint8).copy()
-        raw.tofile(filepath)
+        flat = torch.empty(storage.nbytes(), dtype=torch.uint8)
+        flat.set_(storage)
+        flat.numpy().tofile(filepath)
 
     def _save_tensor(tensor, filepath):
         """Save a tensor's logical values as a contiguous binary file.
