@@ -187,6 +187,26 @@ _CAPTURE_HOOK = textwrap.dedent('''\
             cpu_tensor.numpy().tofile(filepath)
 
 
+    def _is_triton_dtype(val):
+        """Return True if *val* is a triton.language dtype (e.g. tl.bfloat16)."""
+        try:
+            import triton.language as _tl
+            return isinstance(val, _tl.dtype)
+        except (ImportError, AttributeError):
+            return False
+
+    def _triton_dtype_attr(val):
+        """Return the tl attribute name for a triton dtype object.
+
+        E.g. tl.bfloat16 -> "bfloat16", tl.float16 -> "float16".
+        """
+        import triton.language as _tl
+        for attr in dir(_tl):
+            if getattr(_tl, attr, None) is val:
+                return attr
+        return str(val)
+
+
     def _save_capture(jit_fn, args, kwargs, grid, autotuner_config_keys):
         """Save pre-kernel tensor inputs and scalar args.
 
@@ -265,6 +285,17 @@ _CAPTURE_HOOK = textwrap.dedent('''\
                     "is_autotune_config": is_config,
                     "value": val,
                     "type": type(val).__name__,
+                })
+
+            elif _is_triton_dtype(val):
+                metadata["args"].append({
+                    "index": i,
+                    "name": name,
+                    "is_pointer": False,
+                    "is_const": True,
+                    "is_autotune_config": is_config,
+                    "value": _triton_dtype_attr(val),
+                    "type": "triton_dtype",
                 })
 
             else:
