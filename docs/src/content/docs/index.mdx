@@ -2,7 +2,7 @@
 title: IntelliKit
 description: Profiling and analysis for AMD software — GPU, host CPU, and LLM workflows
 hero:
-  tagline: Profiling and analysis for AMD software
+  tagline: "Profiling and analysis for AMD software — GPU, host CPU, and LLM workflows"
   actions:
     - text: Get Started
       link: /getting-started/installation/
@@ -17,7 +17,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## What's in the box
 
-IntelliKit is a set of Python tools for AMD-focused performance and validation. The stack targets GPUs through ROCm, turning hardware counters, traces, and dispatch data into clean APIs you can use from Python, scripts, MCP clients, or AI coding assistants.
+IntelliKit is a set of Python tools for AMD-focused performance and validation. Most of the stack targets GPUs through ROCm, turning hardware counters, traces, and dispatch data into clear APIs you can use from Python. `uprof_mcp` adds AMD uProf for host-side CPU hotspot analysis. For LLM-style workflows you also get MCP servers and agent skills — installable `SKILL.md` playbooks for Cursor, Claude, Codex, and GitHub Copilot.
 
 <CardGrid>
   <Card title="Kerncap" icon="rocket">
