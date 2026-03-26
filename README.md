@@ -6,7 +6,7 @@
 
 **Agent-first tooling for AMD hardware**
 
-<a href="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-ci-test.yml"><img src="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-ci-test.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml"><img src="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml/badge.svg" alt="Intellikit Pytest"></a>
 <a href="https://amdresearch.github.io/intellikit"><img src="https://img.shields.io/badge/docs-live-blue" alt="Docs"></a>
 <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 
