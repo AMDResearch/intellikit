@@ -8,13 +8,13 @@ Nexus intercepts Heterogeneous System Architecture (HSA) packets, extracts the s
 ## Installation
 
 ```bash
-# From Git (recommended)
-pip install git+https://github.com/AMDResearch/intellikit.git
+# From Git
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"
 
 # Editable install for development
 git clone https://github.com/AMDResearch/intellikit.git
 cd intellikit
-pip install -e .
+pip install -e ./nexus
 ```
 
 ### Manual C++ build (optional)
