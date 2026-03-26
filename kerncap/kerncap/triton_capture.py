@@ -425,8 +425,8 @@ def run_triton_capture(
             raise RuntimeError(
                 f"Triton capture did not produce metadata.json in "
                 f"{output_dir}.\n"
-                f"stdout: {proc.stdout[:500]}\n"
-                f"stderr: {proc.stderr[:500]}"
+                f"stdout: {proc.stdout}\n"
+                f"stderr: {proc.stderr}"
             )
 
         return output_dir
