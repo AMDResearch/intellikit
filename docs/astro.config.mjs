@@ -37,6 +37,7 @@ export default defineConfig({
           label: "Guides",
           items: [
             { label: "MCP Setup", slug: "guides/mcp-setup" },
+            { label: "Skills Setup", slug: "guides/skills-setup" },
             { label: "End-to-End Workflow", slug: "guides/workflow" },
           ],
         },
