@@ -46,17 +46,25 @@ TORCH_DTYPE_MAP = {
 }
 
 
-def load_tensor(path, dtype_str, shape):
-    """Load a binary file as a torch tensor on GPU."""
+def load_tensor(path, dtype_str, shape, strides=None, storage_offset=0):
+    """Load a binary file as a torch tensor on GPU.
+
+    When *strides* is provided the raw storage bytes are loaded and the
+    original non-contiguous view is reconstructed via torch.as_strided,
+    which correctly replays padded or otherwise non-contiguous layouts.
+    """
     np_dtype, torch_dtype = TORCH_DTYPE_MAP.get(dtype_str, (np.float32, torch.float32))
-    data = np.fromfile(path, dtype=np_dtype)
-    tensor = torch.from_numpy(data.copy())
+    raw = np.fromfile(path, dtype=np.uint8)
     if dtype_str == "torch.bfloat16":
-        tensor = tensor.view(torch.bfloat16)
+        data = raw.view(np.uint16)
+        tensor = torch.from_numpy(data.copy()).view(torch.bfloat16)
     else:
-        tensor = tensor.to(dtype=torch_dtype)
+        data = raw.view(np_dtype)
+        tensor = torch.from_numpy(data.copy()).to(dtype=torch_dtype)
     tensor = tensor.to(device="cuda")
-    if shape:
+    if strides is not None and shape:
+        tensor = torch.as_strided(tensor, shape, strides, storage_offset)
+    elif shape:
         tensor = tensor.reshape(shape)
     return tensor
 
@@ -68,7 +76,11 @@ def main():
 {% for arg in args %}
 {% if arg.is_pointer %}
     # {{ arg.name }}: {{ arg.torch_dtype }} {{ arg.shape }}
+{% if arg.strides %}
+    {{ arg.name }} = load_tensor(os.path.join(SCRIPT_DIR, "capture", "{{ arg.file }}"), "{{ arg.torch_dtype }}", {{ arg.shape }}, strides={{ arg.strides }}, storage_offset={{ arg.storage_offset if arg.storage_offset else 0 }})
+{% else %}
     {{ arg.name }} = load_tensor(os.path.join(SCRIPT_DIR, "capture", "{{ arg.file }}"), "{{ arg.torch_dtype }}", {{ arg.shape }})
+{% endif %}
 {% elif arg.value is none %}
     {{ arg.name }} = None
 {% elif arg.type == "bool" %}
