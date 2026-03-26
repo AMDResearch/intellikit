@@ -268,11 +268,23 @@ def _write_replay_makefile(
         f.write("\n".join(lines) + "\n")
 
 
-_TRITON_SAFE_IMPORT_ROOTS = frozenset({
-    "triton", "math", "functools", "os", "sys", "typing",
-    "dataclasses", "enum", "itertools", "operator", "abc",
-    "collections", "builtins",
-})
+_TRITON_SAFE_IMPORT_ROOTS = frozenset(
+    {
+        "triton",
+        "math",
+        "functools",
+        "os",
+        "sys",
+        "typing",
+        "dataclasses",
+        "enum",
+        "itertools",
+        "operator",
+        "abc",
+        "collections",
+        "builtins",
+    }
+)
 
 
 def _extract_triton_kernel_standalone(
@@ -355,8 +367,7 @@ def _extract_triton_kernel_standalone(
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             safe = any(
-                alias.name.split(".")[0] in _TRITON_SAFE_IMPORT_ROOTS
-                for alias in node.names
+                alias.name.split(".")[0] in _TRITON_SAFE_IMPORT_ROOTS for alias in node.names
             )
         elif isinstance(node, ast.ImportFrom):
             if node.level and node.level > 0:
@@ -454,7 +465,9 @@ def generate_triton_reproducer(
     if os.path.isfile(pkg_init):
         variant_path = os.path.join(output_dir, "kernel_variant.py")
         _extract_triton_kernel_standalone(
-            main_file, kernel_source.kernel_function, variant_path,
+            main_file,
+            kernel_source.kernel_function,
+            variant_path,
         )
         kernel_module = "kernel_variant"
         logger.info(

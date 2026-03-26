@@ -460,6 +460,7 @@ class TestTritonReproducer:
         cap_dir.mkdir()
         # Create a dummy binary file for the tensor arg
         import struct
+
         dummy_data = struct.pack("16f", *range(16))
         (cap_dir / "arg_0.bin").write_bytes(dummy_data)
 
