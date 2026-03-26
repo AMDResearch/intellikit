@@ -38,11 +38,13 @@
 }
 
 /* Center hero content and reduce vertical space */
-.content-panel:has(.hero),
-[data-page-title] .hero,
 .hero {
   text-align: center;
-  padding: 0.5rem 1.5rem !important;
+  padding: 0.5rem 1ch !important;
+}
+
+.content-panel:has(.hero) {
+  padding: 0.5rem 1ch !important;
 }
 
 .hero .stack {
@@ -66,6 +68,17 @@
 
 .hero .actions {
   justify-content: center;
+}
+
+/* Widen main content area */
+:root {
+  --sl-content-width: 55rem;
+  --sl-sidebar-width: 15rem;
+}
+
+/* Left-justify all content below the hero */
+.sl-markdown-content {
+  text-align: left;
 }
 
 /* IntelliKit title: "Intelli" in blue, "Kit" in red */
