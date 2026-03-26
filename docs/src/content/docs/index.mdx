@@ -15,16 +15,6 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Install
-
-```bash
-# Install all tools
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
-
-# Install agent skills (Cursor, Claude, Codex, GitHub Copilot)
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
-```
-
 ## What's in the box
 
 IntelliKit is a set of Python tools for AMD-focused performance and validation. The stack targets GPUs through ROCm, turning hardware counters, traces, and dispatch data into clean APIs you can use from Python, scripts, MCP clients, or AI coding assistants.
@@ -52,6 +42,16 @@ IntelliKit is a set of Python tools for AMD-focused performance and validation. 
     **CPU** — MCP bridge to AMD uProf for host-side CPU hotspot analysis.
   </Card>
 </CardGrid>
+
+## Install
+
+```bash
+# Install all tools
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
+
+# Install agent skills (Cursor, Claude, Codex, GitHub Copilot)
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
+```
 
 ## The workflow
 
