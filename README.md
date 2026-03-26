@@ -6,6 +6,10 @@
 
 **Agent-first tooling for AMD hardware**
 
+<a href="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml"><img src="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml/badge.svg" alt="Intellikit Pytest"></a>
+<a href="https://amdresearch.github.io/intellikit"><img src="https://img.shields.io/badge/docs-live-blue" alt="Docs"></a>
+<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+
 </div>
 
 IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
