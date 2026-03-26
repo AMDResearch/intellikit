@@ -308,7 +308,7 @@ class TestHsacoReproducer:
 class TestTritonReproducer:
     """Tests for Triton reproducer generation."""
 
-    def _make_triton_capture(self, tmp_path):
+    def _make_triton_capture(self, tmp_path, extra_args=None):
         """Create a capture dir with legacy metadata.json for Triton."""
         cap = tmp_path / "capture"
         cap.mkdir()
@@ -316,7 +316,7 @@ class TestTritonReproducer:
             "kernel_name": "vector_add_kernel",
             "grid": {"x": 4, "y": 1, "z": 1},
             "block": {"x": 1024, "y": 1, "z": 1},
-            "args": [],
+            "args": extra_args or [],
         }
         (cap / "metadata.json").write_text(json.dumps(meta))
         return str(cap)
@@ -358,3 +358,106 @@ class TestTritonReproducer:
         assert "from sample_triton_kernel import vector_add_kernel" in content
         assert "_kernel[grid]" in content
         assert "_kernel = vector_add_kernel" in content
+
+    def test_package_path_generates_standalone_module(self, tmp_path):
+        """When the kernel is inside a package, a standalone module should be
+        generated instead of copying the whole package directory."""
+        # Build a fake vLLM-style package with module-level side effects
+        pkg_dir = tmp_path / "src" / "fused_moe"
+        pkg_dir.mkdir(parents=True)
+        (pkg_dir / "__init__.py").write_text("")
+        kernel_file = pkg_dir / "fused_moe.py"
+        kernel_file.write_text(
+            "import triton\n"
+            "import triton.language as tl\n"
+            "\n"
+            "# Side-effect that must NOT run in the reproducer\n"
+            "from some_framework import register_op  # noqa\n"
+            "register_op('my_op')  # noqa\n"
+            "\n"
+            "@triton.jit\n"
+            "def _write_zeros(out_ptr, N: tl.constexpr):\n"
+            "    pid = tl.program_id(0)\n"
+            "    tl.store(out_ptr + pid, 0.0)\n"
+            "\n"
+            "@triton.jit\n"
+            "def fused_moe_kernel(a_ptr, b_ptr, N: tl.constexpr):\n"
+            "    pid = tl.program_id(0)\n"
+            "    _write_zeros(b_ptr, N)\n"
+        )
+
+        cap = self._make_triton_capture(tmp_path)
+        output = str(tmp_path / "repro")
+
+        ks = KernelSource(
+            language="triton",
+            kernel_name="fused_moe_kernel",
+            main_file=str(kernel_file),
+            source_files=[str(kernel_file)],
+            kernel_function="fused_moe_kernel",
+        )
+
+        generate_triton_reproducer(cap, ks, output)
+
+        # A standalone module should have been generated — NOT the package dir
+        assert os.path.exists(os.path.join(output, "standalone_fused_moe.py"))
+        assert not os.path.isdir(os.path.join(output, "fused_moe"))
+
+        standalone = Path(os.path.join(output, "standalone_fused_moe.py")).read_text()
+        assert "fused_moe_kernel" in standalone
+        assert "_write_zeros" in standalone
+        assert "import triton" in standalone
+        # The framework side-effect import must be absent
+        assert "some_framework" not in standalone
+        assert "register_op" not in standalone
+
+        repro = Path(os.path.join(output, "reproducer.py")).read_text()
+        assert "from standalone_fused_moe import fused_moe_kernel" in repro
+
+    def test_reproducer_uses_strides_when_present(self, tmp_path):
+        """When metadata contains strides, load_tensor should use as_strided."""
+        cap_dir = tmp_path / "capture"
+        cap_dir.mkdir()
+        # Create a dummy binary file for the tensor arg
+        import struct
+        dummy_data = struct.pack("16f", *range(16))
+        (cap_dir / "arg_0.bin").write_bytes(dummy_data)
+
+        meta = {
+            "kernel_name": "vector_add_kernel",
+            "grid": {"x": 1, "y": 1, "z": 1},
+            "block": {"x": 16, "y": 1, "z": 1},
+            "args": [
+                {
+                    "index": 0,
+                    "name": "a_ptr",
+                    "is_pointer": True,
+                    "is_const": False,
+                    "is_autotune_config": False,
+                    "file": "arg_0.bin",
+                    "ref_output_file": "ref_output_0.bin",
+                    "buffer_size": 64,
+                    "shape": [2, 4],
+                    "strides": [8, 1],
+                    "storage_offset": 0,
+                    "torch_dtype": "torch.float32",
+                }
+            ],
+        }
+        (cap_dir / "metadata.json").write_text(json.dumps(meta))
+
+        output = str(tmp_path / "repro")
+        ks = KernelSource(
+            language="triton",
+            kernel_name="vector_add_kernel",
+            main_file=str(FIXTURES / "sample_triton_kernel.py"),
+            source_files=[str(FIXTURES / "sample_triton_kernel.py")],
+            kernel_function="vector_add_kernel",
+        )
+
+        generate_triton_reproducer(str(cap_dir), ks, output)
+
+        repro = Path(os.path.join(output, "reproducer.py")).read_text()
+        assert "strides=[8, 1]" in repro
+        assert "storage_offset=0" in repro
+        assert "as_strided" in repro
