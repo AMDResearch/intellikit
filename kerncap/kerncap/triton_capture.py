@@ -159,16 +159,20 @@ _CAPTURE_HOOK = textwrap.dedent('''\
 
         Unlike _save_tensor, this does NOT call .contiguous(), so non-standard
         strides (e.g. padded row layouts) are preserved in the on-disk bytes.
-        The storage is moved to CPU first; the caller must record tensor.stride()
-        and tensor.storage_offset() in metadata so the reproducer can reconstruct
-        the original view via torch.as_strided.
+
+        We view the GPU storage as a flat uint8 tensor and copy THAT to CPU,
+        rather than calling tensor.cpu() which creates a contiguous copy and
+        discards the padded layout.  The caller must record tensor.stride()
+        and tensor.storage_offset() in metadata so the reproducer can
+        reconstruct the original view via torch.as_strided.
         """
         import torch
-        cpu_tensor = tensor.detach().cpu()
-        storage = cpu_tensor.untyped_storage()
-        flat = torch.empty(storage.nbytes(), dtype=torch.uint8)
-        flat.set_(storage)
-        flat.numpy().tofile(filepath)
+        storage = tensor.detach().untyped_storage()
+        flat_gpu = torch.empty(storage.nbytes(), dtype=torch.uint8,
+                               device=tensor.device)
+        flat_gpu.set_(storage)
+        flat_cpu = flat_gpu.cpu()
+        flat_cpu.numpy().tofile(filepath)
 
     def _save_tensor(tensor, filepath):
         """Save a tensor's logical values as a contiguous binary file.
