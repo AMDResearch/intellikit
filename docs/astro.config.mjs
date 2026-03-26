@@ -3,7 +3,7 @@ import starlight from "@astrojs/starlight";
 
 export default defineConfig({
   site: "https://amdresearch.github.io",
-  base: "/IntelliKit",
+  base: "/intellikit",
   integrations: [
     starlight({
       title: "IntelliKit",
