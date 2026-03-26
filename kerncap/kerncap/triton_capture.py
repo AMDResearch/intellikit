@@ -154,8 +154,27 @@ _CAPTURE_HOOK = textwrap.dedent('''\
         return grid + (1,) * max(0, 3 - len(grid))
 
 
+    def _save_tensor_storage(tensor, filepath):
+        """Save a tensor's full underlying storage to preserve stride layout.
+
+        Unlike _save_tensor, this does NOT call .contiguous(), so non-standard
+        strides (e.g. padded row layouts) are preserved in the on-disk bytes.
+        The storage is moved to CPU first; the caller must record tensor.stride()
+        and tensor.storage_offset() in metadata so the reproducer can reconstruct
+        the original view via torch.as_strided.
+        """
+        import torch
+        import numpy as np
+        cpu_tensor = tensor.detach().cpu()
+        storage = cpu_tensor.untyped_storage()
+        raw = np.frombuffer(bytes(storage), dtype=np.uint8).copy()
+        raw.tofile(filepath)
+
     def _save_tensor(tensor, filepath):
-        """Save a tensor to a raw binary file."""
+        """Save a tensor's logical values as a contiguous binary file.
+
+        Used for reference outputs where we compare logical values, not layouts.
+        """
         import torch
         cpu_tensor = tensor.detach().cpu().contiguous()
         if cpu_tensor.dtype == torch.bfloat16:
@@ -204,7 +223,7 @@ _CAPTURE_HOOK = textwrap.dedent('''\
             if isinstance(val, torch.Tensor):
                 filename = f"arg_{i}.bin"
                 filepath = os.path.join(_output_dir, filename)
-                _save_tensor(val, filepath)
+                _save_tensor_storage(val, filepath)
 
                 metadata["args"].append({
                     "index": i,
@@ -216,6 +235,8 @@ _CAPTURE_HOOK = textwrap.dedent('''\
                     "ref_output_file": f"ref_output_{i}.bin",
                     "buffer_size": val.nelement() * val.element_size(),
                     "shape": list(val.shape),
+                    "strides": list(val.stride()),
+                    "storage_offset": val.storage_offset(),
                     "torch_dtype": str(val.dtype),
                 })
                 tensor_args.append((i, name, val))
