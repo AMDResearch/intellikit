@@ -36,3 +36,44 @@
   );
   border-bottom: 1px solid var(--sl-color-gray-5);
 }
+
+/* Center hero content and reduce vertical space */
+.content-panel:has(.hero),
+[data-page-title] .hero,
+.hero {
+  text-align: center;
+  padding: 0.5rem 1.5rem !important;
+}
+
+.hero .stack {
+  align-items: center;
+  gap: 0.25rem;
+  padding-block: 0.25rem;
+}
+
+.hero .copy {
+  text-align: center;
+  align-items: center;
+}
+
+.hero .copy > * {
+  max-width: 100%;
+}
+
+.hero .copy .tagline {
+  white-space: nowrap;
+}
+
+.hero .actions {
+  justify-content: center;
+}
+
+/* IntelliKit title: "Intelli" in blue, "Kit" in red */
+.hero h1#_top {
+  background: linear-gradient(90deg, #4a9eed 7ch, #ed1c24 7ch);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  width: fit-content;
+  margin-inline: auto;
+}
