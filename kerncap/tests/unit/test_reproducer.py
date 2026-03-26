@@ -414,6 +414,46 @@ class TestTritonReproducer:
         repro = Path(os.path.join(output, "reproducer.py")).read_text()
         assert "from standalone_fused_moe import fused_moe_kernel" in repro
 
+    def test_standalone_extracts_imports_inside_try_except(self, tmp_path):
+        """Triton imports wrapped in try/except must be captured."""
+        pkg_dir = tmp_path / "src" / "fused_moe"
+        pkg_dir.mkdir(parents=True)
+        (pkg_dir / "__init__.py").write_text("")
+        kernel_file = pkg_dir / "fused_moe.py"
+        kernel_file.write_text(
+            "import functools\n"
+            "\n"
+            "try:\n"
+            "    import triton\n"
+            "    import triton.language as tl\n"
+            "except ImportError:\n"
+            "    HAS_TRITON = False\n"
+            "\n"
+            "@triton.jit\n"
+            "def fused_moe_kernel(a_ptr, N: tl.constexpr):\n"
+            "    pid = tl.program_id(0)\n"
+            "    tl.store(a_ptr + pid, 0.0)\n"
+        )
+
+        cap = self._make_triton_capture(tmp_path)
+        output = str(tmp_path / "repro")
+
+        ks = KernelSource(
+            language="triton",
+            kernel_name="fused_moe_kernel",
+            main_file=str(kernel_file),
+            source_files=[str(kernel_file)],
+            kernel_function="fused_moe_kernel",
+        )
+
+        generate_triton_reproducer(cap, ks, output)
+
+        standalone = Path(os.path.join(output, "standalone_fused_moe.py")).read_text()
+        assert "import triton" in standalone
+        assert "triton.language" in standalone
+        assert "fused_moe_kernel" in standalone
+        assert "import functools" in standalone
+
     def test_reproducer_uses_strides_when_present(self, tmp_path):
         """When metadata contains strides, load_tensor should use as_strided."""
         cap_dir = tmp_path / "capture"

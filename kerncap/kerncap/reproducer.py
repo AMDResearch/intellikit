@@ -344,12 +344,15 @@ def _extract_triton_kernel_standalone(
                 break
 
     # ------------------------------------------------------------------ #
-    # Collect safe (triton / stdlib) imports from module-level nodes only. #
+    # Collect safe (triton / stdlib) imports from the entire AST.          #
+    # ast.walk finds imports inside try/except, if-guards, etc. that a     #
+    # top-level-only scan would miss (e.g. vLLM wraps triton imports in    #
+    # try/except blocks).                                                  #
     # ------------------------------------------------------------------ #
     import_lines: List[str] = []
     seen_imports: set = set()
 
-    for node in tree.body:
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             safe = any(
                 alias.name.split(".")[0] in _TRITON_SAFE_IMPORT_ROOTS
@@ -367,9 +370,17 @@ def _extract_triton_kernel_standalone(
             continue
 
         seg = ast.get_source_segment(source, node)
+        if seg is None:
+            seg = ast.unparse(node)
         if seg and seg not in seen_imports:
             seen_imports.add(seg)
             import_lines.append(seg)
+
+    # Every standalone Triton kernel file needs these unconditionally.
+    if "import triton" not in seen_imports:
+        import_lines.insert(0, "import triton")
+    if not any("triton.language" in s for s in seen_imports):
+        import_lines.insert(1, "import triton.language as tl")
 
     # ------------------------------------------------------------------ #
     # Build and write the standalone file.                                 #
