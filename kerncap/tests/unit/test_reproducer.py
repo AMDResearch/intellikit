@@ -400,10 +400,10 @@ class TestTritonReproducer:
         generate_triton_reproducer(cap, ks, output)
 
         # A standalone module should have been generated — NOT the package dir
-        assert os.path.exists(os.path.join(output, "standalone_fused_moe.py"))
+        assert os.path.exists(os.path.join(output, "kernel_variant.py"))
         assert not os.path.isdir(os.path.join(output, "fused_moe"))
 
-        standalone = Path(os.path.join(output, "standalone_fused_moe.py")).read_text()
+        standalone = Path(os.path.join(output, "kernel_variant.py")).read_text()
         assert "fused_moe_kernel" in standalone
         assert "_write_zeros" in standalone
         assert "import triton" in standalone
@@ -412,7 +412,7 @@ class TestTritonReproducer:
         assert "register_op" not in standalone
 
         repro = Path(os.path.join(output, "reproducer.py")).read_text()
-        assert "from standalone_fused_moe import fused_moe_kernel" in repro
+        assert "from kernel_variant import fused_moe_kernel" in repro
 
     def test_standalone_extracts_imports_inside_try_except(self, tmp_path):
         """Triton imports wrapped in try/except must be captured."""
@@ -448,7 +448,7 @@ class TestTritonReproducer:
 
         generate_triton_reproducer(cap, ks, output)
 
-        standalone = Path(os.path.join(output, "standalone_fused_moe.py")).read_text()
+        standalone = Path(os.path.join(output, "kernel_variant.py")).read_text()
         assert "import triton" in standalone
         assert "triton.language" in standalone
         assert "fused_moe_kernel" in standalone

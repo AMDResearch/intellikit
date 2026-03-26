@@ -452,15 +452,14 @@ def generate_triton_reproducer(
     # that collide with the already-registered ops from the editable install.
     pkg_init = os.path.join(main_dir, "__init__.py")
     if os.path.isfile(pkg_init):
-        standalone_name = f"standalone_{Path(main_file).stem}"
-        standalone_path = os.path.join(output_dir, f"{standalone_name}.py")
+        variant_path = os.path.join(output_dir, "kernel_variant.py")
         _extract_triton_kernel_standalone(
-            main_file, kernel_source.kernel_function, standalone_path,
+            main_file, kernel_source.kernel_function, variant_path,
         )
-        kernel_module = standalone_name
+        kernel_module = "kernel_variant"
         logger.info(
             "Extracted standalone kernel module: %s (avoided full package copy)",
-            standalone_path,
+            variant_path,
         )
     else:
         # No package structure: copy individual files to flat directory.
