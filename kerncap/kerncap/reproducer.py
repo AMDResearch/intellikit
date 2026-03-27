@@ -355,6 +355,13 @@ def _extract_triton_kernel_standalone(
                 triton_funcs.append(node)
                 break
 
+    if not any(f.name == kernel_function for f in triton_funcs):
+        found = [f.name for f in triton_funcs]
+        raise ValueError(
+            f"Kernel function '{kernel_function}' not found among Triton-decorated "
+            f"functions in {source_file}. Found: {found}"
+        )
+
     # ------------------------------------------------------------------ #
     # Collect safe (triton / stdlib) imports from the entire AST.          #
     # ast.walk finds imports inside try/except, if-guards, etc. that a     #
