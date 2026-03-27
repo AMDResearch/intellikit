@@ -366,18 +366,28 @@ def _extract_triton_kernel_standalone(
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            safe = any(
-                alias.name.split(".")[0] in _TRITON_SAFE_IMPORT_ROOTS for alias in node.names
-            )
+            safe_aliases = [
+                alias
+                for alias in node.names
+                if alias.name.split(".")[0] in _TRITON_SAFE_IMPORT_ROOTS
+            ]
+            if not safe_aliases:
+                continue
+            for alias in safe_aliases:
+                seg = f"import {alias.name}"
+                if alias.asname:
+                    seg += f" as {alias.asname}"
+                if seg not in seen_imports:
+                    seen_imports.add(seg)
+                    import_lines.append(seg)
+            continue
         elif isinstance(node, ast.ImportFrom):
             if node.level and node.level > 0:
                 continue  # skip relative imports
             root = (node.module or "").split(".")[0]
-            safe = root in _TRITON_SAFE_IMPORT_ROOTS
+            if root not in _TRITON_SAFE_IMPORT_ROOTS:
+                continue
         else:
-            continue
-
-        if not safe:
             continue
 
         seg = ast.get_source_segment(source, node)
