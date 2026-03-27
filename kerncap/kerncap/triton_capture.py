@@ -457,11 +457,14 @@ def run_triton_capture(
 
         meta_file = os.path.join(output_dir, "metadata.json")
         if not os.path.exists(meta_file):
+            tail = 2000
+            stdout_tail = proc.stdout[-tail:] if proc.stdout else ""
+            stderr_tail = proc.stderr[-tail:] if proc.stderr else ""
             raise RuntimeError(
                 f"Triton capture did not produce metadata.json in "
                 f"{output_dir}.\n"
-                f"stdout: {proc.stdout}\n"
-                f"stderr: {proc.stderr}"
+                f"stdout (last {tail} chars): {stdout_tail}\n"
+                f"stderr (last {tail} chars): {stderr_tail}"
             )
 
         return output_dir
