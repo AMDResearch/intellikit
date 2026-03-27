@@ -343,7 +343,7 @@ def _extract_triton_kernel_standalone(
             start = func_node.decorator_list[0].lineno - 1
         else:
             start = func_node.lineno - 1
-        end = func_node.end_lineno  # already 1-indexed, exclusive as slice end
+        end = func_node.end_lineno  # 1-indexed inclusive; works as 0-indexed exclusive slice bound
         return "\n".join(source_lines[start:end])
 
     triton_funcs: List[ast.FunctionDef] = []
