@@ -214,18 +214,19 @@ class GFX90aBackend(CounterBackend):
         return (TCC_HIT_sum / total) * 100 if total > 0 else 0.0
 
     @metric("memory.l1_hit_rate")
-    def _l1_hit_rate(self, TCP_TCC_READ_REQ_sum, TCP_TOTAL_CACHE_ACCESSES_sum):
+    def _l1_hit_rate(self, TCP_TCC_READ_REQ_sum, TCP_TCC_WRITE_REQ_sum, TCP_TOTAL_CACHE_ACCESSES_sum):
         """
         L1 cache hit rate as percentage
 
-        Formula: ((total_accesses - l1_misses) / total_accesses) * 100
-        L1 misses go to L2 (TCC), so misses = TCP_TCC_READ_REQ
+        Formula: ((total_accesses - read_misses - write_misses) / total_accesses) * 100
+        L1 misses go to L2 (TCC): reads via TCP_TCC_READ_REQ, writes via TCP_TCC_WRITE_REQ
         """
         if TCP_TOTAL_CACHE_ACCESSES_sum == 0:
             return 0.0
 
-        l1_hits = TCP_TOTAL_CACHE_ACCESSES_sum - TCP_TCC_READ_REQ_sum
-        return (l1_hits / TCP_TOTAL_CACHE_ACCESSES_sum) * 100
+        l1_misses = TCP_TCC_READ_REQ_sum + TCP_TCC_WRITE_REQ_sum
+        l1_hits = TCP_TOTAL_CACHE_ACCESSES_sum - l1_misses
+        return max((l1_hits / TCP_TOTAL_CACHE_ACCESSES_sum) * 100, 0.0)
 
     @metric("memory.l2_bandwidth")
     def _l2_bandwidth(self, TCC_HIT_sum, TCC_MISS_sum, GRBM_GUI_ACTIVE):
@@ -355,12 +356,13 @@ class GFX90aBackend(CounterBackend):
         """
         Total floating-point operations performed by the kernel
 
-        Formula: 64 * (FP16 + FP32 + FP64) + 512 * MFMA
-        - 64 operations per wave (wavefront size = 64)
+        Formula: wavefront_size * (FP16 + FP32 + FP64) + 512 * MFMA
+        - wavefront_size operations per wave (from device_specs)
         - FMA counts as 2 operations (multiply + add)
         - MFMA instructions produce 512 operations per instruction
         """
-        fops = 64 * (
+        ws = self.device_specs.wavefront_size
+        fops = ws * (
             (
                 SQ_INSTS_VALU_ADD_F16
                 + SQ_INSTS_VALU_MUL_F16
@@ -415,7 +417,8 @@ class GFX90aBackend(CounterBackend):
         Duration is set by the base class from profiler timestamps before calling.
         """
         # Calculate total FLOPS (same as compute.total_flops)
-        fops = 64 * (
+        ws = self.device_specs.wavefront_size
+        fops = ws * (
             (
                 SQ_INSTS_VALU_ADD_F16
                 + SQ_INSTS_VALU_MUL_F16
@@ -480,7 +483,8 @@ class GFX90aBackend(CounterBackend):
         Formula: total_flops / hbm_bytes
         """
         # Calculate total FLOPS
-        fops = 64 * (
+        ws = self.device_specs.wavefront_size
+        fops = ws * (
             (
                 SQ_INSTS_VALU_ADD_F16
                 + SQ_INSTS_VALU_MUL_F16
@@ -543,7 +547,8 @@ class GFX90aBackend(CounterBackend):
         Formula: total_flops / l2_bytes
         """
         # Calculate total FLOPS
-        fops = 64 * (
+        ws = self.device_specs.wavefront_size
+        fops = ws * (
             (
                 SQ_INSTS_VALU_ADD_F16
                 + SQ_INSTS_VALU_MUL_F16
@@ -604,7 +609,8 @@ class GFX90aBackend(CounterBackend):
         Formula: total_flops / l1_bytes
         """
         # Calculate total FLOPS
-        fops = 64 * (
+        ws = self.device_specs.wavefront_size
+        fops = ws * (
             (
                 SQ_INSTS_VALU_ADD_F16
                 + SQ_INSTS_VALU_MUL_F16

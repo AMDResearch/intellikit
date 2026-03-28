@@ -664,14 +664,15 @@ class TestCopyPattern:
         assert result == 640000
 
     def test_l1_hit_rate_with_writes(self, backend):
-        """Copy kernel: L1 hit rate only accounts for read misses"""
+        """Copy kernel: L1 hit rate accounts for read AND write misses"""
         backend._raw_data = {
             "TCP_TCC_READ_REQ_sum": 250,
+            "TCP_TCC_WRITE_REQ_sum": 250,
             "TCP_TOTAL_CACHE_ACCESSES_sum": 1000,
         }
         result = backend._l1_hit_rate()
-        # (1000 - 250) / 1000 * 100 = 75%
-        assert result == 75.0
+        # (1000 - 250 - 250) / 1000 * 100 = 50%
+        assert result == 50.0
 
     def test_bandwidth_utilization(self, backend):
         """Bandwidth utilization = actual_bw / peak_bw * 100"""
@@ -760,13 +761,14 @@ class TestL1ResidentPattern:
 
     def test_high_l1_hit_rate(self, backend):
         """8KB per WG in L1, iterated 200 times: ~99.5% hit rate"""
-        # First pass misses, remaining 199 hit
+        # First pass misses, remaining 199 hit. Read-only so write misses = 0.
         backend._raw_data = {
             "TCP_TCC_READ_REQ_sum": 100,     # misses (first pass only)
+            "TCP_TCC_WRITE_REQ_sum": 0,
             "TCP_TOTAL_CACHE_ACCESSES_sum": 20000,  # 200 passes * 100 accesses
         }
         result = backend._l1_hit_rate()
-        # (20000 - 100) / 20000 * 100 = 99.5%
+        # (20000 - 100 - 0) / 20000 * 100 = 99.5%
         assert result == 99.5
 
 
