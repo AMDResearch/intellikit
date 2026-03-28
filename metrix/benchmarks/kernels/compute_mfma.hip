@@ -12,17 +12,13 @@
 
 #include "common.h"
 
-// Use the compiler intrinsic instead of raw inline asm.
-// __builtin_amdgcn_mfma_f32_16x16x4f32(float A, float B, float4 C, int cbsz, int abid, int blgp)
-// Returns float4 (4 accumulators per lane, 64 lanes = 16x16 output matrix)
-// Each call = 16*16*2 = 512 FP32 ops
-
-typedef float float4 __attribute__((ext_vector_type(4)));
+// The MFMA intrinsic uses clang's native vector type, not HIP's float4
+typedef float v4f32 __attribute__((ext_vector_type(4)));
 
 __global__ void mfma_kernel(float* __restrict__ out, int iterations) {
     float a = 1.0f;
     float b = 1.0f;
-    float4 c = {0.0f, 0.0f, 0.0f, 0.0f};
+    v4f32 c = {0.0f, 0.0f, 0.0f, 0.0f};
 
     #pragma unroll 1
     for (int i = 0; i < iterations; i++) {
