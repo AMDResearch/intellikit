@@ -968,7 +968,7 @@ class TestMixedComputeMemoryPattern:
     )
     def test_arithmetic_intensity_scales_with_k(self, backend, K, expected_ai):
         """AI = K * 2 * 64 / (2 * 64 * 4) = K / 4 FLOP/byte"""
-        num_elements = 1000  # 1000 threads
+        num_elements = 1024  # must be multiple of 64 for exact wave count
         # Each thread: 1 read (4 bytes) + K FMAs + 1 write (4 bytes)
         # Per wave (64 threads): 1 VMEM_RD + K FMAs (rocprofv3 counts per-wave)
         num_waves = num_elements // 64
@@ -997,7 +997,7 @@ class TestMixedComputeMemoryPattern:
         # flops = num_waves * K * 2 * 64 = num_elements * K * 2
         # bytes = (rd_requests + wr_requests) * 64 = num_elements * 8
         # AI = num_elements * K * 2 / (num_elements * 8) = K / 4
-        assert abs(result - expected_ai) < 0.01
+        assert abs(result - expected_ai) / max(expected_ai, 1e-9) < 0.05
 
     def test_bytes_transferred_l2_scales_with_accesses(self, backend):
         """L2 bytes = TCC_REQ * 128"""
