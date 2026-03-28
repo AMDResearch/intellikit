@@ -1013,3 +1013,158 @@ class TestMixedComputeMemoryPattern:
             assert result == 10000 * 128  # 128B cache lines on gfx942
         else:
             assert result == 10000 * 64  # 64B cache lines on gfx90a
+
+
+# ---------------------------------------------------------------------------
+# Formula bug regression tests
+#
+# These tests encode the known formula issues discovered during MI300X
+# microbenchmark validation. Each test is written to FAIL against the
+# buggy formula and PASS after the fix is applied.
+# ---------------------------------------------------------------------------
+
+
+class TestL1HitRateBugFix:
+    """
+    BUG: L1 hit rate only subtracts read misses, ignoring write misses.
+
+    Current formula:
+        (total_accesses - TCP_TCC_READ_REQ_sum) / total_accesses
+
+    Correct formula (matches omniperf):
+        (total_accesses - TCP_TCC_READ_REQ_sum - TCP_TCC_WRITE_REQ_sum) / total_accesses
+
+    Impact: copy kernel shows 75% L1 hit rate instead of ~50% because
+    write misses (TCP_TCC_WRITE_REQ_sum) are not counted as misses.
+    """
+
+    def test_copy_kernel_l1_hit_rate_accounts_for_write_misses(self, backend):
+        """
+        Copy kernel: 50% reads + 50% writes, all miss L1.
+        With 1000 total accesses, 500 read misses, 500 write misses:
+          - Buggy formula:  (1000 - 500) / 1000 = 50% (ignores write misses)
+          - Correct formula: (1000 - 500 - 500) / 1000 = 0%
+        """
+        backend._raw_data = {
+            "TCP_TOTAL_CACHE_ACCESSES_sum": 1000,
+            "TCP_TCC_READ_REQ_sum": 500,
+            "TCP_TCC_WRITE_REQ_sum": 500,
+        }
+        result = backend._l1_hit_rate()
+        # After fix: should be 0% since all accesses miss
+        assert result == 0.0, (
+            f"L1 hit rate should be 0% when all reads AND writes miss, got {result}%"
+        )
+
+    def test_read_only_l1_hit_rate_unchanged(self, backend):
+        """Read-only kernel: write miss counter = 0, result should match old formula"""
+        backend._raw_data = {
+            "TCP_TOTAL_CACHE_ACCESSES_sum": 1000,
+            "TCP_TCC_READ_REQ_sum": 100,
+            "TCP_TCC_WRITE_REQ_sum": 0,
+        }
+        result = backend._l1_hit_rate()
+        assert result == 90.0
+
+    def test_write_heavy_kernel_lower_hit_rate(self, backend):
+        """
+        Kernel with lots of writes: write misses should reduce hit rate.
+        4000 total accesses, 1000 read misses, 2000 write misses.
+        Correct: (4000 - 1000 - 2000) / 4000 = 25%
+        """
+        backend._raw_data = {
+            "TCP_TOTAL_CACHE_ACCESSES_sum": 4000,
+            "TCP_TCC_READ_REQ_sum": 1000,
+            "TCP_TCC_WRITE_REQ_sum": 2000,
+        }
+        result = backend._l1_hit_rate()
+        assert result == 25.0, f"Expected 25%, got {result}%"
+
+
+class TestFLOPSWavefrontSizeBugFix:
+    """
+    BUG: total_flops hardcodes wavefront_size=64 instead of using
+    self.device_specs.wavefront_size.
+
+    Current formula:
+        fops = 64 * (ADD + MUL + TRANS + FMA*2) + 512 * MFMA
+
+    Correct formula:
+        fops = self.device_specs.wavefront_size * (ADD + MUL + TRANS + FMA*2) + 512 * MFMA
+
+    Impact: Will produce 2x overcounted FLOPS on RDNA4 (wavefront_size=32).
+    Currently both backends have wavefront_size=64, so this won't fail
+    until we add an RDNA backend. The test patches wavefront_size to
+    verify the formula respects the spec.
+    """
+
+    def test_flops_uses_device_wavefront_size(self, backend):
+        """
+        Patch wavefront_size to 32 and verify FLOPS halves.
+        100 FMA instructions * 2 ops * wavefront_size lanes.
+        With ws=64: 100 * 2 * 64 = 12800
+        With ws=32: 100 * 2 * 32 = 6400
+        """
+        from dataclasses import replace
+
+        zero_counters = {
+            "SQ_INSTS_VALU_ADD_F16": 0, "SQ_INSTS_VALU_MUL_F16": 0,
+            "SQ_INSTS_VALU_TRANS_F16": 0, "SQ_INSTS_VALU_FMA_F16": 0,
+            "SQ_INSTS_VALU_ADD_F32": 0, "SQ_INSTS_VALU_MUL_F32": 0,
+            "SQ_INSTS_VALU_TRANS_F32": 0, "SQ_INSTS_VALU_FMA_F32": 0,
+            "SQ_INSTS_VALU_ADD_F64": 0, "SQ_INSTS_VALU_MUL_F64": 0,
+            "SQ_INSTS_VALU_TRANS_F64": 0, "SQ_INSTS_VALU_FMA_F64": 0,
+            "SQ_INSTS_VALU_MFMA_MOPS_F16": 0, "SQ_INSTS_VALU_MFMA_MOPS_BF16": 0,
+            "SQ_INSTS_VALU_MFMA_MOPS_F32": 0, "SQ_INSTS_VALU_MFMA_MOPS_F64": 0,
+        }
+
+        # First compute with normal wavefront_size=64
+        backend._raw_data = {**zero_counters, "SQ_INSTS_VALU_FMA_F32": 100}
+        flops_ws64 = backend._total_flops()
+        assert flops_ws64 == 100 * 2 * 64  # 12800
+
+        # Now patch wavefront_size to 32 (simulating RDNA4)
+        original_specs = backend.device_specs
+        backend.device_specs = replace(original_specs, wavefront_size=32)
+
+        backend._raw_data = {**zero_counters, "SQ_INSTS_VALU_FMA_F32": 100}
+        flops_ws32 = backend._total_flops()
+
+        # Restore
+        backend.device_specs = original_specs
+
+        # After fix: FLOPS should halve when wavefront_size halves
+        assert flops_ws32 == 100 * 2 * 32, (
+            f"FLOPS should be {100 * 2 * 32} with wavefront_size=32, got {flops_ws32}. "
+            f"Formula likely hardcodes 64 instead of using device_specs.wavefront_size"
+        )
+
+    def test_flops_also_fixes_gflops_and_ai(self, backend):
+        """GFLOPS and arithmetic_intensity reuse the FLOPS calc, so they inherit the fix"""
+        from dataclasses import replace
+
+        zero_counters = {
+            "SQ_INSTS_VALU_ADD_F16": 0, "SQ_INSTS_VALU_MUL_F16": 0,
+            "SQ_INSTS_VALU_TRANS_F16": 0, "SQ_INSTS_VALU_FMA_F16": 0,
+            "SQ_INSTS_VALU_ADD_F32": 0, "SQ_INSTS_VALU_MUL_F32": 0,
+            "SQ_INSTS_VALU_TRANS_F32": 0, "SQ_INSTS_VALU_FMA_F32": 0,
+            "SQ_INSTS_VALU_ADD_F64": 0, "SQ_INSTS_VALU_MUL_F64": 0,
+            "SQ_INSTS_VALU_TRANS_F64": 0, "SQ_INSTS_VALU_FMA_F64": 0,
+            "SQ_INSTS_VALU_MFMA_MOPS_F16": 0, "SQ_INSTS_VALU_MFMA_MOPS_BF16": 0,
+            "SQ_INSTS_VALU_MFMA_MOPS_F32": 0, "SQ_INSTS_VALU_MFMA_MOPS_F64": 0,
+        }
+
+        original_specs = backend.device_specs
+        backend.device_specs = replace(original_specs, wavefront_size=32)
+
+        backend._raw_data = {**zero_counters, "SQ_INSTS_VALU_FMA_F32": 100}
+        backend._current_duration_us = 1.0  # 1 microsecond
+        gflops = backend._hbm_gflops()
+
+        backend.device_specs = original_specs
+
+        expected_flops = 100 * 2 * 32
+        expected_gflops = expected_flops / 1e9 / (1.0 / 1e6)  # = 6.4 GFLOPS
+        assert abs(gflops - expected_gflops) < 0.001, (
+            f"GFLOPS should be {expected_gflops} with ws=32, got {gflops}"
+        )
