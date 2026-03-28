@@ -4,39 +4,29 @@
 // Benchmark 9: MFMA (Matrix Fused Multiply-Add) instructions.
 // Validates: SQ_INSTS_VALU_MFMA_MOPS_F32 contribution to compute.total_flops
 //
-// Design: Uses inline assembly to emit v_mfma_f32_16x16x4_f32 instructions.
+// Design: Uses __builtin_amdgcn_mfma_f32_16x16x4f32 intrinsic.
 //         Each MFMA instruction produces 512 FP32 operations (16*16*2).
 //         gfx942+ only.
-//
-// Fallback: If MFMA asm fails, uses a small GEMM via rocBLAS as alternative.
-//           For now, inline asm version targeting gfx942.
 //
 // Usage: compute_mfma [iterations]
 
 #include "common.h"
 
-// v_mfma_f32_16x16x4_f32: 16x16 output, 4 elements of K dimension
-// Each instruction: 16*16*2 = 512 FP32 ops (multiply + add for each output element)
-// Input: 4 floats per thread in A, 4 floats per thread in B
-// Output: 16 floats per thread (16x16 matrix spread across 64 threads)
+// Use the compiler intrinsic instead of raw inline asm.
+// __builtin_amdgcn_mfma_f32_16x16x4f32(float A, float B, float4 C, int cbsz, int abid, int blgp)
+// Returns float4 (4 accumulators per lane, 64 lanes = 16x16 output matrix)
+// Each call = 16*16*2 = 512 FP32 ops
+
+typedef float float4 __attribute__((ext_vector_type(4)));
 
 __global__ void mfma_kernel(float* __restrict__ out, int iterations) {
-    // Initialize accumulators and inputs in registers
     float a = 1.0f;
     float b = 1.0f;
-    float c[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float4 c = {0.0f, 0.0f, 0.0f, 0.0f};
 
     #pragma unroll 1
     for (int i = 0; i < iterations; i++) {
-        // v_mfma_f32_16x16x4_f32 : D[0:3] = A * B + C[0:3]
-        asm volatile(
-            "v_mfma_f32_16x16x4_f32 %0, %4, %5, %0\n"
-            "v_mfma_f32_16x16x4_f32 %1, %4, %5, %1\n"
-            "v_mfma_f32_16x16x4_f32 %2, %4, %5, %2\n"
-            "v_mfma_f32_16x16x4_f32 %3, %4, %5, %3\n"
-            : "+v"(c[0]), "+v"(c[1]), "+v"(c[2]), "+v"(c[3])
-            : "v"(a), "v"(b)
-        );
+        c = __builtin_amdgcn_mfma_f32_16x16x4f32(a, b, c, 0, 0, 0);
     }
 
     // Prevent dead-code elimination
@@ -59,11 +49,11 @@ int main(int argc, char** argv) {
                        d_out, iterations);
     HIP_CHECK(hipDeviceSynchronize());
 
-    // Each iteration: 4 MFMA instructions, each producing 512 ops
-    // Per wave: iterations * 4 MFMA instructions counted in SQ_INSTS_VALU_MFMA_MOPS_F32
+    // Each iteration: 1 MFMA instruction producing 512 ops
+    // Per wave: iterations MFMA instructions counted in SQ_INSTS_VALU_MFMA_MOPS_F32
     // total_flops formula: 512 * SQ_INSTS_VALU_MFMA_MOPS_F32
     size_t num_waves = total_threads / 64;
-    size_t mfma_per_wave = (size_t)iterations * 4;
+    size_t mfma_per_wave = (size_t)iterations;
     printf("mfma: %d iterations, %zu waves, %zu mfma_insts/wave\n",
            iterations, num_waves, mfma_per_wave);
     printf("  expected total_flops (mfma term) = %zu\n",
