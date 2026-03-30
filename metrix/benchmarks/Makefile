@@ -16,7 +16,7 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 $(BIN_DIR)/%: $(KERNEL_DIR)/%.hip $(KERNEL_DIR)/common.h | $(BIN_DIR)
-	$(HIPCC) $(CXXFLAGS) -I$(KERNEL_DIR) $< -o $@
+	$(HIPCC) $(CXXFLAGS) -I$(KERNEL_DIR) $< -o $@ || echo "WARNING: Failed to compile $<"
 
 clean:
 	rm -rf $(BIN_DIR)
