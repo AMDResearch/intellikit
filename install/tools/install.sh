@@ -7,7 +7,7 @@
 
 set -e
 
-ALL_TOOLS=(accordo kerncap linex metrix nexus rocm_mcp uprof_mcp)
+ALL_TOOLS=(accordo kerncap linex metrix nexus rocm_mcp samplex uprof_mcp)
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh"
 REPO_URL="https://github.com/AMDResearch/intellikit.git"
 REF="main"

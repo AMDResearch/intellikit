@@ -17,6 +17,7 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 | **linex** | Source-line profiling | Map cycle-level timing and stall analysis to source code lines (MCP-only) |
 | **metrix** | Hardware counter metrics | Profile GPU kernels with human-readable performance insights (CLI + MCP) |
 | **nexus** | HSA packet interception | Capture GPU kernel launches and memory operations (MCP-only) |
+| **samplex** | PC sampling profiling | Statistical instruction hotspots, stall reasons, issued vs stalled (CLI + MCP) |
 | **rocm_mcp** | ROCm MCP servers | LLM-accessible HIP compilation, docs, and system info |
 | **uprof_mcp** | uProf MCP server | LLM-accessible AMD uProf CPU profiling |
 
@@ -31,7 +32,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 #   ./install/tools/install.sh [--tools ...] [--pip-cmd ...] [--repo-url ...] [--ref ...] [--dry-run]
 
 # Editable installs for development (any subset; from repo root)
-pip install -e accordo/ -e kerncap/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
+pip install -e accordo/ -e kerncap/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e samplex/ -e uprof_mcp/
 
 # Install individual tools
 pip install -e metrix/
@@ -55,6 +56,7 @@ All main tools now have `tests/` directories with pytest-based test suites:
 - **linex**: `tests/` directory
 - **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (`unit`, `integration`, `e2e`, `slow`)
 - **nexus**: `tests/` directory
+- **samplex**: `tests/unit/` with unit tests (no GPU required)
 - **rocm_mcp**: `tests/` directory
 - **uprof_mcp**: `tests/` directory
 
@@ -109,6 +111,7 @@ Each tool is a standalone Python package with its own `pyproject.toml`:
 | **kerncap** | scikit-build-core (CMake), setuptools-scm | Kernel extraction and isolation, C++ HSA interception, CLI tool |
 | **linex** | setuptools, setuptools-scm | Source-level SQTT profiling (`src/` layout), MCP-only |
 | **metrix** | setuptools, setuptools-scm | Hardware counter profiling (`src/` layout), CLI + MCP, RDNA support |
+| **samplex** | setuptools, setuptools-scm | PC sampling profiling (`src/` layout), CLI + MCP |
 | **nexus** | scikit-build-core (CMake), setuptools-scm | HSA packet interception, C++ shared library, MCP-only |
 | **rocm_mcp** | setuptools | MCP servers for ROCm tools (`src/` layout) |
 | **uprof_mcp** | setuptools | MCP server for AMD uProf CPU profiling (`src/` layout) |
@@ -143,7 +146,7 @@ All MCP servers have been migrated to FastMCP (version 2.0.0+) for streamable HT
 - **Legacy MCP SDK**: Only accordo and kerncap still use `mcp[cli]` for compatibility
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
-- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `samplex-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
 
 ### Nexus C++ Integration
 
@@ -180,13 +183,14 @@ Not all tools follow the same directory structure:
 |------|--------|------------------|------------|-------|--------|-----|
 | **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skill/` | Yes |
 | **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skill/` | No |
+| **samplex** | `src/` layout | `samplex/src/samplex/` | N/A | `samplex/tests/` | `samplex/skill/` | Yes |
 | **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A | No |
 | **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | `uprof_mcp/tests/` | N/A | No |
 | **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` | Yes |
 | **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skill/` | Yes |
 | **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` | No |
 
-This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skill/` directory containing `SKILL.md` files for AI agent integration.
+This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`, `samplex`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skill/` directory containing `SKILL.md` files for AI agent integration.
 
 ## Dependency Management
 
@@ -208,7 +212,7 @@ This affects import paths and where to find source code. Tools with CLI support 
   - Editable install: `pip install -e <tool>/`
   - Non-editable install: `pip install ./<tool>/`
   - GitHub install: `pip install 'git+https://github.com/AMDResearch/intellikit.git@<sha>#subdirectory=<tool>'`
-- **Pytest testing** (`intellikit-pytest.yml`): Runs `pytest` for accordo, kerncap, metrix, nexus, linex, and uprof_mcp
+- **Pytest testing** (`intellikit-pytest.yml`): Runs `pytest` for accordo, kerncap, metrix, nexus, linex, samplex, and uprof_mcp
 - **Lint** (`lint.yml`): Runs `ruff check` and `ruff format` on changed files
 
 ### Linting Enforcement
@@ -242,6 +246,7 @@ kerncap-mcp = "kerncap.mcp.server:main"
 linex-mcp = "linex.mcp.server:main"
 metrix-mcp = "metrix.mcp.server:main"
 nexus-mcp = "nexus.mcp.server:main"
+samplex-mcp = "samplex.mcp.server:main"
 hip-compiler-mcp = "rocm_mcp.compile.hip_compiler_mcp:main"
 hip-docs-mcp = "rocm_mcp.doc.hip_docs_mcp:main"
 rocminfo-mcp = "rocm_mcp.sysinfo.rocminfo_mcp:main"
@@ -268,6 +273,7 @@ Default HTTP paths per server:
 | `linex-mcp` | `/linex` |
 | `metrix-mcp` | `/metrix` |
 | `nexus-mcp` | `/nexus` |
+| `samplex-mcp` | `/samplex` |
 | `uprof-profiler-mcp` | `/uprof_mcp` |
 | `hip-compiler-mcp` | `/rocm_mcp/hip_compiler` |
 | `hip-docs-mcp` | `/rocm_mcp/hip_docs` |
@@ -440,6 +446,7 @@ kerncap/skill/SKILL.md
 linex/skill/SKILL.md
 metrix/skill/SKILL.md
 nexus/skill/SKILL.md
+samplex/skill/SKILL.md
 
 # Install skills for AI agents using the install script
 ./install/skills/install.sh                    # local: ./.agents/skills/

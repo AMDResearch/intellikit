@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "samplex"
+dynamic = ["version"]
+description = "Samplex: GPU PC Sampling. Where is my kernel stuck? Statistical instruction-level profiling via rocprofv3 PC sampling."
+authors = [
+    { name = "Muhammad Awad", email = "muhaawad@amd.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pandas>=1.5.0",
+    "fastmcp>=2.0.0",
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Profiling",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/samplex"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/samplex"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/samplex/README.md"
+
+[project.scripts]
+samplex = "samplex.cli.main:main"
+samplex-mcp = "samplex.mcp.server:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+# ---- setuptools-scm versioning ----
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-date"
+fallback_version = "0.1.0"
+root = ".."
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ---- Ruff configuration ----
+[tool.ruff]
+extend = "../ruff.toml"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E701", "E731", "E741", "F841", "F401"]
