@@ -13,6 +13,7 @@ rocprofiler-sdk:
     # --- GPU utilization ---
 
     - name: compute.gpu_utilization
+      unit: Percent
       definitions:
         - expression: (GRBM_GUI_ACTIVE / GRBM_COUNT) * 100
           architectures: [gfx1201, gfx1151]
@@ -20,6 +21,7 @@ rocprofiler-sdk:
     # --- Cache hit rates ---
 
     - name: memory.l2_hit_rate
+      unit: Percent
       definitions:
         - expression: (TCC_HIT_sum / (TCC_HIT_sum + TCC_MISS_sum)) * 100
           architectures: [gfx942, gfx90a]
@@ -27,6 +29,7 @@ rocprofiler-sdk:
           architectures: [gfx1201, gfx1151]
 
     - name: memory.l1_hit_rate
+      unit: Percent
       definitions:
         - expression: >-
             ((TCP_TOTAL_CACHE_ACCESSES_sum - TCP_TCC_READ_REQ_sum)
@@ -36,6 +39,7 @@ rocprofiler-sdk:
     # --- L2 bandwidth ---
 
     - name: memory.l2_bandwidth
+      unit: GB/s
       definitions:
         - expression: >-
             (((TCC_HIT_sum + TCC_MISS_sum) * 128) / 1e9)
@@ -45,11 +49,13 @@ rocprofiler-sdk:
     # --- Bytes transferred ---
 
     - name: memory.bytes_transferred_l2
+      unit: Bytes
       definitions:
         - expression: TCC_REQ_sum * 128
           architectures: [gfx942, gfx90a]
 
     - name: memory.bytes_transferred_l1
+      unit: Bytes
       definitions:
         - expression: TCP_TOTAL_CACHE_ACCESSES_sum * 128
           architectures: [gfx942]
@@ -59,6 +65,7 @@ rocprofiler-sdk:
     # --- Coalescing and efficiency ---
 
     - name: memory.coalescing_efficiency
+      unit: Percent
       definitions:
         - expression: >-
             min(((SQ_INSTS_VMEM_RD + SQ_INSTS_VMEM_WR) * 16
@@ -66,12 +73,14 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     - name: memory.global_load_efficiency
+      unit: Percent
       definitions:
         - expression: >-
             min((SQ_INSTS_VMEM_RD / TCP_TCC_READ_REQ_sum) * 100, 100.0)
           architectures: [gfx942, gfx90a]
 
     - name: memory.global_store_efficiency
+      unit: Percent
       definitions:
         - expression: >-
             min((SQ_INSTS_VMEM_WR / TCP_TCC_WRITE_REQ_sum) * 100, 100.0)
@@ -80,6 +89,7 @@ rocprofiler-sdk:
     # --- LDS ---
 
     - name: memory.lds_bank_conflicts
+      unit: Conflicts per Access
       definitions:
         - expression: SQ_LDS_BANK_CONFLICT / SQ_INSTS_LDS
           architectures: [gfx942, gfx90a]
@@ -88,6 +98,7 @@ rocprofiler-sdk:
     # gfx942 has TCC_BUBBLE_sum for 128B reads; gfx90a does not
 
     - name: memory.hbm_read_bandwidth
+      unit: GB/s
       definitions:
         - expression: >-
             ((TCC_BUBBLE_sum * 128
@@ -104,6 +115,7 @@ rocprofiler-sdk:
     # --- HBM write bandwidth ---
 
     - name: memory.hbm_write_bandwidth
+      unit: GB/s
       definitions:
         - expression: >-
             ((TCC_EA0_WRREQ_64B_sum * 64
@@ -119,6 +131,7 @@ rocprofiler-sdk:
     # --- HBM bandwidth utilization ---
 
     - name: memory.hbm_bandwidth_utilization
+      unit: Percent
       definitions:
         - expression: >-
             ((TCC_BUBBLE_sum * 128
@@ -141,6 +154,7 @@ rocprofiler-sdk:
     # --- Total HBM bytes ---
 
     - name: memory.bytes_transferred_hbm
+      unit: Bytes
       definitions:
         - expression: >-
             TCC_BUBBLE_sum * 128
@@ -159,6 +173,7 @@ rocprofiler-sdk:
     # --- Atomic latency ---
 
     - name: memory.atomic_latency
+      unit: Cycles
       definitions:
         - expression: TCC_EA0_ATOMIC_LEVEL_sum / TCC_EA0_ATOMIC_sum
           architectures: [gfx942]
@@ -170,6 +185,7 @@ rocprofiler-sdk:
     # --- Compute: total FLOPS ---
 
     - name: compute.total_flops
+      unit: FLOPS
       definitions:
         - expression: >-
             64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
@@ -185,6 +201,7 @@ rocprofiler-sdk:
     # --- Compute: GFLOPS ---
 
     - name: compute.hbm_gflops
+      unit: GFLOP/s
       definitions:
         - expression: >-
             ((64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
@@ -202,6 +219,7 @@ rocprofiler-sdk:
     # --- Compute: HBM arithmetic intensity ---
 
     - name: compute.hbm_arithmetic_intensity
+      unit: FLOPs/Byte
       definitions:
         - expression: >-
             (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
@@ -236,6 +254,7 @@ rocprofiler-sdk:
     # --- Compute: L2 arithmetic intensity ---
 
     - name: compute.l2_arithmetic_intensity
+      unit: FLOPs/Byte
       definitions:
         - expression: >-
             (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
@@ -253,6 +272,7 @@ rocprofiler-sdk:
     # L1 cache line: 128 bytes on gfx942, 64 bytes on gfx90a
 
     - name: compute.l1_arithmetic_intensity
+      unit: FLOPs/Byte
       definitions:
         - expression: >-
             (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16

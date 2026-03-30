@@ -38,6 +38,7 @@ class Statistics:
     max: float
     avg: float
     count: int
+    unit: str = ""
 
 
 @dataclass
@@ -100,7 +101,7 @@ class CounterBackend(ABC):
                     self._unsupported_metrics[name] = method._unsupported_reason
                 else:
                     # Register as available
-                    self._metrics[name] = {"counters": method._metric_counters, "compute": method}
+                    self._metrics[name] = {"counters": method._metric_counters, "compute": method, "unit": getattr(method, "_metric_unit", "")}
 
     def get_available_metrics(self) -> List[str]:
         """Get list of all metrics supported by this backend"""
@@ -170,10 +171,12 @@ class CounterBackend(ABC):
                     r"^reduce\([A-Z_0-9]+,\s*(?:sum|max|min)\)$", expression.strip()
                 )
 
+                unit = counter_def.get("unit", "")
                 if reduce_match:
                     yaml_metrics[counter_name] = {
                         "counters": [counter_name],
                         "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
+                        "unit": unit,
                     }
                 else:
                     required_counters = self._extract_counters_from_expression(expression)
@@ -181,11 +184,14 @@ class CounterBackend(ABC):
                     yaml_metrics[counter_name] = {
                         "counters": required_counters,
                         "compute": compute_fn,
+                        "unit": unit,
                     }
             else:
+                unit = counter_def.get("unit", "")
                 yaml_metrics[counter_name] = {
                     "counters": [counter_name],
                     "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
+                    "unit": unit,
                 }
 
         if not yaml_metrics and not yaml_unsupported:
@@ -385,6 +391,7 @@ class CounterBackend(ABC):
             max: float
             avg: float
             count: int
+            unit: str = ""
 
         for kernel_name, kernel_data in kernel_results.items():
             # Get all available metrics for this backend
@@ -453,6 +460,9 @@ class CounterBackend(ABC):
                             elif hasattr(self, "_raw_data"):
                                 delattr(self, "_raw_data")
 
+                    # Get unit from metric definition
+                    metric_unit = metric_info.get("unit", "") if isinstance(metric_info, dict) else ""
+
                     # Add to kernel_data as a MetricStats object
                     # (use the same value for min/max/avg since it's derived from averages)
                     kernel_data[metric_name] = MetricStats(
@@ -460,6 +470,7 @@ class CounterBackend(ABC):
                         max=derived_value,
                         avg=derived_value,
                         count=kernel_data[required_params[0]].count,  # Use count from first counter
+                        unit=metric_unit,
                     )
 
                 except Exception as e:
@@ -758,7 +769,10 @@ class CounterBackend(ABC):
         first_counter = list(counter_stats.keys())[0]
         count = counter_stats[first_counter].count
 
-        return Statistics(min=metric_min, max=metric_max, avg=metric_avg, count=count)
+        # Get unit from metric definition
+        unit = self._metrics[metric].get("unit", "") if isinstance(self._metrics[metric], dict) else ""
+
+        return Statistics(min=metric_min, max=metric_max, avg=metric_avg, count=count, unit=unit)
 
     def _compute_with_stat_type(
         self, metric: str, counter_stats: Dict[str, Statistics], stat_type: str

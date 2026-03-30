@@ -220,13 +220,10 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
                 if metric in data["metrics"]:
                     stats = data["metrics"][metric]
 
+                    name = metric.split(".", 1)[-1].replace("_", " ").title()
                     if metric in METRIC_CATALOG:
-                        metric_def = METRIC_CATALOG[metric]
-                        name = metric_def["name"]
-                        unit = metric_def.get("unit", "")
-                    else:
-                        name = metric.split(".", 1)[-1].replace("_", " ").title()
-                        unit = ""
+                        name = METRIC_CATALOG[metric].get("name", name)
+                    unit = stats.unit
 
                     # Log detailed stats at DEBUG level
                     logger.debug(
@@ -259,6 +256,7 @@ def _write_json_output(output_path: Path, results: Dict, metrics: List[str]):
                 "max": stats.max,
                 "avg": stats.avg,
                 "count": stats.count,
+                "unit": getattr(stats, "unit", ""),
             }
 
     with open(output_path, "w") as f:
