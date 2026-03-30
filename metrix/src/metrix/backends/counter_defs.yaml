@@ -6,11 +6,30 @@
 #   NUM_CU, MAX_WAVES_PER_CU, WAVEFRONT_SIZE, BASE_CLOCK_MHZ,
 #   HBM_BANDWIDTH_GBS, L2_SIZE_MB, LDS_SIZE_PER_CU_KB,
 #   DURATION_US
+#
+# Counter naming conventions (from rocm-systems / rocprofiler-compute):
+#   GRBM_GUI_ACTIVE — GPU active cycles (convert to seconds: cycles / (clock_MHz * 1e6))
+#   GRBM_COUNT — total elapsed cycles (including idle)
+#   TCC_* — L2 cache (Texture Cache Channel) counters
+#   TCP_* — L1 vector cache (Texture Cache per Pipe) counters
+#   SQ_* — Shader Sequencer instruction counters
+#
+# HBM request sizes and counter differences between architectures:
+#   gfx942 (MI300): L2-to-Fabric requests can be 32B, 64B, or 128B.
+#     TCC_EA0_RDREQ_sum — total read requests (all sizes) via EA0 port
+#     TCC_EA0_RDREQ_32B_sum — 32-byte read requests
+#     TCC_BUBBLE_sum — 128-byte read requests (MI300+ only)
+#     Remaining reads are 64B: (RDREQ - BUBBLE - RDREQ_32B)
+#   gfx90a (MI200): Only 32B and 64B requests (no TCC_BUBBLE).
+#     TCC_EA_RDREQ_sum — total read requests (aggregate of EA0+EA1 ports)
+#     TCC_EA_RDREQ_32B_sum — 32-byte read requests
+#     Remaining reads are 64B: (RDREQ - RDREQ_32B)
 
 rocprofiler-sdk:
   counters:
 
     # --- GPU utilization ---
+    # Fraction of elapsed cycles the GPU was actively executing work.
 
     - name: compute.gpu_utilization
       unit: Percent
@@ -19,6 +38,7 @@ rocprofiler-sdk:
           architectures: [gfx1201, gfx1151]
 
     # --- Cache hit rates ---
+    # L2 (TCC): hits / (hits + misses). L1 (TCP): misses go to L2 via TCC_READ_REQ.
 
     - name: memory.l2_hit_rate
       unit: Percent
@@ -37,6 +57,8 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     # --- L2 bandwidth ---
+    # (total L2 accesses * 128B cacheline) / kernel active time.
+    # Time = GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6) converts cycles to seconds.
 
     - name: memory.l2_bandwidth
       unit: GB/s
@@ -47,6 +69,8 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     # --- Bytes transferred ---
+    # Raw byte counts: requests * cacheline size.
+    # L2 cacheline = 128B on all CDNA. L1 cacheline = 128B on gfx942, 64B on gfx90a.
 
     - name: memory.bytes_transferred_l2
       unit: Bytes
@@ -63,6 +87,11 @@ rocprofiler-sdk:
           architectures: [gfx90a]
 
     # --- Coalescing and efficiency ---
+    # Coalescing: how well the address unit (TA) merges thread requests into cache
+    # accesses. 100% = fully coalesced (stride-1), 25% = worst case (each thread
+    # hits a different cacheline). Formula: (mem_instructions * 16 / cache_accesses).
+    # The factor 16 = wavefront_size(64) / threads_per_cacheline(4).
+    # Load/store efficiency: ratio of issued instructions to L2 requests generated.
 
     - name: memory.coalescing_efficiency
       unit: Percent
@@ -87,6 +116,7 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     # --- LDS ---
+    # Bank conflicts per LDS instruction. 0 = no conflicts, >0 = serialized accesses.
 
     - name: memory.lds_bank_conflicts
       unit: Conflicts per Access
@@ -95,7 +125,9 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     # --- HBM read bandwidth ---
-    # gfx942 has TCC_BUBBLE_sum for 128B reads; gfx90a does not
+    # Total bytes read from HBM / kernel active time.
+    # gfx942: 3 request sizes — 128B (TCC_BUBBLE), 64B (remainder), 32B.
+    # gfx90a: 2 request sizes — 64B (remainder), 32B. No 128B reads.
 
     - name: memory.hbm_read_bandwidth
       unit: GB/s
@@ -113,6 +145,8 @@ rocprofiler-sdk:
           architectures: [gfx90a]
 
     # --- HBM write bandwidth ---
+    # Total bytes written to HBM / kernel active time.
+    # Writes are 64B or 32B only (no 128B writes on any arch).
 
     - name: memory.hbm_write_bandwidth
       unit: GB/s
@@ -129,6 +163,7 @@ rocprofiler-sdk:
           architectures: [gfx90a]
 
     # --- HBM bandwidth utilization ---
+    # (actual read+write bandwidth) / (peak HBM bandwidth) * 100.
 
     - name: memory.hbm_bandwidth_utilization
       unit: Percent
@@ -152,6 +187,7 @@ rocprofiler-sdk:
           architectures: [gfx90a]
 
     # --- Total HBM bytes ---
+    # Sum of all read + write bytes through L2-to-Fabric interface.
 
     - name: memory.bytes_transferred_hbm
       unit: Bytes
@@ -171,6 +207,7 @@ rocprofiler-sdk:
           architectures: [gfx90a]
 
     # --- Atomic latency ---
+    # Average L2 cache atomic operation latency in GPU cycles.
 
     - name: memory.atomic_latency
       unit: Cycles
@@ -183,6 +220,9 @@ rocprofiler-sdk:
           architectures: [gfx90a]
 
     # --- Compute: total FLOPS ---
+    # VALU: 64 ops/instruction (wavefront_size=64). FMA counts as 2 FLOPs (mul+add).
+    # MFMA: 512 FLOPs/instruction — all MFMA shapes on CDNA normalize to 512 ops
+    # per MOPS counter increment (ref: AMD Matrix Instruction Calculator).
 
     - name: compute.total_flops
       unit: FLOPS
@@ -199,6 +239,7 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     # --- Compute: GFLOPS ---
+    # total_flops / 1e9 / kernel_duration_seconds.
 
     - name: compute.hbm_gflops
       unit: GFLOP/s
@@ -217,6 +258,8 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     # --- Compute: HBM arithmetic intensity ---
+    # total_flops / hbm_bytes_transferred. Key roofline metric.
+    # High AI = compute-bound, low AI = memory-bound.
 
     - name: compute.hbm_arithmetic_intensity
       unit: FLOPs/Byte
@@ -252,6 +295,7 @@ rocprofiler-sdk:
           architectures: [gfx90a]
 
     # --- Compute: L2 arithmetic intensity ---
+    # total_flops / l2_bytes. L2 cacheline = 128B.
 
     - name: compute.l2_arithmetic_intensity
       unit: FLOPs/Byte
@@ -269,7 +313,7 @@ rocprofiler-sdk:
           architectures: [gfx942, gfx90a]
 
     # --- Compute: L1 arithmetic intensity ---
-    # L1 cache line: 128 bytes on gfx942, 64 bytes on gfx90a
+    # total_flops / l1_bytes. L1 cacheline = 128B on gfx942, 64B on gfx90a.
 
     - name: compute.l1_arithmetic_intensity
       unit: FLOPs/Byte
