@@ -30,7 +30,7 @@ __global__ void mfma_asm_kernel(float* __restrict__ out, int iters) {
         // v_mfma_f32_4x4x4_f16: simplest MFMA, needs 1 VGPR accumulator
         // a and b are packed f16x2 in VGPRs
         asm volatile(
-            "v_mfma_f32_4x4x4_f16 %0, %1, %2, %0"
+            "v_mfma_f32_4x4x4f16 %0, %1, %2, %0"
             : "+v"(c0)
             : "v"(static_cast<unsigned int>(0x3C003C00)),  // 1.0h, 1.0h
               "v"(static_cast<unsigned int>(0x3C003C00))
