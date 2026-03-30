@@ -3,6 +3,8 @@ title: Metrix
 description: "GPU Profiling. Decoded. Clean, human-readable metrics for AMD GPUs."
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
 
 ## Why Metrix?
@@ -10,8 +12,7 @@ Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
 - **Clean Python API** with modern design
 - **Human-readable metrics** instead of raw counters
 - **Unit tested** and reliable
-- **13 Memory Metrics**: bandwidth, cache, coalescing, LDS, atomic latency
-- **5 Compute Metrics**: FLOPS, arithmetic intensity (HBM/L2/L1), compute throughput
+- **18 metrics** across memory, cache, compute, and GPU utilization
 - **Multi-run profiling**: automatic aggregation with min/max/avg statistics
 - **Kernel filtering**: efficient regex filtering at rocprofv3 level
 - **Multiple output formats**: text, JSON, CSV
@@ -24,39 +25,53 @@ pip install -e .
 
 ## Quick start
 
-```bash
-# Profile with all metrics (architecture auto-detected)
-metrix ./my_app
+<Tabs syncKey="interface">
+  <TabItem label="CLI">
+    ```bash
+    # Profile with all metrics (architecture auto-detected)
+    metrix ./my_app
 
-# Time only (fast)
-metrix --time-only -n 10 ./my_app
+    # Time only (fast)
+    metrix --time-only -n 10 ./my_app
 
-# Filter kernels by name
-metrix --kernel matmul ./my_app
+    # Filter kernels by name
+    metrix --kernel matmul ./my_app
 
-# Custom metrics
-metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
+    # Custom metrics
+    metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
 
-# Save to JSON
-metrix -o results.json ./my_app
-```
+    # Save to JSON
+    metrix -o results.json ./my_app
+    ```
+  </TabItem>
+  <TabItem label="Python API">
+    ```python
+    from metrix import Metrix
 
-## Python API
+    # Architecture is auto-detected
+    profiler = Metrix()
+    results = profiler.profile("./my_app", num_replays=5)
 
-```python
-from metrix import Metrix
-
-# Architecture is auto-detected
-profiler = Metrix()
-results = profiler.profile("./my_app", num_replays=5)
-
-for kernel in results.kernels:
-    print(f"{kernel.name}: {kernel.duration_us.avg:.2f} μs")
-    for metric, stats in kernel.metrics.items():
-        print(f"  {metric}: {stats.avg:.2f}")
-```
+    for kernel in results.kernels:
+        print(f"{kernel.name}: {kernel.duration_us.avg:.2f} us")
+        for metric, stats in kernel.metrics.items():
+            print(f"  {metric}: {stats.avg:.2f}")
+    ```
+  </TabItem>
+</Tabs>
 
 ## Available metrics
+
+### Compute
+
+| Metric | Description |
+|--------|-------------|
+| `compute.gpu_utilization` | GPU utilization (%). *gfx1201/gfx1151 only.* |
+| `compute.total_flops` | Total floating-point operations performed |
+| `compute.hbm_gflops` | Compute throughput (GFLOP/s) |
+| `compute.hbm_arithmetic_intensity` | Ratio of FLOPs to HBM bytes (FLOPs/Byte) |
+| `compute.l2_arithmetic_intensity` | Ratio of FLOPs to L2 bytes (FLOPs/Byte) |
+| `compute.l1_arithmetic_intensity` | Ratio of FLOPs to L1 bytes (FLOPs/Byte) |
 
 ### Memory bandwidth
 
@@ -89,23 +104,13 @@ for kernel in results.kernels:
 
 | Metric | Description |
 |--------|-------------|
-| `memory.lds_bank_conflicts` | LDS bank conflicts per instruction |
+| `memory.lds_bank_conflicts` | LDS bank conflicts per access |
 
 ### Atomic operations
 
 | Metric | Description |
 |--------|-------------|
 | `memory.atomic_latency` | Atomic operation latency (cycles) |
-
-### Compute
-
-| Metric | Description |
-|--------|-------------|
-| `compute.total_flops` | Total floating-point operations performed |
-| `compute.hbm_gflops` | Compute throughput (GFLOPS) |
-| `compute.hbm_arithmetic_intensity` | Ratio of FLOPs to HBM bytes (FLOP/byte) |
-| `compute.l2_arithmetic_intensity` | Ratio of FLOPs to L2 bytes (FLOP/byte) |
-| `compute.l1_arithmetic_intensity` | Ratio of FLOPs to L1 bytes (FLOP/byte) |
 
 ## CLI reference
 
@@ -134,19 +139,6 @@ metrix info <metric|profile> <name>
 ```
 
 GPU architecture is auto-detected using `rocminfo`.
-
-## Architecture
-
-Metrix uses a clean backend architecture where hardware counter names appear exactly once as function parameters:
-
-```python
-@metric("memory.l2_hit_rate")
-def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
-    total = TCC_HIT_sum + TCC_MISS_sum
-    return (TCC_HIT_sum / total) * 100 if total > 0 else 0.0
-```
-
-This eliminates error-prone mapping dictionaries and makes the codebase maintainable. Adding new metrics or supporting new GPU architectures is straightforward.
 
 ## Requirements
 

@@ -3,6 +3,8 @@ title: Nexus
 description: HSA Packet Source Code Extractor — see what ran on your GPU
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Nexus intercepts Heterogeneous System Architecture (HSA) packets, extracts the source code from them, and outputs assembly and HIP code in a structured format.
 
 ## Installation
@@ -28,64 +30,65 @@ cmake -B build \
 cmake --build build --parallel 16
 ```
 
-## Python API
+## Usage
 
-```python
-from nexus import Nexus
+<Tabs syncKey="interface">
+  <TabItem label="Python API">
+    ```python
+    from nexus import Nexus
 
-# Create tracer
-nexus = Nexus(log_level=1)
+    # Create tracer
+    nexus = Nexus(log_level=1)
 
-# Run and get trace
-trace = nexus.run(["python", "my_gpu_script.py"])
+    # Run and get trace
+    trace = nexus.run(["python", "my_gpu_script.py"])
 
-# Iterate over kernels
-for kernel in trace:
-    print(f"{kernel.name}: {len(kernel.assembly)} instructions")
+    # Iterate over kernels
+    for kernel in trace:
+        print(f"{kernel.name}: {len(kernel.assembly)} instructions")
 
-    # Assembly instructions
-    for i, asm_line in enumerate(kernel.assembly, 1):
-        print(f"  {i:3d}. {asm_line}")
+        # Assembly instructions
+        for i, asm_line in enumerate(kernel.assembly, 1):
+            print(f"  {i:3d}. {asm_line}")
 
-    # HIP source with line numbers
-    if kernel.lines and len(kernel.lines) == len(kernel.hip):
-        for line_no, hip_line in zip(kernel.lines, kernel.hip):
-            print(f"  {line_no:3d}. {hip_line}")
+        # HIP source with line numbers
+        if kernel.lines and len(kernel.lines) == len(kernel.hip):
+            for line_no, hip_line in zip(kernel.lines, kernel.hip):
+                print(f"  {line_no:3d}. {hip_line}")
 
-# Access specific kernel by name
-kernel = trace["vector_add(float*, float*, float*, int)"]
-print(kernel.assembly)   # Array of assembly strings
-print(kernel.hip)        # Array of HIP source lines
-print(kernel.signature)  # Kernel signature
-print(kernel.files)      # Source files
-print(kernel.lines)      # Line numbers
+    # Access specific kernel by name
+    kernel = trace["vector_add(float*, float*, float*, int)"]
+    print(kernel.assembly)   # Array of assembly strings
+    print(kernel.hip)        # Array of HIP source lines
+    print(kernel.signature)  # Kernel signature
+    print(kernel.files)      # Source files
+    print(kernel.lines)      # Line numbers
 
-# Save and load traces
-trace.save("my_trace.json")
-old_trace = Nexus.load("my_trace.json")
-```
+    # Save and load traces
+    trace.save("my_trace.json")
+    old_trace = Nexus.load("my_trace.json")
+    ```
+  </TabItem>
+  <TabItem label="Environment variables">
+    Use environment variables to run Nexus directly via `HSA_TOOLS_LIB`:
 
-## Command line
+    ```bash
+    export HSA_TOOLS_LIB=$(python -c "import nexus; print(nexus.lib_path())")
+    export NEXUS_LOG_LEVEL=3
+    export NEXUS_OUTPUT_FILE=result.json
 
-### Environment variables
+    hipcc vector_add.hip -g -o vector_add   # -g needed for source line mapping
+    ./vector_add
+    ```
 
-| Variable | Description |
-|----------|-------------|
-| `NEXUS_LOG_LEVEL` | Verbosity level (0 = none, 1 = info, 2 = warning, 3 = error, 4 = detail) |
-| `NEXUS_OUTPUT_FILE` | Path to the JSON output file |
-| `NEXUS_EXTRA_SEARCH_PREFIX` | Additional search directories for HIP files. Supports wildcards, colon-separated. |
-| `TRITON_DISABLE_LINE_INFO` | Set to `0` to enable line info in Triton kernels (auto-set by Python API) |
-
-### Example
-
-```bash
-export HSA_TOOLS_LIB=build/lib/libnexus.so
-export NEXUS_LOG_LEVEL=3
-export NEXUS_OUTPUT_FILE=result.json
-
-hipcc vector_add.hip -g -o vector_add   # -g needed for source line mapping
-./vector_add
-```
+    | Variable | Description |
+    |----------|-------------|
+    | `NEXUS_LOG_LEVEL` | Verbosity level (0 = none, 1 = info, 2 = warning, 3 = error, 4 = detail) |
+    | `NEXUS_OUTPUT_FILE` | Path to the JSON output file |
+    | `NEXUS_EXTRA_SEARCH_PREFIX` | Additional search directories for HIP files. Supports wildcards, colon-separated. |
+    | `TRITON_DISABLE_LINE_INFO` | Set to `0` to enable line info in Triton kernels (auto-set by Python API) |
+  </TabItem>
+</Tabs>
 
 Without `-g` you still get assembly and HIP source in the trace; only the mapping to original source line numbers may be missing.
 
