@@ -49,16 +49,16 @@ class GFX942Backend(CounterBackend):
         collected from each hardware block in a single profiling pass.
         """
         return {
-            "SQ": 8,    # Shader Sequencer — instruction issue & scheduling
-            "TA": 2,    # Texture Addresser — coalesces memory requests
-            "TD": 2,    # Texture Data — routes cache data back to SIMDs
-            "TCP": 4,   # Texture Cache per Pipe — L1 vector cache
-            "TCC": 4,   # Texture Cache Channel — L2 cache / memory controller
-            "CPC": 2,   # Command Processor Compute — decodes dispatches
-            "CPF": 2,   # Command Processor Fetch — fetches commands from memory
-            "SPI": 6,   # Shader Processor Input — workgroup manager, schedules waves to CUs
+            "SQ": 8,  # Shader Sequencer — instruction issue & scheduling
+            "TA": 2,  # Texture Addresser — coalesces memory requests
+            "TD": 2,  # Texture Data — routes cache data back to SIMDs
+            "TCP": 4,  # Texture Cache per Pipe — L1 vector cache
+            "TCC": 4,  # Texture Cache Channel — L2 cache / memory controller
+            "CPC": 2,  # Command Processor Compute — decodes dispatches
+            "CPF": 2,  # Command Processor Fetch — fetches commands from memory
+            "SPI": 6,  # Shader Processor Input — workgroup manager, schedules waves to CUs
             "GRBM": 2,  # Graphics Register Bus Manager — top-level GPU activity counters
-            "GDS": 4,   # Global Data Share — chip-wide shared memory
+            "GDS": 4,  # Global Data Share — chip-wide shared memory
         }
 
     def _run_rocprof(

@@ -101,7 +101,11 @@ class CounterBackend(ABC):
                     self._unsupported_metrics[name] = method._unsupported_reason
                 else:
                     # Register as available
-                    self._metrics[name] = {"counters": method._metric_counters, "compute": method, "unit": getattr(method, "_metric_unit", "")}
+                    self._metrics[name] = {
+                        "counters": method._metric_counters,
+                        "compute": method,
+                        "unit": getattr(method, "_metric_unit", ""),
+                    }
 
     def get_available_metrics(self) -> List[str]:
         """Get list of all metrics supported by this backend"""
@@ -385,14 +389,6 @@ class CounterBackend(ABC):
         """
         from ..logger import logger
 
-        @dataclass
-        class MetricStats:
-            min: float
-            max: float
-            avg: float
-            count: int
-            unit: str = ""
-
         for kernel_name, kernel_data in kernel_results.items():
             # Get all available metrics for this backend
             available_metrics = self.get_available_metrics()
@@ -461,11 +457,13 @@ class CounterBackend(ABC):
                                 delattr(self, "_raw_data")
 
                     # Get unit from metric definition
-                    metric_unit = metric_info.get("unit", "") if isinstance(metric_info, dict) else ""
+                    metric_unit = (
+                        metric_info.get("unit", "") if isinstance(metric_info, dict) else ""
+                    )
 
                     # Add to kernel_data as a MetricStats object
                     # (use the same value for min/max/avg since it's derived from averages)
-                    kernel_data[metric_name] = MetricStats(
+                    kernel_data[metric_name] = Statistics(
                         min=derived_value,
                         max=derived_value,
                         avg=derived_value,
@@ -770,7 +768,9 @@ class CounterBackend(ABC):
         count = counter_stats[first_counter].count
 
         # Get unit from metric definition
-        unit = self._metrics[metric].get("unit", "") if isinstance(self._metrics[metric], dict) else ""
+        unit = (
+            self._metrics[metric].get("unit", "") if isinstance(self._metrics[metric], dict) else ""
+        )
 
         return Statistics(min=metric_min, max=metric_max, avg=metric_avg, count=count, unit=unit)
 
