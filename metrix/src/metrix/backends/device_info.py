@@ -162,7 +162,13 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     l2_size_mb = gpu["l2_cache_size_bytes"] / (1024.0 * 1024.0)
     lds_size_per_cu_kb = gpu["max_shared_memory_per_multiprocessor"] / 1024.0
 
-    # Compute theoretical bandwidth from memory clock + bus width
+    # Compute theoretical bandwidth from memory clock + bus width.
+    # HIP's memoryClockRate is the MCLK from amdgpu_dpm_get_mclk():
+    #   HBM2/HBM2e (gfx90a): MCLK = data strobe clock, DDR → 2x multiplier
+    #   HBM3 (gfx94x):       MCLK = CK (command clock) = half the data strobe → 4x
+    #   HBM3e (gfx95x):      same as HBM3 → 4x
+    #   GDDR6 (RDNA):        MCLK = data clock, DDR → 2x
+    # Ref: ROCm/rocm-systems projects/clr/rocclr/device/rocm/rocdevice.cpp
     mem_clock = gpu["memory_clock_rate_khz"]
     bus_width = gpu["memory_bus_width_bits"]
     if mem_clock <= 0 or bus_width <= 0:
@@ -170,7 +176,8 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
             f"Device {device_id} ({arch}) reported invalid memory specs: "
             f"memory_clock_rate_khz={mem_clock}, memory_bus_width_bits={bus_width}"
         )
-    hbm_bw_gbs = 2.0 * mem_clock * 1e3 * bus_width / 8.0 / 1e9
+    mem_multiplier = 4.0 if arch.startswith(("gfx94", "gfx95")) else 2.0
+    hbm_bw_gbs = mem_multiplier * mem_clock * 1e3 * bus_width / 8.0 / 1e9
 
     return DeviceSpecs(
         arch=arch,
