@@ -49,15 +49,17 @@ def _compile_hip(source: str, name: str, tmp_dir: Path) -> Path:
     src.write_text(source)
     r = subprocess.run(
         ["hipcc", str(src), "-o", str(bin_path), "-O2", "-fno-inline"],
-        capture_output=True, text=True, cwd=tmp_dir, timeout=120,
+        capture_output=True,
+        text=True,
+        cwd=tmp_dir,
+        timeout=120,
     )
     if r.returncode != 0:
         raise RuntimeError(f"hipcc failed:\n{r.stderr}")
     return bin_path
 
 
-def _profile(binary: Path, metrics: list, tmp_dir: Path,
-             num_replays: int = 2) -> dict:
+def _profile(binary: Path, metrics: list, tmp_dir: Path, num_replays: int = 2) -> dict:
     """Profile a binary and return {metric_name: avg_value}."""
     profiler = Metrix()
     results = profiler.profile(
@@ -78,10 +80,13 @@ def _profile(binary: Path, metrics: list, tmp_dir: Path,
 # Bandwidth benchmarks
 # =========================================================================
 
+
 class TestHBMBandwidth:
     """Validate HBM bandwidth derived metrics."""
 
-    _READ_SRC = _HIP_HEADER + r"""
+    _READ_SRC = (
+        _HIP_HEADER
+        + r"""
     __global__ void read_kernel(const float* __restrict__ src,
                                 float* __restrict__ out, size_t N) {
         size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -103,8 +108,11 @@ class TestHBMBandwidth:
         return 0;
     }
     """
+    )
 
-    _WRITE_SRC = _HIP_HEADER + r"""
+    _WRITE_SRC = (
+        _HIP_HEADER
+        + r"""
     __global__ void write_kernel(float* __restrict__ dst, size_t N) {
         size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
         if (idx < N) dst[idx] = 1.0f;
@@ -122,8 +130,11 @@ class TestHBMBandwidth:
         return 0;
     }
     """
+    )
 
-    _COPY_SRC = _HIP_HEADER + r"""
+    _COPY_SRC = (
+        _HIP_HEADER
+        + r"""
     __global__ void copy_kernel(const float* __restrict__ src,
                                 float* __restrict__ dst, size_t N) {
         size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -144,6 +155,7 @@ class TestHBMBandwidth:
         return 0;
     }
     """
+    )
 
     def test_hbm_read_bandwidth(self):
         """Sequential coalesced read should achieve >100 GB/s."""
@@ -166,9 +178,15 @@ class TestHBMBandwidth:
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
             p = Path(d)
             b = _compile_hip(self._COPY_SRC, "bw_copy", p)
-            m = _profile(b, ["memory.hbm_bandwidth_utilization",
-                              "memory.hbm_read_bandwidth",
-                              "memory.hbm_write_bandwidth"], p)
+            m = _profile(
+                b,
+                [
+                    "memory.hbm_bandwidth_utilization",
+                    "memory.hbm_read_bandwidth",
+                    "memory.hbm_write_bandwidth",
+                ],
+                p,
+            )
         assert 5.0 <= m["memory.hbm_bandwidth_utilization"] <= 100.0
         assert m["memory.hbm_read_bandwidth"] > 50.0
         assert m["memory.hbm_write_bandwidth"] > 50.0
@@ -178,8 +196,11 @@ class TestHBMBandwidth:
 # Coalescing benchmarks
 # =========================================================================
 
+
 def _strided_source(stride: int) -> str:
-    return _HIP_HEADER + f"""
+    return (
+        _HIP_HEADER
+        + f"""
     __global__ void strided_kernel(const float* __restrict__ src,
                                    float* __restrict__ out, size_t N) {{
         size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -202,6 +223,7 @@ def _strided_source(stride: int) -> str:
         return 0;
     }}
     """
+    )
 
 
 class TestCoalescingEfficiency:
@@ -247,13 +269,16 @@ class TestCoalescingEfficiency:
 # Cache hit rate benchmarks
 # =========================================================================
 
+
 class TestCacheHitRates:
     """Validate L1 and L2 cache hit rate metrics."""
 
     # Small array iterated many times to get L2 hits.
     # Use few blocks to reduce L2 set contention across CUs.
     # MI210 has 8 MB L2 (lower associativity), MI300X has 256 MB.
-    _L2_SRC = _HIP_HEADER + r"""
+    _L2_SRC = (
+        _HIP_HEADER
+        + r"""
     __global__ void l2_kernel(const float* __restrict__ src,
                               float* __restrict__ out,
                               size_t N, int iters) {
@@ -285,8 +310,11 @@ class TestCacheHitRates:
         return 0;
     }
     """
+    )
 
-    _L1_SRC = _HIP_HEADER + r"""
+    _L1_SRC = (
+        _HIP_HEADER
+        + r"""
     __global__ void l1_kernel(const float* __restrict__ src,
                               float* __restrict__ out,
                               int N_per_block, int iters) {
@@ -315,6 +343,7 @@ class TestCacheHitRates:
         return 0;
     }
     """
+    )
 
     def test_l2_hit_rate_with_resident_data(self):
         """256 KB array iterated 500x with few blocks should show elevated L2 hit rate.
@@ -342,9 +371,12 @@ class TestCacheHitRates:
 # LDS bank conflict benchmarks
 # =========================================================================
 
+
 def _lds_source(stride: int) -> str:
     access = "lds[tid % 8192]" if stride == 1 else f"lds[(tid * {stride}) % 8192]"
-    return _HIP_HEADER + f"""
+    return (
+        _HIP_HEADER
+        + f"""
     #define LDS_SIZE 8192
     __global__ void lds_kernel(float* __restrict__ out, int iters) {{
         __shared__ float lds[LDS_SIZE];
@@ -368,6 +400,7 @@ def _lds_source(stride: int) -> str:
         return 0;
     }}
     """
+    )
 
 
 class TestLDSBankConflicts:
@@ -394,7 +427,9 @@ class TestLDSBankConflicts:
 # Compute (FLOPS) benchmarks
 # =========================================================================
 
-_VALU_FMA_SRC = _HIP_HEADER + r"""
+_VALU_FMA_SRC = (
+    _HIP_HEADER
+    + r"""
 __global__ void valu_fma_kernel(float* __restrict__ out, int iters) {
     float a = 1.0001f, b = 0.9999f, c = 0.0f;
     #pragma unroll 1
@@ -416,6 +451,7 @@ int main() {
     return 0;
 }
 """
+)
 
 
 class TestFLOPSCounters:
@@ -441,7 +477,9 @@ class TestFLOPSCounters:
 # Atomic latency benchmarks (gfx942 only)
 # =========================================================================
 
-_ATOMIC_HIGH_SRC = _HIP_HEADER + r"""
+_ATOMIC_HIGH_SRC = (
+    _HIP_HEADER
+    + r"""
 __global__ void atomic_kernel(int* __restrict__ counter, int iters) {
     #pragma unroll 1
     for (int i = 0; i < iters; i++) atomicAdd(counter, 1);
@@ -459,8 +497,11 @@ int main() {
     return 0;
 }
 """
+)
 
-_ATOMIC_LOW_SRC = _HIP_HEADER + r"""
+_ATOMIC_LOW_SRC = (
+    _HIP_HEADER
+    + r"""
 __global__ void atomic_kernel(int* __restrict__ counters, int iters) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     #pragma unroll 1
@@ -479,6 +520,7 @@ int main() {
     return 0;
 }
 """
+)
 
 
 class TestAtomicLatency:
@@ -508,8 +550,11 @@ class TestAtomicLatency:
 # Arithmetic intensity benchmarks
 # =========================================================================
 
+
 def _mixed_source(K: int) -> str:
-    return _HIP_HEADER + f"""
+    return (
+        _HIP_HEADER
+        + f"""
     __global__ void mixed_kernel(const float* __restrict__ src,
                                  float* __restrict__ dst, size_t N) {{
         size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -536,6 +581,7 @@ def _mixed_source(K: int) -> str:
         return 0;
     }}
     """
+    )
 
 
 class TestArithmeticIntensity:
@@ -600,7 +646,9 @@ _NON_NEGATIVE_METRICS = [
 
 # Copy kernel exercises both reads and writes — good for testing bounds
 # across memory metrics.  FMA-heavy kernel covers compute metrics.
-_BOUNDS_COPY_SRC = _HIP_HEADER + r"""
+_BOUNDS_COPY_SRC = (
+    _HIP_HEADER
+    + r"""
 __global__ void copy_kernel(const float* __restrict__ src,
                             float* __restrict__ dst, size_t N) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -621,8 +669,11 @@ int main() {
     return 0;
 }
 """
+)
 
-_BOUNDS_FMA_SRC = _HIP_HEADER + r"""
+_BOUNDS_FMA_SRC = (
+    _HIP_HEADER
+    + r"""
 __global__ void fma_kernel(const float* __restrict__ src,
                            float* __restrict__ dst, size_t N) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -649,6 +700,7 @@ int main() {
     return 0;
 }
 """
+)
 
 
 class TestMetricBounds:
@@ -668,9 +720,7 @@ class TestMetricBounds:
             if name not in m:
                 continue
             val = m[name]
-            assert 0.0 <= val <= 100.0, (
-                f"{name} = {val} is outside [0, 100]"
-            )
+            assert 0.0 <= val <= 100.0, f"{name} = {val} is outside [0, 100]"
 
     def test_memory_metrics_non_negative(self):
         """Bandwidth, bytes transferred, and LDS conflicts must be >= 0."""
