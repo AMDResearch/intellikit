@@ -9,7 +9,7 @@ All metrics are loaded from counter_defs.yaml.
 import pytest
 from unittest.mock import patch
 from metrix.backends import get_backend
-from metrix.backends.base import DeviceSpecs
+from metrix.backends.base import DeviceSpecs, Statistics
 
 _TEST_SPECS = {
     "gfx942": DeviceSpecs(
@@ -359,6 +359,49 @@ class TestMetricDiscovery:
         assert "compute.hbm_arithmetic_intensity" in metrics
         assert "compute.l2_arithmetic_intensity" in metrics
         assert "compute.l1_arithmetic_intensity" in metrics
+
+    def test_yaml_units_loaded(self, backend):
+        """YAML unit strings are loaded into backend._metrics"""
+        expected_units = {
+            "memory.l2_hit_rate": "Percent",
+            "memory.l1_hit_rate": "Percent",
+            "memory.l2_bandwidth": "GB/s",
+            "memory.hbm_read_bandwidth": "GB/s",
+            "memory.hbm_write_bandwidth": "GB/s",
+            "memory.hbm_bandwidth_utilization": "Percent",
+            "memory.bytes_transferred_l2": "Bytes",
+            "memory.bytes_transferred_l1": "Bytes",
+            "memory.bytes_transferred_hbm": "Bytes",
+            "memory.coalescing_efficiency": "Percent",
+            "memory.global_load_efficiency": "Percent",
+            "memory.global_store_efficiency": "Percent",
+            "memory.lds_bank_conflicts": "Conflicts per Access",
+            "compute.total_flops": "FLOPS",
+            "compute.hbm_gflops": "GFLOP/s",
+            "compute.hbm_arithmetic_intensity": "FLOPs/Byte",
+            "compute.l2_arithmetic_intensity": "FLOPs/Byte",
+            "compute.l1_arithmetic_intensity": "FLOPs/Byte",
+        }
+        for metric_name, expected_unit in expected_units.items():
+            assert metric_name in backend._metrics, f"{metric_name} not discovered"
+            actual_unit = backend._metrics[metric_name].get("unit", "")
+            assert actual_unit == expected_unit, (
+                f"{metric_name}: expected unit '{expected_unit}', got '{actual_unit}'"
+            )
+
+    def test_compute_metric_stats_returns_unit(self, backend):
+        """compute_metric_stats() returns Statistics with correct unit"""
+        dispatch_key = "test_kernel"
+        backend._aggregated = {
+            dispatch_key: {
+                "TCC_HIT_sum": Statistics(min=800, max=800, avg=800, count=1),
+                "TCC_MISS_sum": Statistics(min=200, max=200, avg=200, count=1),
+            }
+        }
+
+        stats = backend.compute_metric_stats(dispatch_key, "memory.l2_hit_rate")
+        assert stats.unit == "Percent"
+        assert stats.avg == 80.0
 
 
 class TestComputeMetrics:

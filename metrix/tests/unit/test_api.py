@@ -70,7 +70,7 @@ class TestMetrixMetricListing:
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("memory.l2_hit_rate")
         assert info["name"] == "L2 Cache Hit Rate"
-        assert info["unit"] == "percent"
+        assert info["unit"] == "Percent"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_compute_metric_info(self, arch):
@@ -86,7 +86,7 @@ class TestMetrixMetricListing:
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("compute.hbm_arithmetic_intensity")
         assert info["name"] == "HBM Arithmetic Intensity"
-        assert info["unit"] == "FLOP/byte"
+        assert info["unit"] == "FLOPs/Byte"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_unknown_metric_raises(self, arch):
