@@ -194,7 +194,9 @@ Snapshots the full runtime state of a single kernel dispatch for later replay.
 
 Locates the kernel's source so the reproducer can compile (HIP) or import (Triton) it.
 
-**HIP**: Searches the source tree for `__global__` declarations matching the demangled kernel name, then traces local `#include "..."` directives recursively (depth 5) to collect all required headers.
+**HIP**: Searches the source tree for `__global__` declarations matching the demangled kernel name, then traces local `#include "..."` directives recursively (depth 5) to collect all required headers. For projects built with CMake, kerncap uses `compile_commands.json` to find the translation unit and extract the exact compiler flags needed for the `make recompile` target.
+
+> **Note**: `compile_commands.json` is **optional** — the capture/replay/validate workflow works without it. However, the `make recompile` target (for editing and rebuilding kernels) requires it. Generate it by adding `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` when configuring your CMake project. If missing, you'll see: *"No compile command found (compile_commands.json missing or has no entry for this file). The 'make recompile' target will not be available."* — basic validation still works, but you won't be able to test kernel modifications.
 
 **Triton**: Parses Python files under `--source-dir` with the `ast` module, matching `@triton.jit`/`@triton.autotune` decorators. `ImportFrom` nodes (including relative imports) are traced to resolve the full dependency set.
 
@@ -233,6 +235,8 @@ vfs.yaml                Clang VFS overlay — maps local copies over originals a
 capture/                VA-faithful memory snapshot, dispatch metadata, baseline HSACO
 Makefile                make run | make recompile | make run-variant | make validate-variant
 ```
+
+> **Prerequisites for `make recompile`**: The recompilation workflow requires `compile_commands.json` from your project's build directory. If your project was built with CMake, regenerate with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` to enable this. Without it, `make run` and `kerncap validate` still work (they use the captured HSACO), but `make recompile` won't be available.
 
 <Tabs syncKey="interface">
   <TabItem label="Python API">
