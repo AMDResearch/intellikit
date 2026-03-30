@@ -61,7 +61,8 @@ jobs:
           if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
             echo "packages=${ALL}" >> "$GITHUB_OUTPUT"
           else
-            echo "packages=${{ steps.filter.outputs.changes }}" >> "$GITHUB_OUTPUT"
+            CHANGES='${{ steps.filter.outputs.changes }}'
+            echo "packages=${CHANGES}" >> "$GITHUB_OUTPUT"
           fi
 
   build-container-image:
