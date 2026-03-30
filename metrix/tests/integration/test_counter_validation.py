@@ -558,3 +558,141 @@ class TestArithmeticIntensity:
             m1 = _profile(b1, ["compute.hbm_arithmetic_intensity"], p)
             m100 = _profile(b100, ["compute.hbm_arithmetic_intensity"], p)
         assert m100["compute.hbm_arithmetic_intensity"] > m1["compute.hbm_arithmetic_intensity"]
+
+
+# =========================================================================
+# Bounds-checking tests for all derived metrics
+# =========================================================================
+
+# Metrics that report percentages must be in [0, 100]
+_PERCENTAGE_METRICS = [
+    "memory.l2_hit_rate",
+    "memory.l1_hit_rate",
+    "memory.hbm_bandwidth_utilization",
+    "memory.coalescing_efficiency",
+    "memory.global_load_efficiency",
+    "memory.global_store_efficiency",
+]
+
+# Metrics that must be non-negative (bandwidth, bytes, FLOPS, latency, etc.)
+_NON_NEGATIVE_METRICS = [
+    "memory.hbm_read_bandwidth",
+    "memory.hbm_write_bandwidth",
+    "memory.l2_bandwidth",
+    "memory.bytes_transferred_hbm",
+    "memory.bytes_transferred_l2",
+    "memory.bytes_transferred_l1",
+    "memory.lds_bank_conflicts",
+    "compute.total_flops",
+    "compute.hbm_gflops",
+    "compute.hbm_arithmetic_intensity",
+    "compute.l2_arithmetic_intensity",
+    "compute.l1_arithmetic_intensity",
+]
+
+# Copy kernel exercises both reads and writes — good for testing bounds
+# across memory metrics.  FMA-heavy kernel covers compute metrics.
+_BOUNDS_COPY_SRC = _HIP_HEADER + r"""
+__global__ void copy_kernel(const float* __restrict__ src,
+                            float* __restrict__ dst, size_t N) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < N) dst[idx] = src[idx];
+}
+int main() {
+    size_t N = 64ULL * 1024 * 1024;
+    float *d_src, *d_dst;
+    HIP_CHECK(hipMalloc(&d_src, N * sizeof(float)));
+    HIP_CHECK(hipMalloc(&d_dst, N * sizeof(float)));
+    HIP_CHECK(hipMemset(d_src, 0, N * sizeof(float)));
+    int block = 256, grid = (N + block - 1) / block;
+    copy_kernel<<<grid, block>>>(d_src, d_dst, N);
+    HIP_CHECK(hipDeviceSynchronize());
+    copy_kernel<<<grid, block>>>(d_src, d_dst, N);
+    HIP_CHECK(hipDeviceSynchronize());
+    HIP_CHECK(hipFree(d_src)); HIP_CHECK(hipFree(d_dst));
+    return 0;
+}
+"""
+
+_BOUNDS_FMA_SRC = _HIP_HEADER + r"""
+__global__ void fma_kernel(const float* __restrict__ src,
+                           float* __restrict__ dst, size_t N) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < N) {
+        float val = src[idx];
+        float acc = 0.0f;
+        #pragma unroll 1
+        for (int i = 0; i < 10; i++) acc = __builtin_fmaf(val, val, acc);
+        dst[idx] = acc;
+    }
+}
+int main() {
+    size_t N = 64ULL * 1024 * 1024;
+    float *d_src, *d_dst;
+    HIP_CHECK(hipMalloc(&d_src, N * sizeof(float)));
+    HIP_CHECK(hipMalloc(&d_dst, N * sizeof(float)));
+    HIP_CHECK(hipMemset(d_src, 0x3F, N * sizeof(float)));
+    int block = 256, grid = (N + block - 1) / block;
+    fma_kernel<<<grid, block>>>(d_src, d_dst, N);
+    HIP_CHECK(hipDeviceSynchronize());
+    fma_kernel<<<grid, block>>>(d_src, d_dst, N);
+    HIP_CHECK(hipDeviceSynchronize());
+    HIP_CHECK(hipFree(d_src)); HIP_CHECK(hipFree(d_dst));
+    return 0;
+}
+"""
+
+
+class TestMetricBounds:
+    """Verify every derived metric stays within valid bounds.
+
+    No metric that reports a percentage should ever exceed 100% or go
+    below 0%.  Bandwidth, bytes, FLOPS, and latency must be non-negative.
+    """
+
+    def test_percentage_metrics_bounded_0_100(self):
+        """All percentage metrics must be in [0, 100]."""
+        with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
+            p = Path(d)
+            b = _compile_hip(_BOUNDS_COPY_SRC, "bounds_copy", p)
+            m = _profile(b, _PERCENTAGE_METRICS, p)
+        for name in _PERCENTAGE_METRICS:
+            if name not in m:
+                continue
+            val = m[name]
+            assert 0.0 <= val <= 100.0, (
+                f"{name} = {val} is outside [0, 100]"
+            )
+
+    def test_memory_metrics_non_negative(self):
+        """Bandwidth, bytes transferred, and LDS conflicts must be >= 0."""
+        mem_metrics = [m for m in _NON_NEGATIVE_METRICS if m.startswith("memory.")]
+        with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
+            p = Path(d)
+            b = _compile_hip(_BOUNDS_COPY_SRC, "bounds_mem", p)
+            m = _profile(b, mem_metrics, p)
+        for name in mem_metrics:
+            if name not in m:
+                continue
+            assert m[name] >= 0.0, f"{name} = {m[name]} is negative"
+
+    def test_compute_metrics_non_negative(self):
+        """FLOPS, GFLOPS, and arithmetic intensity must be >= 0."""
+        compute_metrics = [m for m in _NON_NEGATIVE_METRICS if m.startswith("compute.")]
+        with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
+            p = Path(d)
+            b = _compile_hip(_BOUNDS_FMA_SRC, "bounds_fma", p)
+            m = _profile(b, compute_metrics, p)
+        for name in compute_metrics:
+            if name not in m:
+                continue
+            assert m[name] >= 0.0, f"{name} = {m[name]} is negative"
+
+    @requires_arch("gfx942")
+    def test_atomic_latency_non_negative(self):
+        """Atomic latency must be >= 0."""
+        with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
+            p = Path(d)
+            b = _compile_hip(_ATOMIC_HIGH_SRC, "bounds_atomic", p)
+            m = _profile(b, ["memory.atomic_latency"], p)
+        assert m["memory.atomic_latency"] >= 0.0

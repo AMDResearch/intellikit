@@ -29,7 +29,7 @@ rocprofiler-sdk:
     - name: memory.l1_hit_rate
       definitions:
         - expression: >-
-            ((TCP_TOTAL_CACHE_ACCESSES_sum - TCP_TCC_READ_REQ_sum)
+            ((TCP_TOTAL_CACHE_ACCESSES_sum - TCP_TCC_READ_REQ_sum - TCP_TCC_WRITE_REQ_sum)
             / TCP_TOTAL_CACHE_ACCESSES_sum) * 100
           architectures: [gfx942, gfx90a]
 
@@ -172,7 +172,7 @@ rocprofiler-sdk:
     - name: compute.total_flops
       definitions:
         - expression: >-
-            64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
+            WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
             + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32
             + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
@@ -187,7 +187,7 @@ rocprofiler-sdk:
     - name: compute.hbm_gflops
       definitions:
         - expression: >-
-            ((64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
+            ((WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
             + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32
             + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
@@ -204,7 +204,7 @@ rocprofiler-sdk:
     - name: compute.hbm_arithmetic_intensity
       definitions:
         - expression: >-
-            (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
+            (WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
             + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32
             + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
@@ -219,7 +219,7 @@ rocprofiler-sdk:
             + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32)
           architectures: [gfx942]
         - expression: >-
-            (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
+            (WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
             + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32
             + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
@@ -238,7 +238,7 @@ rocprofiler-sdk:
     - name: compute.l2_arithmetic_intensity
       definitions:
         - expression: >-
-            (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
+            (WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
             + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32
             + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
@@ -255,7 +255,7 @@ rocprofiler-sdk:
     - name: compute.l1_arithmetic_intensity
       definitions:
         - expression: >-
-            (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
+            (WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
             + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32
             + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
@@ -266,7 +266,7 @@ rocprofiler-sdk:
             / (TCP_TOTAL_CACHE_ACCESSES_sum * 128)
           architectures: [gfx942]
         - expression: >-
-            (64 * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
+            (WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
             + (SQ_INSTS_VALU_ADD_F32 + SQ_INSTS_VALU_MUL_F32
             + SQ_INSTS_VALU_TRANS_F32 + SQ_INSTS_VALU_FMA_F32 * 2)
