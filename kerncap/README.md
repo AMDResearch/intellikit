@@ -135,6 +135,8 @@ Capture a kernel's full runtime state and generate a standalone reproducer.
 | Capture-only | `kc.extract("mul_mat_q", cmd=[...])` | `kerncap extract mul_mat_q --cmd "..."` |
 | Specific dispatch | `kc.extract("gemm_kernel", cmd=[...], dispatch=2)` | `kerncap extract gemm_kernel --cmd "..." --dispatch 2` |
 
+> **Language detection**: kerncap auto-detects whether a kernel is HIP or Triton from `--source-dir` contents. To override, pass `--language hip` or `--language triton` on the CLI (or `language="triton"` in the Python API).
+
 ```python
 # HIP kernel with source (enables recompile workflow)
 result = kc.extract(
@@ -164,6 +166,8 @@ Replay a captured kernel in isolation.
 | Baseline | `kc.replay("./isolated/mul_mat_q")` | `kerncap replay ./isolated/mul_mat_q` |
 | Variant HSACO | `kc.replay("./isolated/mul_mat_q", hsaco="optimized.hsaco")` | `kerncap replay ./isolated/mul_mat_q --hsaco optimized.hsaco` |
 | Benchmark | `kc.replay("./isolated/mul_mat_q", iterations=100)` | `kerncap replay ./isolated/mul_mat_q --iterations 100` |
+
+> **HIP launch mode**: If replay conflicts with `rocprofv3` (e.g. when profiling the reproducer itself), pass `--hip-launch` to use the HIP runtime launch path instead of the default HSA dispatch.
 
 ```python
 baseline = kc.replay("./isolated/mul_mat_q")
