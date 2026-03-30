@@ -250,6 +250,8 @@ class TestCoalescingEfficiency:
 class TestCacheHitRates:
     """Validate L1 and L2 cache hit rate metrics."""
 
+    # 1 MB array (256K floats) — fits in L2 on all archs
+    # (MI210 has 8 MB L2, MI300X has 256 MB)
     _L2_SRC = _HIP_HEADER + r"""
     __global__ void l2_kernel(const float* __restrict__ src,
                               float* __restrict__ out,
@@ -262,8 +264,8 @@ class TestCacheHitRates:
         if (threadIdx.x == 0) out[blockIdx.x] = acc;
     }
     int main() {
-        size_t N = 2ULL * 1024 * 1024;  // 8 MB — fits in L2
-        int iters = 100, num_blocks = 256, block = 256;
+        size_t N = 256ULL * 1024;  // 1 MB — fits in L2 on all archs
+        int iters = 200, num_blocks = 128, block = 256;
         float *d_src, *d_out;
         HIP_CHECK(hipMalloc(&d_src, N * sizeof(float)));
         HIP_CHECK(hipMalloc(&d_out, num_blocks * sizeof(float)));
@@ -314,7 +316,7 @@ class TestCacheHitRates:
     """
 
     def test_l2_hit_rate_with_resident_data(self):
-        """8 MB array iterated 100x should show >50% L2 hit rate."""
+        """1 MB array iterated 200x should show >50% L2 hit rate."""
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
             p = Path(d)
             b = _compile_hip(self._L2_SRC, "l2_resident", p)
