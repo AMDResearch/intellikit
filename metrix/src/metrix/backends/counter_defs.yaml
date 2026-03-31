@@ -35,7 +35,7 @@ rocprofiler-sdk:
       unit: Percent
       definitions:
         - expression: (GRBM_GUI_ACTIVE / GRBM_COUNT) * 100
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx942, gfx90a, gfx1201, gfx1151]
 
     # --- Cache hit rates ---
     # L2 (TCC): hits / (hits + misses). L1 (TCP): misses go to L2 via TCC_READ_REQ.

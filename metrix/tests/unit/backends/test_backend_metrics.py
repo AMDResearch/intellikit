@@ -78,6 +78,34 @@ def get_arch_counter_names(backend, base_names):
     return result
 
 
+class TestGPUUtilization:
+    """Test GPU utilization computation"""
+
+    def test_full_utilization(self, backend):
+        """100% utilization — GPU active for all cycles"""
+        backend._raw_data = {"GRBM_GUI_ACTIVE": 1000, "GRBM_COUNT": 1000}
+        result = compute(backend, "compute.gpu_utilization")
+        assert result == 100.0
+
+    def test_half_utilization(self, backend):
+        """50% utilization"""
+        backend._raw_data = {"GRBM_GUI_ACTIVE": 500, "GRBM_COUNT": 1000}
+        result = compute(backend, "compute.gpu_utilization")
+        assert result == 50.0
+
+    def test_zero_utilization(self, backend):
+        """0% utilization — GPU idle"""
+        backend._raw_data = {"GRBM_GUI_ACTIVE": 0, "GRBM_COUNT": 1000}
+        result = compute(backend, "compute.gpu_utilization")
+        assert result == 0.0
+
+    def test_no_cycles(self, backend):
+        """Handle zero total cycles (division by zero)"""
+        backend._raw_data = {"GRBM_GUI_ACTIVE": 0, "GRBM_COUNT": 0}
+        result = compute(backend, "compute.gpu_utilization")
+        assert result == 0.0
+
+
 class TestL2HitRate:
     """Test L2 cache hit rate computation"""
 

@@ -474,6 +474,31 @@ class TestFLOPSCounters:
 
 
 # =========================================================================
+# GPU utilization benchmarks
+# =========================================================================
+
+
+class TestGPUUtilization:
+    """Validate compute.gpu_utilization on CDNA and RDNA."""
+
+    def test_busy_kernel_shows_high_utilization(self):
+        """A long-running compute kernel should show >50% GPU utilization."""
+        with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
+            p = Path(d)
+            b = _compile_hip(_VALU_FMA_SRC, "gpu_util", p)
+            m = _profile(b, ["compute.gpu_utilization"], p)
+        assert m["compute.gpu_utilization"] > 50.0
+
+    def test_utilization_bounded_0_100(self):
+        """GPU utilization must be in [0, 100]."""
+        with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
+            p = Path(d)
+            b = _compile_hip(_VALU_FMA_SRC, "gpu_util_bounds", p)
+            m = _profile(b, ["compute.gpu_utilization"], p)
+        assert 0.0 <= m["compute.gpu_utilization"] <= 100.0
+
+
+# =========================================================================
 # Atomic latency benchmarks (gfx942 only)
 # =========================================================================
 
@@ -620,6 +645,7 @@ class TestArithmeticIntensity:
 
 # Metrics that report percentages must be in [0, 100]
 _PERCENTAGE_METRICS = [
+    "compute.gpu_utilization",
     "memory.l2_hit_rate",
     "memory.l1_hit_rate",
     "memory.hbm_bandwidth_utilization",
