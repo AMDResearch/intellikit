@@ -409,7 +409,7 @@ class ROCProfV3Wrapper:
                     dispatches[dispatch_id]["counters"][counter_name] = counter_value
 
                 except (KeyError, ValueError) as e:
-                    print(f"Warning: Failed to parse row: {e}: {row}")
+                    logger.warning(f"Failed to parse row: {e}: {row}")
                     continue
 
         # Convert to ProfileResult objects
@@ -474,7 +474,7 @@ class ROCProfV3Wrapper:
                     dispatches[dispatch_id] = result
 
                 except (KeyError, ValueError) as e:
-                    print(f"Warning: Failed to parse trace row: {e}")
+                    logger.warning(f"Failed to parse trace row: {e}")
                     continue
 
         return list(dispatches.values())

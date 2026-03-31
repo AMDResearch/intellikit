@@ -123,16 +123,18 @@ class CounterBackend(ABC):
         arch = self.device_specs.arch
         yaml_path = Path(__file__).parent / "counter_defs.yaml"
 
+        from ..logger import logger
+
         if not yaml_path.exists():
             return
 
-        print(f"📄 Loading YAML-based metrics from {yaml_path.name}")
+        logger.debug(f"Loading YAML-based metrics from {yaml_path.name}")
 
         try:
             with open(yaml_path, "r") as f:
                 yaml_data = yaml.safe_load(f)
         except Exception as e:
-            print(f"⚠️  Failed to load YAML metrics: {e}")
+            logger.warning(f"Failed to load YAML metrics: {e}")
             return
 
         if not yaml_data or "rocprofiler-sdk" not in yaml_data:
@@ -206,7 +208,7 @@ class CounterBackend(ABC):
         self._unsupported_metrics.clear()
         self._metrics.update(yaml_metrics)
         self._unsupported_metrics.update(yaml_unsupported)
-        print(f"✓ Loaded {len(self._metrics)} YAML-based metrics for {arch}")
+        logger.info(f"Loaded {len(self._metrics)} YAML-based metrics for {arch}")
 
     @property
     def _builtin_expression_vars(self) -> set:
@@ -557,15 +559,8 @@ class CounterBackend(ABC):
 
             # Process each batch
             for batch_num, (batch_label, batch_metrics) in enumerate(batches, 1):
-                sep = "=" * 60
-                print(f"\n{sep}")
-                print(
-                    f"📊 Profiling {batch_label} ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
-                )
-                sep = "=" * 60
-                print(f"{sep}")
                 logger.info(
-                    f"Profiling {batch_label} metrics ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
+                    f"Profiling {batch_label} ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
                 )
 
                 # Recursively call profile with batch (won't recurse since len <= MAX_METRICS_PER_BATCH)
@@ -586,49 +581,18 @@ class CounterBackend(ABC):
                         all_kernel_results[kernel_name] = {}
                     all_kernel_results[kernel_name].update(kernel_data)
 
-                # Show results for this batch immediately (grouped by kernel)
-                print(f"\n✓ {batch_label} RESULTS:")
+                # Log results for this batch (grouped by kernel)
                 for kernel_name, kernel_data in batch_result._aggregated.items():
-                    print(f"  [{kernel_name}]")
                     for metric_name, metric_stats in sorted(kernel_data.items()):
                         if hasattr(metric_stats, "avg"):
-                            print(f"    {metric_name}: {metric_stats.avg:.2f}")
+                            logger.debug(f"  {batch_label} [{kernel_name}] {metric_name}: {metric_stats.avg:.2f}")
 
-            logger.info(f"✓ Collected all {len(metrics)} metrics across {total_batches} batches")
+            logger.info(f"Collected all {len(metrics)} metrics across {total_batches} batches")
 
             # Compute derived metrics now that all counters are aggregated
-            print(f"\n{'=' * 60}")
-            print("📊 Computing derived metrics...")
-            print("=" * 60)
+            logger.info("Computing derived metrics...")
             all_kernel_results = self._compute_derived_metrics(all_kernel_results)
-            print("✓ Derived metrics computed\n")
-
-            # Display derived metrics
-            print("\n✓ DERIVED METRICS:")
-            for kernel_name, kernel_data in all_kernel_results.items():
-                derived_found = False
-                for metric_name in sorted(kernel_data.keys()):
-                    # Show metrics with common derived metric patterns
-                    if any(
-                        x in metric_name
-                        for x in ["percent", "rate", "efficiency", "utilization", "bandwidth"]
-                    ):
-                        if not derived_found:
-                            print(f"  {kernel_name}:")
-                            derived_found = True
-                        metric_stats = kernel_data[metric_name]
-                        if hasattr(metric_stats, "avg"):
-                            # Format as percentage if it's a percent metric
-                            if (
-                                "percent" in metric_name
-                                or "rate" in metric_name
-                                or "efficiency" in metric_name
-                                or "utilization" in metric_name
-                            ):
-                                print(f"    {metric_name}: {metric_stats.avg:.2f}%")
-                            else:
-                                print(f"    {metric_name}: {metric_stats.avg:.2f}")
-            print("")
+            logger.info("Derived metrics computed")
 
             # Return merged results - set our _aggregated and return self
             self._aggregated = all_kernel_results
