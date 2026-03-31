@@ -34,7 +34,7 @@ rocprofiler-sdk:
     - name: compute.gpu_utilization
       unit: Percent
       definitions:
-        - expression: (GRBM_GUI_ACTIVE / GRBM_COUNT) * 100
+        - expression: min((GRBM_GUI_ACTIVE / GRBM_COUNT) * 100, 100.0)
           architectures: [gfx942, gfx90a, gfx1201, gfx1151]
 
     # --- Cache hit rates ---

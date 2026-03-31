@@ -105,6 +105,12 @@ class TestGPUUtilization:
         result = compute(backend, "compute.gpu_utilization")
         assert result == 0.0
 
+    def test_clamped_above_100(self, backend):
+        """Counter aggregation can produce GUI_ACTIVE > COUNT; result clamped to 100"""
+        backend._raw_data = {"GRBM_GUI_ACTIVE": 1005, "GRBM_COUNT": 1000}
+        result = compute(backend, "compute.gpu_utilization")
+        assert result == 100.0
+
 
 class TestL2HitRate:
     """Test L2 cache hit rate computation"""
