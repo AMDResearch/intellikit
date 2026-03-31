@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# gpu_query binary: locate source, compile on first use, cache
+# gpu_query binary: locate source, compile on first use
 # ---------------------------------------------------------------------------
 _GPU_QUERY_SOURCE = "gpu_query.hip"
 
@@ -55,34 +54,16 @@ def _find_hip_source() -> Optional[Path]:
     return None
 
 
-def _get_cache_dir() -> Path:
-    """Return a user-writable cache directory for compiled binaries."""
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    base = Path(xdg) if xdg else Path.home() / ".cache"
-    cache = base / "metrix"
-    try:
-        cache.mkdir(parents=True, exist_ok=True)
-        return cache
-    except PermissionError:
-        cache = Path("/tmp") / "metrix"
-        cache.mkdir(parents=True, exist_ok=True)
-        return cache
-
-
 def _compile_gpu_query(source: Path) -> Path:
-    """Compile gpu_query.hip with hipcc if not already cached."""
-    cache = _get_cache_dir()
-    binary = cache / "gpu_query"
-
-    # Recompile if binary missing or source is newer
-    if binary.is_file() and binary.stat().st_mtime >= source.stat().st_mtime:
-        return binary
-
+    """Compile gpu_query.hip with hipcc into a temporary file."""
     hipcc = shutil.which("hipcc")
     if hipcc is None:
         raise RuntimeError("hipcc not found on PATH. Install ROCm or add hipcc to PATH.")
 
-    logger.info("Compiling gpu_query.hip (first run only)...")
+    import tempfile
+
+    binary = Path(tempfile.mktemp(prefix="metrix_gpu_query_"))
+
     try:
         proc = subprocess.run(
             [hipcc, str(source), "-o", str(binary), "-O2"],
