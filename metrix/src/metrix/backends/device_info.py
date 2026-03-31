@@ -141,11 +141,9 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     results = _run_gpu_query(device_id)
     gpu = results[0]
     hw_arch = gpu["gcn_arch_name"].split(":")[0]
-
-    if hw_arch != arch:
-        raise RuntimeError(
-            f"Architecture mismatch: requested {arch} but device {device_id} is {hw_arch}"
-        )
+    # Use the actual hardware arch, not the requested one — get_backend()
+    # already maps aliases (gfx1103 -> GFX1100Backend, gfx950 -> GFX942Backend)
+    arch = hw_arch
 
     # Convert raw HIP values to DeviceSpecs units
     wavefront_size = gpu["wavefront_size"]
