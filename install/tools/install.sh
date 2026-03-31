@@ -176,21 +176,25 @@ check_system_deps() {
     fi
   fi
   if [[ ${#missing[@]} -gt 0 ]]; then
-    echo ""
-    echo "Error: Missing system packages required by accordo/nexus: ${missing[*]}"
-    echo "Install them first:"
+    echo "" >&2
+    echo "Error: Missing system packages required by accordo/nexus: ${missing[*]}" >&2
+    echo "Install them first:" >&2
     if command -v apt-get >/dev/null 2>&1; then
-      echo "  sudo apt-get update && sudo apt-get install -y ${missing[*]}"
+      echo "  sudo apt-get update && sudo apt-get install -y ${missing[*]}" >&2
     elif command -v dnf >/dev/null 2>&1; then
-      echo "  sudo dnf install -y ${missing[*]}"
+      echo "  sudo dnf install -y ${missing[*]}" >&2
     elif command -v yum >/dev/null 2>&1; then
-      echo "  sudo yum install -y ${missing[*]}"
+      echo "  sudo yum install -y ${missing[*]}" >&2
     else
-      echo "  (use your system package manager to install: ${missing[*]})"
+      echo "  (use your system package manager to install: ${missing[*]})" >&2
     fi
-    echo ""
-    echo "Without these, the C++ build step for accordo/nexus (via KernelDB) will fail."
-    echo ""
+    echo "" >&2
+    echo "Without these, the C++ build step for accordo/nexus (via KernelDB) will fail." >&2
+    echo "" >&2
+    if [[ "$DRY_RUN" == true ]]; then
+      echo "Dry run: continuing despite missing system dependencies." >&2
+      return 0
+    fi
     exit 1
   fi
 }
