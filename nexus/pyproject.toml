@@ -31,6 +31,7 @@ dev = [
 ]
 
 [project.scripts]
+nexus = "nexus.cli:main"
 nexus-mcp = "nexus.mcp.server:main"
 
 [tool.scikit-build]
