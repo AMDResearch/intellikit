@@ -60,8 +60,13 @@ def _get_cache_dir() -> Path:
     xdg = os.environ.get("XDG_CACHE_HOME")
     base = Path(xdg) if xdg else Path.home() / ".cache"
     cache = base / "metrix"
-    cache.mkdir(parents=True, exist_ok=True)
-    return cache
+    try:
+        cache.mkdir(parents=True, exist_ok=True)
+        return cache
+    except PermissionError:
+        cache = Path("/tmp") / "metrix"
+        cache.mkdir(parents=True, exist_ok=True)
+        return cache
 
 
 def _compile_gpu_query(source: Path) -> Path:
