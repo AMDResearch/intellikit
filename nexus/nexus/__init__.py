@@ -49,27 +49,6 @@ def _find_nexus_lib() -> Optional[Path]:
     return None
 
 
-def lib_path() -> str:
-    """Return the absolute path to ``libnexus.so``.
-
-    Useful for setting ``HSA_TOOLS_LIB`` when driving Nexus via
-    environment variables instead of the Python API::
-
-        export HSA_TOOLS_LIB=$(python -c "import nexus; print(nexus.lib_path())")
-
-    Raises:
-        RuntimeError: If libnexus.so cannot be found.
-    """
-    path = _find_nexus_lib()
-    if path is None:
-        raise RuntimeError(
-            "Could not find libnexus.so. Please build the project first:\n"
-            "  cmake -B build -DCMAKE_PREFIX_PATH=/opt/rocm -DCMAKE_BUILD_TYPE=Release\n"
-            "  cmake --build build --parallel"
-        )
-    return str(path)
-
-
 class Kernel:
     """Represents a single GPU kernel with its assembly and source code."""
 

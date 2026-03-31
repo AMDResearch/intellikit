@@ -133,7 +133,7 @@ For more details, see the [examples directory](examples/).
 To use Nexus, simply export the following environment variables and run your application:
 
 ```terminal
-export HSA_TOOLS_LIB=$(python -c "import nexus; print(nexus.lib_path())")
+export HSA_TOOLS_LIB=/path/to/libnexus.so  # installed into site-packages/nexus/
 export NEXUS_LOG_LEVEL=3
 export NEXUS_OUTPUT_FILE=result.json
 
