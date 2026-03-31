@@ -54,8 +54,15 @@ def _find_hip_source() -> Optional[Path]:
     return None
 
 
+_compiled_binary: Optional[Path] = None
+
+
 def _compile_gpu_query(source: Path) -> Path:
-    """Compile gpu_query.hip with hipcc into a temporary file."""
+    """Compile gpu_query.hip with hipcc into a temporary file (once per process)."""
+    global _compiled_binary
+    if _compiled_binary is not None and _compiled_binary.is_file():
+        return _compiled_binary
+
     hipcc = shutil.which("hipcc")
     if hipcc is None:
         raise RuntimeError("hipcc not found on PATH. Install ROCm or add hipcc to PATH.")
@@ -77,6 +84,7 @@ def _compile_gpu_query(source: Path) -> Path:
     if proc.returncode != 0:
         raise RuntimeError(f"hipcc failed (rc={proc.returncode}):\n{proc.stderr}")
 
+    _compiled_binary = binary
     return binary
 
 
