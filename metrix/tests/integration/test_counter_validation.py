@@ -187,6 +187,8 @@ class TestHBMBandwidth:
                 ],
                 p,
             )
+        # 3% floor: on high-peak-BW parts (e.g. gfx950) the same absolute
+        # copy BW yields a smaller % utilization. Absolute BW is checked below.
         assert 3.0 <= m["memory.hbm_bandwidth_utilization"] <= 100.0
         assert m["memory.hbm_read_bandwidth"] > 50.0
         assert m["memory.hbm_write_bandwidth"] > 50.0

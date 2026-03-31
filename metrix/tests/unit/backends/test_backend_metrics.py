@@ -66,7 +66,7 @@ def get_arch_counter_names(backend, base_names):
     """
     Map counter names based on backend architecture.
 
-    gfx942 (MI300X) uses TCC_EA0_* naming, gfx90a (MI200) uses TCC_EA_*
+    gfx942/gfx950 (MI300X/MI350X) use TCC_EA0_* naming, gfx90a (MI200) uses TCC_EA_*
     """
     arch = backend.device_specs.arch
 
