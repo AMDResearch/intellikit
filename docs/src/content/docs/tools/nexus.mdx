@@ -9,7 +9,12 @@ Nexus intercepts Heterogeneous System Architecture (HSA) packets, extracts the s
 
 ## Installation
 
+Nexus compiles a native C++ library during installation. You need `cmake` and `libdwarf-dev` first:
+
 ```bash
+# System prerequisites (Debian/Ubuntu)
+sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev
+
 # From Git
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"
 
