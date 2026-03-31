@@ -177,7 +177,7 @@ check_system_deps() {
   fi
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo ""
-    echo "WARNING: Missing system packages required by accordo/nexus: ${missing[*]}"
+    echo "Error: Missing system packages required by accordo/nexus: ${missing[*]}"
     echo "Install them first:"
     if command -v apt-get >/dev/null 2>&1; then
       echo "  sudo apt-get update && sudo apt-get install -y ${missing[*]}"
@@ -191,6 +191,7 @@ check_system_deps() {
     echo ""
     echo "Without these, the C++ build step for accordo/nexus (via KernelDB) will fail."
     echo ""
+    exit 1
   fi
 }
 
