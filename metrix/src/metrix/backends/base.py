@@ -585,7 +585,9 @@ class CounterBackend(ABC):
                 for kernel_name, kernel_data in batch_result._aggregated.items():
                     for metric_name, metric_stats in sorted(kernel_data.items()):
                         if hasattr(metric_stats, "avg"):
-                            logger.debug(f"  {batch_label} [{kernel_name}] {metric_name}: {metric_stats.avg:.2f}")
+                            logger.debug(
+                                f"  {batch_label} [{kernel_name}] {metric_name}: {metric_stats.avg:.2f}"
+                            )
 
             logger.info(f"Collected all {len(metrics)} metrics across {total_batches} batches")
 
