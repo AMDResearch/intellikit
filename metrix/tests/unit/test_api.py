@@ -15,7 +15,7 @@ class TestMetrixInit:
         """Test default initialization (falls back to gfx942 if no hardware detected)"""
         profiler = Metrix()
         # Default depends on hardware detection, but should succeed
-        assert profiler.arch in ["gfx942", "gfx90a", "gfx1201"]
+        assert profiler.arch in ["gfx942", "gfx950", "gfx90a", "gfx1201", "gfx1151"]
         assert profiler.backend is not None
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])

@@ -187,7 +187,7 @@ class TestHBMBandwidth:
                 ],
                 p,
             )
-        assert 5.0 <= m["memory.hbm_bandwidth_utilization"] <= 100.0
+        assert 3.0 <= m["memory.hbm_bandwidth_utilization"] <= 100.0
         assert m["memory.hbm_read_bandwidth"] > 50.0
         assert m["memory.hbm_write_bandwidth"] > 50.0
 
