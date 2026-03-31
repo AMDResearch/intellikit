@@ -102,7 +102,15 @@ def test_cli_list_metrics():
 
 
 def test_cli_list_metrics_includes_compute():
-    """Test that metrix list metrics includes compute metrics"""
+    """Test that metrix list metrics includes compute metrics (when available)"""
+    from metrix import Metrix
+
+    profiler = Metrix()
+    if "compute.total_flops" not in profiler.backend.get_available_metrics():
+        pytest.skip(
+            f"Compute metrics not available on {profiler.backend.device_specs.arch}"
+        )
+
     result = subprocess.run(
         ["metrix", "list", "metrics"], capture_output=True, text=True, timeout=5
     )
@@ -125,6 +133,14 @@ def test_cli_list_profiles_includes_compute():
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_compute_profile():
     """Test metrix profile --profile compute"""
+    from metrix import Metrix
+
+    profiler = Metrix()
+    if "compute.total_flops" not in profiler.backend.get_available_metrics():
+        pytest.skip(
+            f"Compute metrics not available on {profiler.backend.device_specs.arch}"
+        )
+
     result = subprocess.run(
         [
             "metrix",
@@ -154,6 +170,14 @@ def test_cli_compute_profile():
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
 def test_cli_compute_metric_directly():
     """Test metrix --metrics compute.total_flops"""
+    from metrix import Metrix
+
+    profiler = Metrix()
+    if "compute.total_flops" not in profiler.backend.get_available_metrics():
+        pytest.skip(
+            f"Compute metrics not available on {profiler.backend.device_specs.arch}"
+        )
+
     result = subprocess.run(
         [
             "metrix",
