@@ -48,7 +48,7 @@ sudo dnf install -y cmake libdwarf-devel
 ### From Git Repository (Recommended)
 
 ```bash
-pip install git+https://github.com/AMDResearch/intellikit.git
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"
 ```
 
 This will automatically build the native C++ library during installation.
@@ -58,7 +58,7 @@ For development/editable install:
 ```bash
 git clone https://github.com/AMDResearch/intellikit.git
 cd intellikit
-pip install -e .
+pip install -e ./nexus
 ```
 
 ### Manual Build (Optional)

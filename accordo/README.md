@@ -27,11 +27,7 @@ sudo dnf install -y cmake libdwarf-devel
 ### Install via pip
 
 ```bash
-# Install from IntelliKit
-pip install git+https://github.com/AMDResearch/intellikit.git
-
-# Or install accordo only
-pip install git+https://github.com/AMDResearch/intellikit.git#subdirectory=accordo
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=accordo"
 ```
 
 ## Quick Start
