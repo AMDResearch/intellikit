@@ -1,8 +1,8 @@
 """
-Unit tests for backend metric computations (gfx942 and gfx90a)
+Unit tests for backend metric computations (gfx942, gfx950, and gfx90a)
 
 Tests use MOCK counter data (no hardware counters in test code!)
-Tests are parametrized to run on both MI300X (gfx942) and MI200 (gfx90a).
+Tests are parametrized to run on MI300X (gfx942), MI350X (gfx950), and MI200 (gfx90a).
 All metrics are loaded from counter_defs.yaml.
 """
 
@@ -23,6 +23,17 @@ _TEST_SPECS = {
         l2_size_mb=256.0,
         lds_size_per_cu_kb=64.0,
     ),
+    "gfx950": DeviceSpecs(
+        arch="gfx950",
+        name="AMD Instinct MI350X",
+        num_cu=256,
+        max_waves_per_cu=32,
+        wavefront_size=64,
+        base_clock_mhz=2200.0,
+        hbm_bandwidth_gbs=6000.0,
+        l2_size_mb=256.0,
+        lds_size_per_cu_kb=64.0,
+    ),
     "gfx90a": DeviceSpecs(
         arch="gfx90a",
         name="AMD Instinct MI210",
@@ -37,9 +48,9 @@ _TEST_SPECS = {
 }
 
 
-@pytest.fixture(params=["gfx942", "gfx90a"])
+@pytest.fixture(params=["gfx942", "gfx950", "gfx90a"])
 def backend(request):
-    """Parametrized fixture that provides both gfx942 and gfx90a backends"""
+    """Parametrized fixture that provides gfx942, gfx950, and gfx90a backends"""
     arch = request.param
     patch_target = f"metrix.backends.{arch}.query_device_specs"
     with patch(patch_target, return_value=_TEST_SPECS[arch]):
@@ -59,7 +70,7 @@ def get_arch_counter_names(backend, base_names):
     """
     arch = backend.device_specs.arch
 
-    if arch == "gfx942":
+    if arch in ("gfx942", "gfx950"):
         mapping = {
             "TCC_EA_RDREQ_sum": "TCC_EA0_RDREQ_sum",
             "TCC_EA_RDREQ_32B_sum": "TCC_EA0_RDREQ_32B_sum",
@@ -189,9 +200,10 @@ class TestBandwidthMetrics:
     def test_hbm_read_bandwidth_64b_only(self, backend):
         """Test read bandwidth with only 64B requests"""
         arch = backend.device_specs.arch
+        # Use clock_mhz * 1000 as active cycles → active_time = 0.001s for any arch
+        active_cycles = int(backend.device_specs.base_clock_mhz * 1000)
 
-        if arch == "gfx942":
-            active_cycles = 2100000
+        if arch in ("gfx942", "gfx950"):
             counters = {
                 "TCC_EA_RDREQ_sum": 1000,
                 "TCC_EA_RDREQ_32B_sum": 0,
@@ -199,7 +211,6 @@ class TestBandwidthMetrics:
                 "GRBM_GUI_ACTIVE": active_cycles,
             }
         else:
-            active_cycles = 1700000
             counters = {
                 "TCC_EA_RDREQ_sum": 1000,
                 "TCC_EA_RDREQ_32B_sum": 0,
@@ -213,9 +224,9 @@ class TestBandwidthMetrics:
     def test_hbm_read_bandwidth_mixed_sizes(self, backend):
         """Test read bandwidth with mixed request sizes"""
         arch = backend.device_specs.arch
+        active_cycles = int(backend.device_specs.base_clock_mhz * 1000)
 
-        if arch == "gfx942":
-            active_cycles = 2100000
+        if arch in ("gfx942", "gfx950"):
             counters = {
                 "TCC_EA_RDREQ_sum": 1000,
                 "TCC_EA_RDREQ_32B_sum": 200,
@@ -224,7 +235,6 @@ class TestBandwidthMetrics:
             }
             expected_min, expected_max = 0.07, 0.08
         else:
-            active_cycles = 1700000
             counters = {
                 "TCC_EA_RDREQ_sum": 1000,
                 "TCC_EA_RDREQ_32B_sum": 400,
@@ -238,12 +248,7 @@ class TestBandwidthMetrics:
 
     def test_hbm_write_bandwidth_64b_only(self, backend):
         """Test write bandwidth with only 64B requests"""
-        arch = backend.device_specs.arch
-
-        if arch == "gfx942":
-            active_cycles = 2100000
-        else:
-            active_cycles = 1700000
+        active_cycles = int(backend.device_specs.base_clock_mhz * 1000)
 
         counters = {
             "TCC_EA_WRREQ_sum": 1000,
@@ -257,12 +262,7 @@ class TestBandwidthMetrics:
 
     def test_hbm_write_bandwidth_mixed_sizes(self, backend):
         """Test write bandwidth with mixed 32B and 64B requests"""
-        arch = backend.device_specs.arch
-
-        if arch == "gfx942":
-            active_cycles = 2100000
-        else:
-            active_cycles = 1700000
+        active_cycles = int(backend.device_specs.base_clock_mhz * 1000)
 
         counters = {
             "TCC_EA_WRREQ_sum": 1000,
@@ -278,7 +278,7 @@ class TestBandwidthMetrics:
         """Handle zero active cycles"""
         counters = {"TCC_EA_RDREQ_sum": 1000, "TCC_EA_RDREQ_32B_sum": 0, "GRBM_GUI_ACTIVE": 0}
 
-        if backend.device_specs.arch == "gfx942":
+        if backend.device_specs.arch in ("gfx942", "gfx950"):
             counters["TCC_BUBBLE_sum"] = 0
 
         backend._raw_data = get_arch_counter_names(backend, counters)
@@ -289,9 +289,9 @@ class TestBandwidthMetrics:
 class TestAtomicLatency:
     """Test L2 cache atomic operation latency computation"""
 
-    @pytest.fixture(params=["gfx942"])
+    @pytest.fixture(params=["gfx942", "gfx950"])
     def atomic_backend(self, request):
-        """Only gfx942 supports atomic_latency (broken on gfx90a)"""
+        """gfx942 and gfx950 support atomic_latency (broken on gfx90a)"""
         arch = request.param
         with patch(
             f"metrix.backends.{arch}.query_device_specs",
@@ -490,7 +490,7 @@ class TestComputeMetrics:
             "TCC_EA_WRREQ_64B_sum": 0,
         }
 
-        if backend.device_specs.arch == "gfx942":
+        if backend.device_specs.arch in ("gfx942", "gfx950"):
             counters["TCC_BUBBLE_sum"] = 0
 
         backend._raw_data.update(get_arch_counter_names(backend, counters))
@@ -510,7 +510,7 @@ class TestComputeMetrics:
             "TCC_EA_WRREQ_64B_sum": 0,
         }
 
-        if backend.device_specs.arch == "gfx942":
+        if backend.device_specs.arch in ("gfx942", "gfx950"):
             counters["TCC_BUBBLE_sum"] = 0
 
         backend._raw_data.update(get_arch_counter_names(backend, counters))
@@ -541,9 +541,11 @@ class TestComputeMetrics:
         backend._raw_data = self._get_zero_flops_counters()
         backend._raw_data["SQ_INSTS_VALU_ADD_F32"] = 1000
 
-        if backend.device_specs.arch == "gfx942":
+        if backend.device_specs.arch in ("gfx942", "gfx950"):
+            # 128B L1 cache line: 1000 FP32 FLOPS / (500 * 128B) = 1.0
             backend._raw_data["TCP_TOTAL_CACHE_ACCESSES_sum"] = 500
         else:
+            # gfx90a: 64B L1 cache line: 1000 FP32 FLOPS / (1000 * 64B) = 1.0
             backend._raw_data["TCP_TOTAL_CACHE_ACCESSES_sum"] = 1000
 
         result = compute(backend, "compute.l1_arithmetic_intensity")
@@ -570,7 +572,7 @@ class TestComputeMetrics:
             "TCC_EA_WRREQ_64B_sum": 0,
         }
 
-        if backend.device_specs.arch == "gfx942":
+        if backend.device_specs.arch in ("gfx942", "gfx950"):
             counters["TCC_BUBBLE_sum"] = 0
 
         backend._raw_data.update(get_arch_counter_names(backend, counters))
@@ -590,7 +592,7 @@ class TestComputeMetrics:
             "TCC_EA_WRREQ_64B_sum": 0,
         }
 
-        if backend.device_specs.arch == "gfx942":
+        if backend.device_specs.arch in ("gfx942", "gfx950"):
             counters["TCC_BUBBLE_sum"] = 0
 
         backend._raw_data.update(get_arch_counter_names(backend, counters))

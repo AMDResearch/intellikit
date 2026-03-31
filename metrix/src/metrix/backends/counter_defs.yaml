@@ -15,10 +15,10 @@
 #   SQ_* — Shader Sequencer instruction counters
 #
 # HBM request sizes and counter differences between architectures:
-#   gfx942 (MI300): L2-to-Fabric requests can be 32B, 64B, or 128B.
+#   gfx942 (MI300) / gfx950 (MI350): L2-to-Fabric requests can be 32B, 64B, or 128B.
 #     TCC_EA0_RDREQ_sum — total read requests (all sizes) via EA0 port
 #     TCC_EA0_RDREQ_32B_sum — 32-byte read requests
-#     TCC_BUBBLE_sum — 128-byte read requests (MI300+ only)
+#     TCC_BUBBLE_sum — 128-byte read requests
 #     Remaining reads are 64B: (RDREQ - BUBBLE - RDREQ_32B)
 #   gfx90a (MI200): Only 32B and 64B requests (no TCC_BUBBLE).
 #     TCC_EA_RDREQ_sum — total read requests (aggregate of EA0+EA1 ports)
@@ -44,7 +44,7 @@ rocprofiler-sdk:
       unit: Percent
       definitions:
         - expression: (TCC_HIT_sum / (TCC_HIT_sum + TCC_MISS_sum)) * 100
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
         - expression: (GL2C_HIT_sum / (GL2C_HIT_sum + GL2C_MISS_sum)) * 100
           architectures: [gfx1201, gfx1151]
 
@@ -54,7 +54,7 @@ rocprofiler-sdk:
         - expression: >-
             ((TCP_TOTAL_CACHE_ACCESSES_sum - TCP_TCC_READ_REQ_sum - TCP_TCC_WRITE_REQ_sum)
             / TCP_TOTAL_CACHE_ACCESSES_sum) * 100
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     # --- L2 bandwidth ---
     # (total L2 accesses * 128B cacheline) / kernel active time.
@@ -66,23 +66,23 @@ rocprofiler-sdk:
         - expression: >-
             (((TCC_HIT_sum + TCC_MISS_sum) * 128) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     # --- Bytes transferred ---
     # Raw byte counts: requests * cacheline size.
-    # L2 cacheline = 128B on all CDNA. L1 cacheline = 128B on gfx942, 64B on gfx90a.
+    # L2 cacheline = 128B on all CDNA. L1 cacheline = 128B on gfx942/gfx950, 64B on gfx90a.
 
     - name: memory.bytes_transferred_l2
       unit: Bytes
       definitions:
         - expression: TCC_REQ_sum * 128
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     - name: memory.bytes_transferred_l1
       unit: Bytes
       definitions:
         - expression: TCP_TOTAL_CACHE_ACCESSES_sum * 128
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - expression: TCP_TOTAL_CACHE_ACCESSES_sum * 64
           architectures: [gfx90a]
 
@@ -99,21 +99,21 @@ rocprofiler-sdk:
         - expression: >-
             min(((SQ_INSTS_VMEM_RD + SQ_INSTS_VMEM_WR) * 16
             / TCP_TOTAL_ACCESSES_sum) * 100, 100.0)
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     - name: memory.global_load_efficiency
       unit: Percent
       definitions:
         - expression: >-
             min((SQ_INSTS_VMEM_RD / TCP_TCC_READ_REQ_sum) * 100, 100.0)
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     - name: memory.global_store_efficiency
       unit: Percent
       definitions:
         - expression: >-
             min((SQ_INSTS_VMEM_WR / TCP_TCC_WRITE_REQ_sum) * 100, 100.0)
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     # --- LDS ---
     # Bank conflicts per LDS instruction. 0 = no conflicts, >0 = serialized accesses.
@@ -122,11 +122,11 @@ rocprofiler-sdk:
       unit: Conflicts per Access
       definitions:
         - expression: SQ_LDS_BANK_CONFLICT / SQ_INSTS_LDS
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     # --- HBM read bandwidth ---
     # Total bytes read from HBM / kernel active time.
-    # gfx942: 3 request sizes — 128B (TCC_BUBBLE), 64B (remainder), 32B.
+    # gfx942/gfx950: 3 request sizes — 128B (TCC_BUBBLE), 64B (remainder), 32B.
     # gfx90a: 2 request sizes — 64B (remainder), 32B. No 128B reads.
 
     - name: memory.hbm_read_bandwidth
@@ -137,7 +137,7 @@ rocprofiler-sdk:
             + (TCC_EA0_RDREQ_sum - TCC_BUBBLE_sum - TCC_EA0_RDREQ_32B_sum) * 64
             + TCC_EA0_RDREQ_32B_sum * 32) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - expression: >-
             (((TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64
             + TCC_EA_RDREQ_32B_sum * 32) / 1e9)
@@ -155,7 +155,7 @@ rocprofiler-sdk:
             ((TCC_EA0_WRREQ_64B_sum * 64
             + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - expression: >-
             ((TCC_EA_WRREQ_64B_sum * 64
             + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32) / 1e9)
@@ -176,7 +176,7 @@ rocprofiler-sdk:
             + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
             / HBM_BANDWIDTH_GBS * 100
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - expression: >-
             (((TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64
             + TCC_EA_RDREQ_32B_sum * 32
@@ -198,7 +198,7 @@ rocprofiler-sdk:
             + TCC_EA0_RDREQ_32B_sum * 32
             + TCC_EA0_WRREQ_64B_sum * 64
             + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - expression: >-
             (TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64
             + TCC_EA_RDREQ_32B_sum * 32
@@ -213,7 +213,7 @@ rocprofiler-sdk:
       unit: Cycles
       definitions:
         - expression: TCC_EA0_ATOMIC_LEVEL_sum / TCC_EA0_ATOMIC_sum
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - unsupported_reason: >-
             TCC_EA_ATOMIC_LEVEL_sum counter is broken on MI200 (gfx90a).
             This metric only works correctly on MI300X (gfx942) and newer GPUs.
@@ -236,7 +236,7 @@ rocprofiler-sdk:
             + SQ_INSTS_VALU_TRANS_F64 + SQ_INSTS_VALU_FMA_F64 * 2))
             + 512 * (SQ_INSTS_VALU_MFMA_MOPS_F16 + SQ_INSTS_VALU_MFMA_MOPS_BF16
             + SQ_INSTS_VALU_MFMA_MOPS_F32 + SQ_INSTS_VALU_MFMA_MOPS_F64)
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     # --- Compute: GFLOPS ---
     # total_flops / 1e9 / kernel_duration_seconds.
@@ -255,7 +255,7 @@ rocprofiler-sdk:
             + SQ_INSTS_VALU_MFMA_MOPS_F32 + SQ_INSTS_VALU_MFMA_MOPS_F64))
             / 1e9) / (DURATION_US / 1e6)
             if DURATION_US > 0 else 0.0
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     # --- Compute: HBM arithmetic intensity ---
     # total_flops / hbm_bytes_transferred. Key roofline metric.
@@ -278,7 +278,7 @@ rocprofiler-sdk:
             + TCC_EA0_RDREQ_32B_sum * 32
             + TCC_EA0_WRREQ_64B_sum * 64
             + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32)
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - expression: >-
             (WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
@@ -310,10 +310,10 @@ rocprofiler-sdk:
             + 512 * (SQ_INSTS_VALU_MFMA_MOPS_F16 + SQ_INSTS_VALU_MFMA_MOPS_BF16
             + SQ_INSTS_VALU_MFMA_MOPS_F32 + SQ_INSTS_VALU_MFMA_MOPS_F64))
             / (TCC_REQ_sum * 128)
-          architectures: [gfx942, gfx90a]
+          architectures: [gfx942, gfx950, gfx90a]
 
     # --- Compute: L1 arithmetic intensity ---
-    # total_flops / l1_bytes. L1 cacheline = 128B on gfx942, 64B on gfx90a.
+    # total_flops / l1_bytes. L1 cacheline = 128B on gfx942/gfx950, 64B on gfx90a.
 
     - name: compute.l1_arithmetic_intensity
       unit: FLOPs/Byte
@@ -328,7 +328,7 @@ rocprofiler-sdk:
             + 512 * (SQ_INSTS_VALU_MFMA_MOPS_F16 + SQ_INSTS_VALU_MFMA_MOPS_BF16
             + SQ_INSTS_VALU_MFMA_MOPS_F32 + SQ_INSTS_VALU_MFMA_MOPS_F64))
             / (TCP_TOTAL_CACHE_ACCESSES_sum * 128)
-          architectures: [gfx942]
+          architectures: [gfx942, gfx950]
         - expression: >-
             (WAVEFRONT_SIZE * ((SQ_INSTS_VALU_ADD_F16 + SQ_INSTS_VALU_MUL_F16
             + SQ_INSTS_VALU_TRANS_F16 + SQ_INSTS_VALU_FMA_F16 * 2)
