@@ -16,7 +16,7 @@ Existing GPU profilers have challenges:
 - **Clean Python API** with modern design
 - **Human-readable metrics** instead of raw counters
 - **Unit tested** and reliable
-- **18 metrics** across memory, cache, compute, and GPU utilization
+- **20 metrics** across memory, cache, compute, and GPU utilization (availability varies by GPU architecture)
 - **Multi-Run Profiling**: Automatic aggregation with min/max/avg statistics
 - **Kernel Filtering**: Efficient regex filtering at rocprofv3 level
 - **Multiple Output Formats**: Text, JSON, CSV

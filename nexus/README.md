@@ -105,7 +105,7 @@ for kernel in trace:
             print(f"  {i:3d}. {hip_line}")
 
 # Access specific kernel by name
-kernel = trace["vector_add(float*, float*, float*, int)"]
+kernel = trace["vector_add(float const*, float const*, float*, int)"]
 print(kernel.assembly)   # Array of assembly strings
 print(kernel.hip)        # Array of HIP source lines
 print(kernel.signature)  # Kernel signature
