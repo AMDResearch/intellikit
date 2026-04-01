@@ -675,11 +675,27 @@ void nexus::on_submit_packet(const void* in_packets,
 nlohmann::json nexus::get_all_isa(const std::string& kernel_name) {
   nlohmann::json assembly_array = nlohmann::json::array();
 
+  LOG_WARN("[DEBUG] get_all_isa called for kernel: {}", kernel_name);
+  LOG_WARN("[DEBUG] kdb_->hasKernel(\"{}\") = {}", kernel_name, kdb_->hasKernel(kernel_name));
+
+  // Dump all known kernel names for debugging
+  {
+    std::vector<std::string> all_kernels;
+    kdb_->getKernels(all_kernels);
+    LOG_WARN("[DEBUG] KernelDB has {} total kernels (eager + lazy)", all_kernels.size());
+    for (const auto& k : all_kernels) {
+      if (kernel_name.find("Cijk") != std::string::npos && k.find("Cijk") != std::string::npos) {
+        LOG_WARN("[DEBUG]   KDB Cijk kernel: '{}'", k);
+      }
+    }
+  }
+
   try {
     // Try to get the kernel directly without checking the list first
     // (getKernels() might not return all kernels, especially for Triton)
     auto& kernel = kdb_->getKernel(kernel_name);
     const auto& basic_blocks = kernel.getBasicBlocks();
+    LOG_WARN("[DEBUG] getKernel succeeded, {} basic blocks", basic_blocks.size());
     for (const auto& bb : basic_blocks) {
       const auto& isa = bb->getInstructions();
       for (const auto& inst : isa) {
@@ -690,8 +706,9 @@ nlohmann::json nexus::get_all_isa(const std::string& kernel_name) {
         LOG_DETAIL("{}", instruction);
       }
     }
+    LOG_WARN("[DEBUG] Total instructions for '{}': {}", kernel_name, assembly_array.size());
   } catch (const std::exception& e) {
-    LOG_ERROR("Failed to get assembly for kernel {}: {}", kernel_name, e.what());
+    LOG_ERROR("[DEBUG] Failed to get assembly for kernel {}: {}", kernel_name, e.what());
   }
 
   return assembly_array;
