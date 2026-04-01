@@ -107,9 +107,7 @@ def test_cli_list_metrics_includes_compute():
 
     profiler = Metrix()
     if "compute.total_flops" not in profiler.backend.get_available_metrics():
-        pytest.skip(
-            f"Compute metrics not available on {profiler.backend.device_specs.arch}"
-        )
+        pytest.skip(f"Compute metrics not available on {profiler.backend.device_specs.arch}")
 
     result = subprocess.run(
         ["metrix", "list", "metrics"], capture_output=True, text=True, timeout=5
@@ -137,9 +135,7 @@ def test_cli_compute_profile():
 
     profiler = Metrix()
     if "compute.total_flops" not in profiler.backend.get_available_metrics():
-        pytest.skip(
-            f"Compute metrics not available on {profiler.backend.device_specs.arch}"
-        )
+        pytest.skip(f"Compute metrics not available on {profiler.backend.device_specs.arch}")
 
     result = subprocess.run(
         [
@@ -174,9 +170,7 @@ def test_cli_compute_metric_directly():
 
     profiler = Metrix()
     if "compute.total_flops" not in profiler.backend.get_available_metrics():
-        pytest.skip(
-            f"Compute metrics not available on {profiler.backend.device_specs.arch}"
-        )
+        pytest.skip(f"Compute metrics not available on {profiler.backend.device_specs.arch}")
 
     result = subprocess.run(
         [

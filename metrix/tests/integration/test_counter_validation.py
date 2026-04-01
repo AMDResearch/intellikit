@@ -657,6 +657,7 @@ def _filter_available(metric_list):
     available = set(profiler.backend.get_available_metrics())
     return [m for m in metric_list if m in available]
 
+
 # Copy kernel exercises both reads and writes — good for testing bounds
 # across memory metrics.  FMA-heavy kernel covers compute metrics.
 _BOUNDS_COPY_SRC = (

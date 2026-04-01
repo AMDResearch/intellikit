@@ -60,9 +60,7 @@ def test_all_memory_metrics_are_displayed(vector_add_binary):
         if metric not in output:
             missing_metrics.append(metric)
 
-    assert len(missing_metrics) == 0, (
-        f"Missing metrics: {missing_metrics}\n\nOutput:\n{output}"
-    )
+    assert len(missing_metrics) == 0, f"Missing metrics: {missing_metrics}\n\nOutput:\n{output}"
 
 
 @pytest.mark.integration
@@ -118,9 +116,7 @@ def test_compute_profile_runs_without_error(vector_add_binary):
     supported_compute = [m for m in compute_metrics if m in available]
 
     if not supported_compute:
-        pytest.skip(
-            f"No compute metrics available on {profiler.backend.device_specs.arch}"
-        )
+        pytest.skip(f"No compute metrics available on {profiler.backend.device_specs.arch}")
 
     result = subprocess.run(
         ["metrix", "-n", "1", "--aggregate", "--profile", "compute", str(vector_add_binary)],
@@ -193,9 +189,7 @@ def test_json_output_has_compute_metrics(vector_add_binary, tmp_path):
     profiler = Metrix()
     available = set(profiler.backend.get_available_metrics())
     if "compute.total_flops" not in available:
-        pytest.skip(
-            f"Compute metrics not available on {profiler.backend.device_specs.arch}"
-        )
+        pytest.skip(f"Compute metrics not available on {profiler.backend.device_specs.arch}")
 
     output_file = tmp_path / "results.json"
 

@@ -25,6 +25,7 @@ def _hw_metrics():
         return set()
     try:
         from metrix.backends import get_backend
+
         backend = get_backend(HW_ARCH)
         return set(backend.get_available_metrics())
     except (ValueError, RuntimeError):
@@ -66,8 +67,7 @@ def requires_metric(*metric_names: str):
     missing = [m for m in metric_names if m not in HW_METRICS]
     return pytest.mark.skipif(
         HW_ARCH is None or len(missing) > 0,
-        reason=(
-            f"requires metric(s) {', '.join(missing)} "
-            f"but {HW_ARCH} does not support them"
-        ) if missing else "no GPU detected",
+        reason=(f"requires metric(s) {', '.join(missing)} but {HW_ARCH} does not support them")
+        if missing
+        else "no GPU detected",
     )

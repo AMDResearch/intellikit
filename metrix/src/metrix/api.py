@@ -140,10 +140,7 @@ class Metrix:
 
         # Check for unavailable metrics (no definition for this architecture)
         available = set(self.backend.get_available_metrics())
-        unavailable = {
-            m for m in metrics_to_compute
-            if m not in available and m not in unsupported
-        }
+        unavailable = {m for m in metrics_to_compute if m not in available and m not in unsupported}
 
         if unsupported or unavailable:
             if explicitly_requested:
@@ -169,8 +166,7 @@ class Metrix:
                         f"Skipping '{metric_name}' (not available on {self.backend.device_specs.arch})"
                     )
                 metrics_to_compute = [
-                    m for m in metrics_to_compute
-                    if m not in unsupported and m not in unavailable
+                    m for m in metrics_to_compute if m not in unsupported and m not in unavailable
                 ]
 
         if not metrics_to_compute and not time_only:
