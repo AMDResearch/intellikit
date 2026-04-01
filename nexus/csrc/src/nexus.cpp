@@ -540,11 +540,14 @@ hsa_status_t nexus::hsa_code_object_reader_create_from_memory(
   }
 
   if (instance->kdb_) {
-    if (filename.has_value()) {
+    bool has_file = filename.has_value() &&
+                    filename.value() != "[anonymous mapping]" &&
+                    !filename.value().empty();
+    if (has_file) {
       instance->kdb_->addFile(filename.value(), instance->gpu_agent_.agent, "", true);
     } else {
       LOG_DETAIL(
-          "Failed to find the file name for the code object. Dumping to temp file.");
+          "No file-backed mapping for code object. Dumping to temp file.");
 
       std::string hash_str =
           hash_memory(reinterpret_cast<const char*>(code_object), size);
