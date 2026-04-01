@@ -15,6 +15,14 @@ from .categories import MetricCategory
 # ═══════════════════════════════════════════════════════════════════
 
 COMPUTE_THROUGHPUT_METRICS = {
+    "compute.gpu_utilization": {
+        "name": "GPU Utilization",
+        "description": "Fraction of elapsed cycles the GPU was actively executing work",
+        "unit": "Percent",
+        "category": MetricCategory.COMPUTE,
+        "derived_from": ["GRBM_GUI_ACTIVE", "GRBM_COUNT"],
+        "formula": "(GRBM_GUI_ACTIVE / GRBM_COUNT) * 100",
+    },
     "compute.total_flops": {
         "name": "Total FLOPS",
         "description": "Total floating-point operations performed by the kernel",
