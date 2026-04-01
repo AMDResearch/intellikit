@@ -69,5 +69,5 @@ def requires_metric(*metric_names: str):
         reason=(
             f"requires metric(s) {', '.join(missing)} "
             f"but {HW_ARCH} does not support them"
-        ) if missing else f"no GPU detected",
+        ) if missing else "no GPU detected",
     )
