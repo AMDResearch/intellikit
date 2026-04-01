@@ -25,19 +25,19 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 | ROCm | 6.0+ for GPU packages (7.0+ for Linex); skip if you only use host-side tools like `uprof_mcp` |
 | GPU | MI300+ for the full GPU experience; some tools vary — see each tool's page |
 | uProf | AMD uProf on x86 for `uprof_mcp` only |
-| cmake, libdwarf-dev | Required by **accordo** and **nexus** (C++ build via KernelDB). See below. |
+| cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** (C++ build via KernelDB). See below. |
 
 ### System dependencies for accordo and nexus
 
 Accordo and nexus include C++ components (via KernelDB) that are compiled during `pip install`.
-Two system packages must be present **before** installing:
+These system packages must be present **before** installing:
 
 ```bash
 # Debian / Ubuntu
-sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev
+sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
 
 # Fedora / RHEL
-sudo dnf install -y cmake libdwarf-devel
+sudo dnf install -y cmake libdwarf-devel libzstd-devel
 ```
 
 The install script (`install/tools/install.sh`) will warn if these are missing. The

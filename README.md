@@ -59,10 +59,10 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 | Python | 3.10 or newer |
 | ROCm | 6.0+ for GPU packages (use **7.0+** for Linex); skip if you only use host-side tools like `uprof_mcp` |
 | GPU | **MI300+** for the full GPU experience; some pieces vary by tool — see each package’s README |
-| cmake, libdwarf-dev | Required by **accordo** and **nexus** only (C++ build via KernelDB) |
+| cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** only (C++ build via KernelDB) |
 | uProf | **AMD uProf** on **x86** for `uprof_mcp` only — see that README |
 
-> **System packages for accordo / nexus:** These tools compile C++ code (via [KernelDB](https://github.com/AMDResearch/KernelDB)) during `pip install`. Install `cmake` and `libdwarf-dev` (`libdwarf-devel` on Fedora/RHEL) first, or the build will fail. The [IntelliKit Docker image](docker/Dockerfile) and `install.sh` already handle this. See [docs](https://amdresearch.github.io/intellikit/getting-started/installation/) for details.
+> **System packages for accordo / nexus:** These tools compile C++ code (via [KernelDB](https://github.com/AMDResearch/KernelDB)) during `pip install`. Install `cmake`, `libdwarf-dev`, and `libzstd-dev` (`libdwarf-devel`/`libzstd-devel` on Fedora/RHEL) first, or the build will fail. The [IntelliKit Docker image](docker/Dockerfile) and `install.sh` already handle this. See [docs](https://amdresearch.github.io/intellikit/getting-started/installation/) for details.
 
 For **development** on a subset of packages only, use editable installs (nothing to install at the monorepo root):
 

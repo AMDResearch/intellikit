@@ -15,7 +15,7 @@ ENV LD_LIBRARY_PATH=$ROCM_PATH/lib:$LD_LIBRARY_PATH \
 # Install system packages
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git wget ninja-build cmake python3-pip python3-dev build-essential libdwarf-dev && \
+    git wget ninja-build cmake python3-pip python3-dev build-essential libdwarf-dev libzstd-dev && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r video 2>/dev/null || true && \

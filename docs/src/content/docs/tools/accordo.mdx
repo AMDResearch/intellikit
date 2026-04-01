@@ -16,11 +16,11 @@ Accordo automatically validates GPU kernel correctness by capturing and comparin
 
 ## Installation
 
-Accordo compiles C++ code (via KernelDB) during installation. You need `cmake` and `libdwarf-dev` first:
+Accordo compiles C++ code (via KernelDB) during installation. You need `cmake`, `libdwarf-dev`, and `libzstd-dev` first:
 
 ```bash
 # System prerequisites (Debian/Ubuntu)
-sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev
+sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
 
 # Install
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=accordo"
