@@ -72,12 +72,15 @@ def main():
     all_metrics = profiler.list_metrics()
     print(f"\n  Available metrics ({len(all_metrics)}):")
     for m in sorted(all_metrics):
-        info = profiler.get_metric_info(m)
-        cat = info.get("category", "?")
-        cat_name = cat.value if hasattr(cat, "value") else str(cat)
-        unit = info.get("unit", "?")
-        unit_name = unit.value if hasattr(unit, "value") else str(unit)
-        print(f"    {m:45s}  [{cat_name:10s}]  ({unit_name})")
+        try:
+            info = profiler.get_metric_info(m)
+            cat = info.get("category", "?")
+            cat_name = cat.value if hasattr(cat, "value") else str(cat)
+            unit = info.get("unit", "?")
+            unit_name = unit.value if hasattr(unit, "value") else str(unit)
+            print(f"    {m:45s}  [{cat_name:10s}]  ({unit_name})")
+        except ValueError:
+            print(f"    {m:45s}  [yaml-only ]  (no catalog entry)")
 
     # List profiles
     profiles = profiler.list_profiles()
