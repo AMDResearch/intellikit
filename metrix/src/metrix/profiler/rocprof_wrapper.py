@@ -169,7 +169,13 @@ class ROCProfV3Wrapper:
             # Add target command (use shlex.split to preserve quoted arguments,
             # e.g. python -c "import torch; ..." won't be split inside quotes)
             prof_cmd.append("--")
-            prof_cmd.extend(shlex.split(command))
+            try:
+                prof_cmd.extend(shlex.split(command))
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"Failed to parse command for rocprofv3: {command!r}. "
+                    "Please check for unmatched quotes or other shell syntax issues."
+                ) from exc
 
             logger.debug(f"rocprofv3 command: {' '.join(prof_cmd)}")
             logger.info(f"Starting rocprofv3 with {len(counters)} counters")

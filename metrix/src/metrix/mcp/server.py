@@ -74,12 +74,24 @@ def list_available_metrics() -> dict:
     """
     from metrix.metrics import METRIC_CATALOG
 
-    metrics = sorted(METRIC_CATALOG.keys())
+    # Query the backend for actually-supported metrics (includes YAML-defined
+    # metrics that may not be in the Python METRIC_CATALOG).
+    # Fall back to METRIC_CATALOG if the backend can't be initialized (no GPU).
+    try:
+        profiler = Metrix()
+        metrics = sorted(profiler.list_metrics())
+    except (RuntimeError, Exception):
+        metrics = sorted(METRIC_CATALOG.keys())
 
     # Group by category for better discoverability
     by_category = {}
     for name in metrics:
-        cat = METRIC_CATALOG[name]["category"].value
+        meta = METRIC_CATALOG.get(name)
+        if meta is not None:
+            cat = meta["category"].value
+        else:
+            # YAML-only metric not in Python catalog — use prefix as category
+            cat = name.split(".", 1)[0] if "." in name else "other"
         by_category.setdefault(cat, []).append(name)
 
     return {
