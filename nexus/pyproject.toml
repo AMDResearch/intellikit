@@ -12,9 +12,9 @@ description = "HSA Packet Source Code Extractor for AMD ROCm - Research tool for
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = "MIT"
+license = {text = "MIT"}
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "fastmcp>=2.0.0",
 ]
@@ -36,6 +36,7 @@ nexus-mcp = "nexus.mcp.server:main"
 [tool.scikit-build]
 cmake.build-type = "Release"
 wheel.packages = ["nexus"]
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 
 [tool.scikit-build.cmake.define]
 LLVM_INSTALL_DIR = {env="LLVM_INSTALL_DIR", default="/opt/rocm/llvm"}
