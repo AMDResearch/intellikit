@@ -67,20 +67,26 @@ def list_available_metrics() -> dict:
     """
     List all available GPU performance metrics.
 
-    Returns a list of metric names that can be collected.
+    Returns a list of metric names that can be collected, organized by category.
 
     Returns:
-        Dictionary with metrics list
+        Dictionary with metrics list and category groupings
     """
-    # Common ROCm metrics
-    common_metrics = [
-        "memory.hbm_bandwidth_utilization",
-        "memory.l2_cache_hit_rate",
-        "compute.cu_utilization",
-        "compute.wave_occupancy",
-    ]
+    from metrix.metrics import METRIC_CATALOG
 
-    return {"metrics": common_metrics, "note": "Use profile_metrics with these metric names"}
+    metrics = sorted(METRIC_CATALOG.keys())
+
+    # Group by category for better discoverability
+    by_category = {}
+    for name in metrics:
+        cat = METRIC_CATALOG[name]["category"].value
+        by_category.setdefault(cat, []).append(name)
+
+    return {
+        "metrics": metrics,
+        "by_category": by_category,
+        "note": "Use profile_metrics with these metric names",
+    }
 
 
 def main() -> None:
