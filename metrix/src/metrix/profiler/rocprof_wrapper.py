@@ -173,7 +173,13 @@ class ROCProfV3Wrapper:
             # any quoted args by stripping the quotes and splitting on the
             # internal whitespace.
             prof_cmd.append("--")
-            prof_cmd.extend(shlex.split(command))
+            try:
+                prof_cmd.extend(shlex.split(command))
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"Failed to parse command for rocprofv3: {command!r}. "
+                    "Please check for unmatched quotes or other shell syntax issues."
+                ) from exc
 
             logger.debug(f"rocprofv3 command: {' '.join(prof_cmd)}")
             logger.info(f"Starting rocprofv3 with {len(counters)} counters")

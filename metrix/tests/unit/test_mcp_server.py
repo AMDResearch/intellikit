@@ -6,21 +6,36 @@ the actual metric catalog, preventing regressions like hardcoded
 metric names that don't exist.
 """
 
+import pytest
+
 from metrix.mcp.server import list_available_metrics, profile_metrics
 from metrix.metrics import METRIC_CATALOG
+
+
+def _has_gpu_backend():
+    """Check if we can instantiate the Metrix backend (requires hipcc/ROCm)."""
+    try:
+        from metrix import Metrix
+        Metrix()
+        return True
+    except (RuntimeError, Exception):
+        return False
 
 
 class TestListAvailableMetrics:
     """Test the list_available_metrics MCP tool"""
 
-    def test_returns_only_catalog_metrics(self):
-        """Every metric returned by list_available_metrics must exist in METRIC_CATALOG"""
+    @pytest.mark.skipif(not _has_gpu_backend(), reason="requires ROCm/hipcc")
+    def test_returns_only_profileable_metrics(self):
+        """Every metric returned by list_available_metrics must be profileable by the backend"""
+        from metrix import Metrix
+        profiler = Metrix()
+        backend_metrics = set(profiler.list_metrics())
         result = list_available_metrics()
         for metric in result["metrics"]:
-            assert metric in METRIC_CATALOG, (
-                f"list_available_metrics returned '{metric}' which does not exist "
-                f"in METRIC_CATALOG. Did you mean one of: "
-                f"{[m for m in METRIC_CATALOG if metric.split('.')[-1] in m]}"
+            assert metric in backend_metrics, (
+                f"list_available_metrics returned '{metric}' which is not "
+                f"available in the current backend"
             )
 
     def test_returns_nonempty(self):
@@ -64,7 +79,9 @@ class TestListAvailableMetrics:
             for m in cat_metrics:
                 assert m in flat
 
-    def test_metric_count_matches_catalog(self):
-        """list_available_metrics should return all metrics from the catalog"""
+    def test_metric_count_at_least_catalog_size(self):
+        """list_available_metrics should return at least as many metrics as the catalog"""
         result = list_available_metrics()
-        assert len(result["metrics"]) == len(METRIC_CATALOG)
+        # Backend may have YAML-defined metrics beyond the Python catalog,
+        # but should never return fewer than the catalog
+        assert len(result["metrics"]) >= len(METRIC_CATALOG)

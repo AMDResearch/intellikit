@@ -259,6 +259,29 @@ class TestROCProfV3Wrapper:
 
         assert target_args == ["python", "-c", "print(1+1)"]
 
+    def test_command_with_unmatched_quotes_raises(self, wrapper_no_rocm_check):
+        """Commands with unmatched quotes should raise RuntimeError, not ValueError"""
+        wrapper = wrapper_no_rocm_check
+
+        def fake_run(cmd, **kwargs):
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+            pytest.raises(RuntimeError, match="Failed to parse command"),
+        ):
+            wrapper.profile(
+                command='python -c "unterminated',
+                counters=["SQ_WAVES"],
+                output_dir=Path(tmpdir),
+            )
+
     def test_simple_command_still_works(self, wrapper_no_rocm_check):
         """Simple commands without quotes should still be split normally"""
         wrapper = wrapper_no_rocm_check
