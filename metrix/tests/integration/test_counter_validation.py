@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from metrix import Metrix
-from ..unit.conftest import requires_arch
+from ..unit.conftest import requires_arch, requires_metric
 
 # ---------------------------------------------------------------------------
 # HIP compilation helper
@@ -228,6 +228,7 @@ def _strided_source(stride: int) -> str:
     )
 
 
+@requires_metric("memory.coalescing_efficiency")
 class TestCoalescingEfficiency:
     """Validate coalescing_efficiency scales with stride."""
 
@@ -360,6 +361,7 @@ class TestCacheHitRates:
             m = _profile(b, ["memory.l2_hit_rate"], p)
         assert m["memory.l2_hit_rate"] > 30.0
 
+    @requires_metric("memory.l1_hit_rate")
     def test_l1_hit_rate_with_tiny_array(self):
         """4 KB per block iterated 1000x should show >80% L1 hit rate."""
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
@@ -456,6 +458,7 @@ int main() {
 )
 
 
+@requires_metric("compute.total_flops", "compute.hbm_gflops")
 class TestFLOPSCounters:
     """Validate compute.total_flops and compute.hbm_gflops."""
 
@@ -586,6 +589,7 @@ def _mixed_source(K: int) -> str:
     )
 
 
+@requires_metric("compute.hbm_arithmetic_intensity")
 class TestArithmeticIntensity:
     """Validate compute.hbm_arithmetic_intensity scales with compute/memory ratio."""
 
@@ -621,7 +625,7 @@ class TestArithmeticIntensity:
 # =========================================================================
 
 # Metrics that report percentages must be in [0, 100]
-_PERCENTAGE_METRICS = [
+_ALL_PERCENTAGE_METRICS = [
     "memory.l2_hit_rate",
     "memory.l1_hit_rate",
     "memory.hbm_bandwidth_utilization",
@@ -631,7 +635,7 @@ _PERCENTAGE_METRICS = [
 ]
 
 # Metrics that must be non-negative (bandwidth, bytes, FLOPS, latency, etc.)
-_NON_NEGATIVE_METRICS = [
+_ALL_NON_NEGATIVE_METRICS = [
     "memory.hbm_read_bandwidth",
     "memory.hbm_write_bandwidth",
     "memory.l2_bandwidth",
@@ -645,6 +649,14 @@ _NON_NEGATIVE_METRICS = [
     "compute.l2_arithmetic_intensity",
     "compute.l1_arithmetic_intensity",
 ]
+
+
+def _filter_available(metric_list):
+    """Filter a metric list to only those available on the detected GPU."""
+    profiler = Metrix()
+    available = set(profiler.backend.get_available_metrics())
+    return [m for m in metric_list if m in available]
+
 
 # Copy kernel exercises both reads and writes — good for testing bounds
 # across memory metrics.  FMA-heavy kernel covers compute metrics.
@@ -714,11 +726,14 @@ class TestMetricBounds:
 
     def test_percentage_metrics_bounded_0_100(self):
         """All percentage metrics must be in [0, 100]."""
+        pct_metrics = _filter_available(_ALL_PERCENTAGE_METRICS)
+        if not pct_metrics:
+            pytest.skip("No percentage metrics available on this GPU")
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
             p = Path(d)
             b = _compile_hip(_BOUNDS_COPY_SRC, "bounds_copy", p)
-            m = _profile(b, _PERCENTAGE_METRICS, p)
-        for name in _PERCENTAGE_METRICS:
+            m = _profile(b, pct_metrics, p)
+        for name in pct_metrics:
             if name not in m:
                 continue
             val = m[name]
@@ -726,7 +741,11 @@ class TestMetricBounds:
 
     def test_memory_metrics_non_negative(self):
         """Bandwidth, bytes transferred, and LDS conflicts must be >= 0."""
-        mem_metrics = [m for m in _NON_NEGATIVE_METRICS if m.startswith("memory.")]
+        mem_metrics = _filter_available(
+            [m for m in _ALL_NON_NEGATIVE_METRICS if m.startswith("memory.")]
+        )
+        if not mem_metrics:
+            pytest.skip("No memory metrics available on this GPU")
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
             p = Path(d)
             b = _compile_hip(_BOUNDS_COPY_SRC, "bounds_mem", p)
@@ -738,7 +757,11 @@ class TestMetricBounds:
 
     def test_compute_metrics_non_negative(self):
         """FLOPS, GFLOPS, and arithmetic intensity must be >= 0."""
-        compute_metrics = [m for m in _NON_NEGATIVE_METRICS if m.startswith("compute.")]
+        compute_metrics = _filter_available(
+            [m for m in _ALL_NON_NEGATIVE_METRICS if m.startswith("compute.")]
+        )
+        if not compute_metrics:
+            pytest.skip("No compute metrics available on this GPU")
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
             p = Path(d)
             b = _compile_hip(_BOUNDS_FMA_SRC, "bounds_fma", p)

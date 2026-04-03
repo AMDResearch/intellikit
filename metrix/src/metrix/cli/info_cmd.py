@@ -47,35 +47,8 @@ def show_metric_info(metric_name, arch="gfx942"):
         actual_counters = backend.get_metric_counters(metric_name)
         for counter in actual_counters:
             print(f"  • {counter}")
-    except ValueError as e:
-        # Metric not implemented in this backend
+    except ValueError:
         print(f"  ⚠️  Metric not implemented for {arch}")
-        # Fall back to catalog's derived_from as documentation
-        if "derived_from" in metric_def:
-            print("\n  Conceptual counters (from catalog):")
-            for counter in metric_def["derived_from"]:
-                print(f"    • {counter}")
-
-    if "interpretation" in metric_def:
-        print("\nInterpretation Guide:")
-        for level, interpretation_data in metric_def["interpretation"].items():
-            if isinstance(interpretation_data, tuple) and len(interpretation_data) == 3:
-                low, high, desc = interpretation_data
-                print(f"  • {level.upper():10s}: {low}-{high}% - {desc}")
-            elif isinstance(interpretation_data, tuple) and len(interpretation_data) == 2:
-                range_info, desc = interpretation_data
-                if isinstance(range_info, tuple):
-                    print(f"  • {level.upper():10s}: {range_info[0]}-{range_info[1]}% - {desc}")
-                else:
-                    print(f"  • {level.upper():10s}: {range_info} - {desc}")
-            else:
-                print(f"  • {level.upper():10s}: {interpretation_data}")
-
-    if metric_def.get("device_specific"):
-        print("\n⚠️  Note: This metric requires device-specific constants")
-
-    if metric_def.get("requires_kernel_info"):
-        print("\n⚠️  Note: This metric requires kernel metadata")
 
 
 def show_profile_info(profile_name):

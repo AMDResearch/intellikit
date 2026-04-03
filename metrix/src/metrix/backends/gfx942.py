@@ -47,6 +47,10 @@ class GFX942Backend(CounterBackend):
 
         These limits define how many performance counters can be simultaneously
         collected from each hardware block in a single profiling pass.
+
+        Source: ROCm/rocm-systems aqlprofile gfxip/gfx9/gfx9_block_info.h
+                (NumCounters constants, derived from AMD internal chip_offset_byte.h)
+                https://github.com/ROCm/rocm-systems/blob/121fafc82c961b9a9f32eda63d2422bf7a0be817/projects/aqlprofile/gfxip/gfx9/gfx9_block_info.h
         """
         return {
             "SQ": 8,  # Shader Sequencer — instruction issue & scheduling
