@@ -16,24 +16,31 @@ mcp = FastMCP("IntelliKit Metrix")
 @mcp.tool()
 def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     """
-    Profile GPU application and collect hardware performance metrics.
+    Profile a GPU application and collect hardware performance metrics.
 
-    Returns human-readable metrics like memory bandwidth utilization,
-    compute utilization, cache hit rates, etc. Use this to understand
-    kernel performance characteristics and identify bottlenecks.
+    Runs the given command under rocprofv3 and returns per-kernel metrics
+    such as memory bandwidth utilization, cache hit rates, arithmetic
+    intensity, and FLOP counts.
+
+    Call list_available_metrics first to discover valid metric names.
 
     Args:
-        command: Command to profile (e.g., './app')
-        metrics: List of metrics to collect (default: common metrics)
+        command: Shell command to profile (e.g., 'python train.py' or './my_app --size 1024').
+                 The command is parsed with shell quoting rules, so quoted arguments are preserved.
+        metrics: List of metric names to collect. Use names returned by list_available_metrics.
+                 If omitted, collects all available metrics for the detected GPU architecture.
 
     Returns:
-        Dictionary with kernels list containing metrics and durations
+        Dictionary with a 'kernels' list. Each kernel entry contains:
+        - name: GPU kernel function name
+        - duration_us_avg: Average kernel execution time in microseconds
+        - metrics: Dictionary mapping metric name to {avg, unit}
     """
     profiler = Metrix()
 
-    # Use default common metrics if none specified
+    # Collect all available metrics if none specified
     if metrics is None:
-        metrics = ["memory.hbm_bandwidth_utilization"]
+        metrics = profiler.list_metrics()
 
     results_obj = profiler.profile(command, metrics=metrics)
 
@@ -65,12 +72,24 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
 @mcp.tool()
 def list_available_metrics() -> dict:
     """
-    List all available GPU performance metrics.
+    List all available GPU performance metrics that can be collected.
 
-    Returns a list of metric names that can be collected, organized by category.
+    Returns metric names organized by category. Use these names with the
+    'metrics' parameter of profile_metrics to collect specific metrics,
+    or omit 'metrics' to collect all of them.
+
+    Categories include:
+    - compute: FLOP counts, GFLOP/s throughput, arithmetic intensity
+    - memory_bandwidth: HBM bandwidth utilization, read/write bandwidth, bytes transferred
+    - memory_cache: L1/L2 hit rates, L2 bandwidth
+    - memory_pattern: coalescing efficiency, load/store efficiency
+    - memory_lds: LDS bank conflicts
 
     Returns:
-        Dictionary with metrics list and category groupings
+        Dictionary with:
+        - metrics: Flat list of all metric names
+        - by_category: Metrics grouped by category
+        - note: Usage hint
     """
     from metrix.metrics import METRIC_CATALOG
 
