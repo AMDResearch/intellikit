@@ -110,5 +110,3 @@ def list_devices():
         for arch in archs:
             name, generation = _META.get(arch, ("", "unknown"))
             print(f"  • {arch:10s}  {name:30s}  ({generation})")
-
-    print("\nUse --device <arch> to specify target architecture")
