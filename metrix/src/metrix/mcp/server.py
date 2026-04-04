@@ -16,24 +16,31 @@ mcp = FastMCP("IntelliKit Metrix")
 @mcp.tool()
 def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     """
-    Profile GPU application and collect hardware performance metrics.
+    Profile a GPU application and collect hardware performance metrics.
 
-    Returns human-readable metrics like memory bandwidth utilization,
-    compute utilization, cache hit rates, etc. Use this to understand
-    kernel performance characteristics and identify bottlenecks.
+    Runs the given command under rocprofv3 and returns per-kernel metrics
+    such as memory bandwidth utilization, cache hit rates, arithmetic
+    intensity, and FLOP counts.
+
+    Call list_available_metrics first to discover valid metric names.
 
     Args:
-        command: Command to profile (e.g., './app')
-        metrics: List of metrics to collect (default: common metrics)
+        command: Shell command to profile (e.g., 'python train.py' or './my_app --size 1024').
+                 The command is parsed with shell quoting rules, so quoted arguments are preserved.
+        metrics: List of metric names to collect. Use names returned by list_available_metrics.
+                 If omitted, collects all available metrics for the detected GPU architecture.
 
     Returns:
-        Dictionary with kernels list containing metrics and durations
+        Dictionary with a 'kernels' list. Each kernel entry contains:
+        - name: GPU kernel function name
+        - duration_us_avg: Average kernel execution time in microseconds
+        - metrics: Dictionary mapping metric name to {avg, unit}
     """
     profiler = Metrix()
 
-    # Use default common metrics if none specified
+    # Collect all available metrics if none specified
     if metrics is None:
-        metrics = ["memory.hbm_bandwidth_utilization"]
+        metrics = profiler.list_metrics()
 
     results_obj = profiler.profile(command, metrics=metrics)
 
@@ -65,22 +72,52 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
 @mcp.tool()
 def list_available_metrics() -> dict:
     """
-    List all available GPU performance metrics.
+    List all available GPU performance metrics that can be collected.
 
-    Returns a list of metric names that can be collected.
+    Returns metric names organized by category. Use these names with the
+    'metrics' parameter of profile_metrics to collect specific metrics,
+    or omit 'metrics' to collect all of them.
+
+    Categories include:
+    - compute: FLOP counts, GFLOP/s throughput, arithmetic intensity
+    - memory_bandwidth: HBM bandwidth utilization, read/write bandwidth, bytes transferred
+    - memory_cache: L1/L2 hit rates, L2 bandwidth
+    - memory_pattern: coalescing efficiency, load/store efficiency
+    - memory_lds: LDS bank conflicts
 
     Returns:
-        Dictionary with metrics list
+        Dictionary with:
+        - metrics: Flat list of all metric names
+        - by_category: Metrics grouped by category
+        - note: Usage hint
     """
-    # Common ROCm metrics
-    common_metrics = [
-        "memory.hbm_bandwidth_utilization",
-        "memory.l2_cache_hit_rate",
-        "compute.cu_utilization",
-        "compute.wave_occupancy",
-    ]
+    from metrix.metrics import METRIC_CATALOG
 
-    return {"metrics": common_metrics, "note": "Use profile_metrics with these metric names"}
+    # Query the backend for actually-supported metrics (includes YAML-defined
+    # metrics that may not be in the Python METRIC_CATALOG).
+    # Fall back to METRIC_CATALOG if the backend can't be initialized (no GPU).
+    try:
+        profiler = Metrix()
+        metrics = sorted(profiler.list_metrics())
+    except (RuntimeError, Exception):
+        metrics = sorted(METRIC_CATALOG.keys())
+
+    # Group by category for better discoverability
+    by_category = {}
+    for name in metrics:
+        meta = METRIC_CATALOG.get(name)
+        if meta is not None:
+            cat = meta["category"].value
+        else:
+            # YAML-only metric not in Python catalog — use prefix as category
+            cat = name.split(".", 1)[0] if "." in name else "other"
+        by_category.setdefault(cat, []).append(name)
+
+    return {
+        "metrics": metrics,
+        "by_category": by_category,
+        "note": "Use profile_metrics with these metric names",
+    }
 
 
 def main() -> None:
