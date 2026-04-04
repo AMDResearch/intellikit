@@ -27,19 +27,19 @@ From the project or install prefix:
 
 ```bash
 # Profile with all metrics (auto-detected arch)
-metrix ./my_app
+metrix profile ./my_app
 
 # Time only (fast, no counters)
-metrix --time-only -n 10 ./my_app
+metrix profile --time-only -n 10 ./my_app
 
 # Filter kernels by name
-metrix --kernel matmul ./my_app
+metrix profile --kernel matmul ./my_app
 
 # Specific metrics
-metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency,compute.total_flops ./my_app
+metrix profile --metrics memory.l2_hit_rate,memory.coalescing_efficiency,compute.total_flops ./my_app
 
 # Save to JSON/CSV
-metrix -o results.json ./my_app
+metrix profile -o results.json ./my_app
 ```
 
 Options: `--profile`/`-p` (run `metrix list profiles` for names: `quick`, `memory`, `memory_bandwidth`, `memory_cache`, `compute`), `--metrics`/`-m`, `--time-only`, `--kernel`/`-k` (regular expression), `--num-replays`/`-n`, `--output`/`-o`, `--top`, `--aggregate`, `--timeout`, `--no-counters`, `--log`/`-l`, `--quiet`/`-q`. Discovery: `metrix list <metrics|profiles|devices>`, `metrix info <metric|profile> <name>`. Note: `metrix list counters` and `metrix info counter <name>` are not implemented yet (CLI reports “not yet implemented”).
@@ -64,7 +64,7 @@ Use `metrics=[...]` for a subset; omit for all metrics. Use `cwd` when the binar
 
 1. Identify the executable or script to profile (e.g. `./app` or `python run_kernels.py`).
 2. If only timing is needed, use `--time-only` for speed.
-3. If full metrics are needed, run `metrix ./app` (or MCP equivalent); optionally restrict with `--kernel` or `--metrics`.
+3. If full metrics are needed, run `metrix profile ./app` (or MCP equivalent); optionally restrict with `--kernel` or `--metrics`.
 4. Interpret results: low L2 hit rate, low coalescing, or low HBM utilization suggest optimization targets.
 5. For automation or tooling, use `-o results.json` and parse the JSON output.
 
