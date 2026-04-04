@@ -18,7 +18,7 @@ Profile AMD GPU kernels and get human-readable metrics (bandwidth, cache, coales
 
 1. **Ensure the target runs on AMD ROCm** (e.g. `hipcc`-built binary or Python script that launches HIP/ROCm kernels).
 2. **Choose execution path:**
-   - If a Metrix MCP server is available, use its profile tool with the same options below.
+   - If a Metrix MCP server is available, use `list_available_metrics` to discover metric names, then `profile_metrics` to collect them (or omit `metrics` to collect all).
    - Otherwise run the CLI or Python API from the environment where Metrix is installed.
 
 ### CLI
