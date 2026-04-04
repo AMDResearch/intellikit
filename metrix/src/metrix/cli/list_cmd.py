@@ -83,6 +83,8 @@ def list_devices():
         ("gfx90a", "AMD Instinct MI200", "CDNA 2"),
         ("gfx942", "AMD Instinct MI300", "CDNA 3"),
         ("gfx950", "AMD Instinct MI350", "CDNA 4"),
+        ("gfx1201", "AMD Radeon RX 9070", "RDNA 4"),
+        ("gfx1151", "AMD Radeon RX 9060", "RDNA 4"),
     ]
 
     for arch, name, generation in devices:
