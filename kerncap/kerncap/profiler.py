@@ -35,6 +35,7 @@ def run_profile(
     cmd: List[str],
     output_path: Optional[str] = None,
     rocprof_bin: Optional[str] = None,
+    timeout: Optional[int] = None,
 ) -> List[KernelStat]:
     """Profile an application with rocprofv3 --kernel-trace --stats.
 
@@ -47,6 +48,8 @@ def run_profile(
         returned in-memory.
     rocprof_bin : str, optional
         Path to rocprofv3 binary.  Auto-detected if None.
+    timeout : int, optional
+        Maximum seconds to wait for the application.  None means no limit.
 
     Returns
     -------
@@ -72,11 +75,15 @@ def run_profile(
             "--",
         ] + cmd
 
-        proc = subprocess.run(
-            full_cmd,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            proc = subprocess.run(
+                full_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(f"Application did not complete within {timeout}s")
 
         stats_csv = _find_stats_csv(tmpdir)
 
