@@ -27,6 +27,7 @@ def server_module(monkeypatch):
     """Load the server module with lightweight dependency stubs."""
     server_path = Path(__file__).resolve().parents[2] / "kerncap" / "mcp" / "server.py"
     spec = importlib.util.spec_from_file_location("test_kerncap_mcp_server", server_path)
+    assert spec is not None, f"Could not create module spec for {server_path}"
     module = importlib.util.module_from_spec(spec)
 
     fake_fastmcp = types.ModuleType("fastmcp")
