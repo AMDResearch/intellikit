@@ -109,7 +109,7 @@ def run_profile(
         kernels = parse_kernel_trace_stats(stats_csv)
 
     if output_path:
-        _write_profile_json(kernels, output_path)
+        _write_profile_json(kernels, output_path, cmd)
 
     return kernels
 
@@ -195,11 +195,15 @@ def parse_kernel_trace_stats(csv_path: str) -> List[KernelStat]:
     return kernels
 
 
-def _write_profile_json(kernels: List[KernelStat], path: str) -> None:
+def _write_profile_json(kernels: List[KernelStat], path: str, cmd: List[str]) -> None:
     """Write profiling results as JSON."""
     import json
+    import shlex
+    from datetime import datetime, timezone
 
     data = {
+        "cmd": shlex.join(cmd),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "kernels": [
             {
                 "name": k.name,
