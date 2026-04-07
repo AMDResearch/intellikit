@@ -93,8 +93,8 @@ def run_capture(
     meta_file = os.path.join(output_dir, "metadata.json")
 
     if not os.path.exists(dispatch_file) and not os.path.exists(meta_file):
-        stdout_preview = proc.stdout[:500] if proc.stdout else "N/A"
-        stderr_preview = proc.stderr[:500] if proc.stderr else "N/A"
+        stdout_preview = proc.stdout[:2000] if proc.stdout else "N/A"
+        stderr_preview = proc.stderr[:2000] if proc.stderr else "N/A"
         raise RuntimeError(
             f"Capture did not produce output in {output_dir}. "
             f"App stdout: {stdout_preview}\n"
