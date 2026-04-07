@@ -881,7 +881,9 @@ def _extract_dwarf_source_files(obj_path: str) -> Optional[List[str]]:
     Returns a list of source file paths, or ``None`` if no debug info
     is available.
     """
+    rocm = os.environ.get("ROCM_PATH", "/opt/rocm")
     for dwarfdump in [
+        os.path.join(rocm, "llvm", "bin", "llvm-dwarfdump"),
         "/opt/rocm/llvm/bin/llvm-dwarfdump",
         "llvm-dwarfdump",
     ]:
