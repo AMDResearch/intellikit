@@ -17,7 +17,7 @@ dependencies = [
     "jinja2>=3.0",
     "click>=8.0",
     "libclang>=18.1",
-    "mcp[cli]",
+    "fastmcp>=2.0.0",
 ]
 
 [project.urls]
