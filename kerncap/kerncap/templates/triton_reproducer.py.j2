@@ -24,7 +24,7 @@ sys.path.insert(0, SCRIPT_DIR)
 # Import the kernel
 from {{ kernel_module }} import {{ kernel_function }}
 
-{% if autotune_config %}
+{% if autotune_config and not autotune_stripped %}
 # Bypass the autotuner — call the inner JITFunction directly with
 # the exact config that was captured, so outputs are reproducible.
 _kernel = {{ kernel_function }}.fn if hasattr({{ kernel_function }}, 'fn') else {{ kernel_function }}
@@ -108,7 +108,7 @@ def main():
 {% endfor %}
 {% if autotune_config %}
 {% for key, value in autotune_config.get('kwargs', {}).items() %}
-        {{ key }}={{ value | tojson }},
+        {{ key }}={{ value | pyrepr }},
 {% endfor %}
 {% if autotune_config.get('num_warps') is not none %}
         num_warps={{ autotune_config['num_warps'] }},
@@ -130,7 +130,7 @@ def main():
 {% endfor %}
 {% if autotune_config %}
 {% for key, value in autotune_config.get('kwargs', {}).items() %}
-        {{ key }}={{ value }},
+        {{ key }}={{ value | pyrepr }},
 {% endfor %}
 {% if autotune_config.get('num_warps') is not none %}
         num_warps={{ autotune_config['num_warps'] }},
