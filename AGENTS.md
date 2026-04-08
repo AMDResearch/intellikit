@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; linex targets ROCm 7.0+ workflows. MI300+ GPUs are needed for the full profiling stack, while RDNA support (gfx1151/gfx1201) is available in metrix.
+**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; kerncap and linex target ROCm 7.0+ workflows. MI300+ GPUs are needed for the full profiling stack, while RDNA support (gfx1151/gfx1201) is available in metrix.
 
 ## Tool Descriptions
 
@@ -159,7 +159,7 @@ All current MCP server implementations use `FastMCP`, and all tool packages now 
 
 - C++ source in `kerncap/src/` (`.hip`, `.cpp` files)
 - Headers in `kerncap/src/` (`.hpp` files: `kerncap.hpp`, `kerncap_log.hpp`)
-- `libkerncap.so`: HSA tool library loaded via `HSA_TOOLS_LIB` for kernel capture
+- `libkerncap.so`: HSA tool library loaded via `LD_PRELOAD` (rocprofiler-sdk registration) for kernel capture
 - Built with scikit-build-core (CMake + HIP language support)
 - CLI commands: `kerncap profile`, `kerncap extract`, `kerncap replay`, `kerncap validate`
 - Supports both HIP and Triton kernel extraction

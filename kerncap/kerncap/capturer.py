@@ -1,7 +1,8 @@
 """Capture orchestrator — runs an application under libkerncap.so.
 
-Sets up the environment, launches the application under HSA interception,
-and returns the capture directory containing the VA-faithful snapshot.
+Sets up the environment, launches the application under LD_PRELOAD
+(rocprofiler-sdk registration), and returns the capture directory
+containing the VA-faithful snapshot.
 """
 
 import logging
@@ -64,7 +65,10 @@ def run_capture(
     os.makedirs(output_dir, exist_ok=True)
 
     env = os.environ.copy()
-    env["HSA_TOOLS_LIB"] = lib_path
+    if "LD_PRELOAD" in env:
+        env["LD_PRELOAD"] = lib_path + ":" + env["LD_PRELOAD"]
+    else:
+        env["LD_PRELOAD"] = lib_path
     env["KERNCAP_KERNEL"] = kernel_name
     env["KERNCAP_OUTPUT"] = output_dir
 

@@ -1,9 +1,10 @@
 /**
  * kerncap.hip — HSA interception tool for kernel argument capture
  *
- * Loaded via HSA_TOOLS_LIB. Intercepts kernel dispatches, captures
- * grid/block dimensions, kernel arguments (scalars and device buffers),
- * and writes them to an output directory for reproducer generation.
+ * Loaded via LD_PRELOAD (rocprofiler-sdk registration). Intercepts kernel
+ * dispatches, captures grid/block dimensions, kernel arguments (scalars and
+ * device buffers), and writes them to an output directory for reproducer
+ * generation.
  *
  * Adapted from Accordo (AMD Research, MIT License).
  */
@@ -11,6 +12,9 @@
 #define __HIP_PLATFORM_AMD__
 
 #include "kerncap.hpp"
+
+#include <rocprofiler-sdk/registration.h>
+#include <rocprofiler-sdk/intercept_table.h>
 
 #include <cinttypes>
 #include <cxxabi.h>
@@ -737,23 +741,60 @@ void CaptureState::handle_packets(
 }  // namespace kerncap
 
 // ---------------------------------------------------------------------------
-// HSA Tool entry points
+// rocprofiler-sdk entry points
 // ---------------------------------------------------------------------------
+
+static void rocp_hsa_table_callback(
+        rocprofiler_intercept_table_t type,
+        uint64_t lib_version, uint64_t lib_instance,
+        void** tables, uint64_t num_tables, void* /*user_data*/) {
+    if (type != ROCPROFILER_HSA_TABLE || num_tables < 1 || !tables || !tables[0])
+        return;
+
+    auto* table = static_cast<HsaApiTable*>(tables[0]);
+    KERNCAP_INFO("rocprofiler-sdk: received HsaApiTable* (lib_version=%" PRIu64
+                 ", lib_instance=%" PRIu64 ")", lib_version, lib_instance);
+    kerncap::CaptureState::get_instance(table, lib_version, 0, nullptr);
+}
+
+static void rocp_tool_fini(void* /*user_data*/) {
+    KERNCAP_INFO("rocprofiler-sdk: tool finalize");
+}
+
 extern "C" {
 
-PUBLIC_API bool OnLoad(HsaApiTable* table,
-                       uint64_t runtime_version,
-                       uint64_t failed_tool_count,
-                       const char* const* failed_tool_names) {
-    KERNCAP_INFO("Loading HSA capture tool");
-    kerncap::CaptureState::get_instance(
-        table, runtime_version, failed_tool_count, failed_tool_names);
-    KERNCAP_INFO("HSA capture tool loaded");
-    return true;
+PUBLIC_API rocprofiler_tool_configure_result_t*
+rocprofiler_configure(uint32_t version, const char* runtime_version,
+                      uint32_t priority,
+                      rocprofiler_client_id_t* client_id) {
+    (void)version;
+    (void)runtime_version;
+    (void)priority;
+
+    client_id->name = "kerncap";
+
+    KERNCAP_INFO("rocprofiler_configure: registering HSA table interception");
+    rocprofiler_at_intercept_table_registration(
+        rocp_hsa_table_callback, ROCPROFILER_HSA_TABLE, nullptr);
+
+    static auto cfg = rocprofiler_tool_configure_result_t{
+        sizeof(rocprofiler_tool_configure_result_t),
+        nullptr,          // initialize
+        rocp_tool_fini,   // finalize
+        nullptr};         // tool_data
+    return &cfg;
 }
 
-PUBLIC_API void OnUnload() {
-    KERNCAP_INFO("Unloading HSA capture tool");
+PUBLIC_API bool OnLoad(HsaApiTable* /*table*/,
+                       uint64_t /*runtime_version*/,
+                       uint64_t /*failed_tool_count*/,
+                       const char* const* /*failed_tool_names*/) {
+    KERNCAP_ERROR("kerncap no longer uses HSA_TOOLS_LIB. "
+                  "Use LD_PRELOAD=libkerncap.so instead.");
+    abort();
+    return false;
 }
+
+PUBLIC_API void OnUnload() { }
 
 }  // extern "C"

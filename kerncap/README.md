@@ -10,7 +10,7 @@ kerncap profiles a running application, intercepts a target kernel dispatch, cap
 
 ```
 1. Profile          rocprofv3 --kernel-trace --stats → rank kernels by duration
-2. Capture          HIP:    HSA_TOOLS_LIB=libkerncap.so → intercept target dispatch,
+2. Capture          HIP:    LD_PRELOAD=libkerncap.so → intercept target dispatch,
                             snapshot all tracked device memory + kernarg buffer + HSACO
                     Triton: Python-level hook on JITFunction.run → capture all tensor,
                             scalar, and constexpr args; pin autotuner config
@@ -22,7 +22,7 @@ kerncap profiles a running application, intercepts a target kernel dispatch, cap
 
 ## Install
 
-Builds `libkerncap.so` from source against the host ROCm (requires `hipcc`, `cmake`, HSA headers — all present in standard ROCm images). No PyTorch or Triton dependency. No network access needed during the C++ build (nlohmann/json is vendored).
+Builds `libkerncap.so` from source against the host ROCm 7.0+ (requires `hipcc`, `cmake`, HSA headers, rocprofiler-sdk — all present in standard ROCm images). No PyTorch or Triton dependency. No network access needed during the C++ build (nlohmann/json is vendored).
 
 ```bash
 # From local source
@@ -153,7 +153,7 @@ See [full documentation](https://amdresearch.github.io/intellikit/tools/kerncap/
 ## Project structure
 
 ```
-src/kerncap.{hip,hpp}     HSA tool loaded via HSA_TOOLS_LIB (capture)
+src/kerncap.{hip,hpp}     HSA tool loaded via LD_PRELOAD (rocprofiler-sdk registration)
 src/replay.cpp             VA-faithful HSA kernel replay binary (kerncap-replay)
 kerncap/                   Python package (CLI, profiler, capturer, source finder,
                            reproducer generator, validator)
