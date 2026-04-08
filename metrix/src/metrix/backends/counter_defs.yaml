@@ -25,56 +25,11 @@
 #     TCC_EA_RDREQ_sum — total read requests (aggregate of EA0+EA1 ports)
 #     TCC_EA_RDREQ_32B_sum — 32-byte read requests
 #     Remaining reads are 64B: (RDREQ - RDREQ_32B)
-#   gfx1030/gfx1100 (RDNA2/3): L2-to-Fabric via GL2C_MC/GL2C_EA counters.
-#     GL2C_MC_RDREQ_sum — total read requests (32B, 64B, 96B, or 128B)
-#     GL2C_EA_RDREQ_32B_sum, GL2C_EA_RDREQ_64B_sum, GL2C_EA_RDREQ_96B_sum,
-#     GL2C_EA_RDREQ_128B_sum — per-size read breakdowns
-#     GL2C_MC_WRREQ_sum — total write requests (32B or 64B)
-#     GL2C_EA_WRREQ_64B_sum — 64-byte write requests
-#
-# RDNA counter limitations (gfx1030/gfx1100/gfx1103):
-#   - No per-dtype VALU counters (SQ_INSTS_VALU_ADD_F32 etc.) — only aggregate SQ_INSTS_VALU
-#   - No MFMA counters (no matrix cores on RDNA2/3)
-#   - No TCP (L1 cache) counters exposed via rocprof
-#   - LDS bank conflicts use SQC_LDS_BANK_CONFLICT (not SQ_LDS_BANK_CONFLICT)
-#   - Memory loads/stores use SQ_INSTS_TEX_LOAD/STORE (not SQ_INSTS_VMEM_RD/WR)
-#
-# gfx1201 (RDNA4) counter differences from RDNA2/3:
-#   - GL2C_MC_RDREQ_sum and GL2C_MC_WRREQ_sum do not exist; use GL2C_EA_RDREQ_sum / GL2C_EA_WRREQ_sum
-#   - GL2C_EA_RDREQ_96B_sum does not exist; only 32B, 64B, 128B read sizes
-#   - TCP L1 counters are available (TCP_REQ, TCP_REQ_MISS) unlike older RDNA
-#   - SDK derived counters available: LDSBankConflict, OccupancyPercent, LdsUtil
-#
-# gfx1201 available counters (rocprofv3 --list-avail):
-#   GL2C (L2 cache):
-#     GL2C_EA_RDREQ[_sum], GL2C_EA_RDREQ_32B[_sum], GL2C_EA_RDREQ_64B[_sum], GL2C_EA_RDREQ_128B[_sum]
-#     GL2C_EA_WRREQ[_sum], GL2C_EA_WRREQ_64B[_sum], GL2C_EA_WRREQ_STALL[_max]
-#     GL2C_HIT[_sum], GL2C_MISS[_sum], GL2C_MC_WRREQ_STALL, GL2C_WRREQ_STALL_max
-#   GRBM (bus manager):
-#     GRBM_COUNT, GRBM_GUI_ACTIVE
-#   SQ (shader sequencer):
-#     SQ_BUSY_CYCLES, SQ_WAVE_CYCLES, SQ_WAVES[_sum], SQ_WAVE32_INSTS, SQ_WAVE64_INSTS
-#     SQ_INSTS_VALU, SQ_INSTS_SALU, SQ_INSTS_SMEM, SQ_INSTS_LDS, SQ_INSTS_FLAT
-#     SQ_INSTS_TEX_LOAD, SQ_INSTS_TEX_STORE
-#     SQ_INSTS_WAVE32, SQ_INSTS_WAVE32_VALU, SQ_INSTS_WAVE32_LDS
-#     SQ_INST_CYCLES_VALU, SQ_INST_CYCLES_VMEM, SQ_INST_LEVEL_LDS, SQ_INSTS_VEC32_LEVEL_LDS
-#     SQ_WAIT_ANY, SQ_WAIT_INST_ANY, SQ_ACCUM_PREV
-#   SQC (shader cache):
-#     SQC_ICACHE_REQ, SQC_ICACHE_HITS, SQC_ICACHE_MISSES
-#     SQC_LDS_BANK_CONFLICT, SQC_LDS_IDX_ACTIVE
-#   TA (texture addresser):
-#     TA_TA_BUSY, TA_BUSY_avr, TA_BUSY_max, TA_BUSY_min
-#     TA_BUFFER_LOAD_WAVEFRONTS[_sum], TA_BUFFER_STORE_WAVEFRONTS[_sum]
-#   TCP (L1 cache):
-#     TCP_REQ, TCP_REQ_MISS
-#   SDK derived:
-#     GPUBusy, GPU_UTIL, OccupancyPercent, MeanOccupancyPerCU, MeanOccupancyPerActiveCU
-#     LDSBankConflict, LdsUtil, MemUnitBusy, VALUBusy, VALUInsts, SALUInsts
-#     FetchSize, FETCH_SIZE, SFetchInsts, L0CacheHit, L2CacheHit
-#     ValuPipeIssueUtil, Wavefronts, WriteUnitStalled, WAVE_DEP_WAIT, WAVE_ISSUE_WAIT
-
 rocprofiler-sdk:
   counters:
+
+    # --- GPU utilization ---
+    # Fraction of elapsed cycles the GPU was actively executing work.
 
     # --- GPU utilization ---
     # Fraction of elapsed cycles the GPU was actively executing work.
@@ -83,11 +38,62 @@ rocprofiler-sdk:
       unit: Percent
       definitions:
         - expression: (GRBM_GUI_ACTIVE / GRBM_COUNT) * 100
-          architectures: [gfx1201, gfx1151, gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103]
+          architectures: [gfx1201]
 
-    # rocprofiler-sdk built-in (see /opt/rocm/share/rocprofiler-sdk/counter_defs.yaml).
-    # No expression: passthrough — pmc and CSV use the SDK name OccupancyPercent.
+    # --- rocprofiler-sdk built-in derived counters (gfx1201) ---
+    # Passthrough — no expression needed; the SDK computes these internally.
+
     - name: OccupancyPercent
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: VALUBusy
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: MemUnitBusy
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: L0CacheHit
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: LdsUtil
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: WriteUnitStalled
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: VALUInsts
+      unit: Instructions/Work-item
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: SALUInsts
+      unit: Instructions/Work-item
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: Wavefronts
+      unit: Count
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: WAVE_DEP_WAIT
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: WAVE_ISSUE_WAIT
       unit: Percent
       definitions:
         - architectures: [gfx1201]
@@ -101,7 +107,7 @@ rocprofiler-sdk:
         - expression: (TCC_HIT_sum / (TCC_HIT_sum + TCC_MISS_sum)) * 100
           architectures: [gfx942, gfx950, gfx90a]
         - expression: (GL2C_HIT_sum / (GL2C_HIT_sum + GL2C_MISS_sum)) * 100
-          architectures: [gfx1201, gfx1151, gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103]
+          architectures: [gfx1201]
 
     - name: memory.l1_hit_rate
       unit: Percent
@@ -125,7 +131,7 @@ rocprofiler-sdk:
         - expression: >-
             (((GL2C_HIT_sum + GL2C_MISS_sum) * 128) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103, gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     # --- Bytes transferred ---
     # Raw byte counts: requests * cacheline size.
@@ -137,7 +143,7 @@ rocprofiler-sdk:
         - expression: TCC_REQ_sum * 128
           architectures: [gfx942, gfx950, gfx90a]
         - expression: (GL2C_HIT_sum + GL2C_MISS_sum) * 128
-          architectures: [gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103, gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     - name: memory.bytes_transferred_l1
       unit: Bytes
@@ -184,20 +190,13 @@ rocprofiler-sdk:
       definitions:
         - expression: SQ_LDS_BANK_CONFLICT / SQ_INSTS_LDS
           architectures: [gfx942, gfx950, gfx90a]
-        # RDNA uses SQC_LDS_BANK_CONFLICT (cycles stalled) / SQC_LDS_IDX_ACTIVE (cycles active).
-        # This gives the fraction of LDS cycles lost to bank conflicts, not conflicts per instruction.
-        - expression: SQC_LDS_BANK_CONFLICT / SQC_LDS_IDX_ACTIVE
-          architectures: [gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103]
-        # gfx1201/gfx1151: SDK built-in (= 100 * SQC_LDS_BANK_CONFLICT / SQC_LDS_IDX_ACTIVE).
-        # Returns percentage of GPU time LDS is stalled by bank conflicts.
         - expression: LDSBankConflict
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     # --- HBM/VRAM read bandwidth ---
     # Total bytes read from HBM (CDNA) or VRAM (RDNA) / kernel active time.
     # gfx942/gfx950: 3 request sizes — 128B (TCC_BUBBLE), 64B (remainder), 32B.
     # gfx90a: 2 request sizes — 64B (remainder), 32B. No 128B reads.
-    # RDNA: 4 request sizes via GL2C_EA — 32B, 64B, 96B, 128B.
 
     - name: memory.hbm_read_bandwidth
       unit: GB/s
@@ -214,18 +213,9 @@ rocprofiler-sdk:
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx90a]
         - expression: >-
-            ((GL2C_EA_RDREQ_32B_sum * 32
-            + GL2C_EA_RDREQ_64B_sum * 64
-            + GL2C_EA_RDREQ_96B_sum * 96
-            + GL2C_EA_RDREQ_128B_sum * 128) / 1e9)
-            / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103]
-        # gfx1201/gfx1151: per-size breakdown counters (GL2C_EA_RDREQ_{32B,64B,128B}_sum) are
-        # broken (always 0). Use GL2C_EA_RDREQ_sum * 128B (L2 cacheline size) instead.
-        - expression: >-
             ((GL2C_EA_RDREQ_sum * 128) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     # --- HBM/VRAM write bandwidth ---
     # Total bytes written to HBM / kernel active time.
@@ -245,16 +235,9 @@ rocprofiler-sdk:
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx90a]
         - expression: >-
-            ((GL2C_EA_WRREQ_64B_sum * 64
-            + (GL2C_MC_WRREQ_sum - GL2C_EA_WRREQ_64B_sum) * 32) / 1e9)
-            / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103]
-        # gfx1201/gfx1151: per-size breakdown counters broken.
-        # Empirically verified: write requests are 64B on RDNA4.
-        - expression: >-
             ((GL2C_EA_WRREQ_sum * 64) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     # --- HBM/VRAM bandwidth utilization ---
     # (actual read+write bandwidth) / (peak HBM bandwidth) * 100.
@@ -280,22 +263,11 @@ rocprofiler-sdk:
             / HBM_BANDWIDTH_GBS * 100
           architectures: [gfx90a]
         - expression: >-
-            ((GL2C_EA_RDREQ_32B_sum * 32
-            + GL2C_EA_RDREQ_64B_sum * 64
-            + GL2C_EA_RDREQ_96B_sum * 96
-            + GL2C_EA_RDREQ_128B_sum * 128
-            + GL2C_EA_WRREQ_64B_sum * 64
-            + (GL2C_MC_WRREQ_sum - GL2C_EA_WRREQ_64B_sum) * 32) / 1e9)
-            / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-            / HBM_BANDWIDTH_GBS * 100
-          architectures: [gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103]
-        # gfx1201/gfx1151: per-size breakdowns broken. Reads 128B, writes 64B.
-        - expression: >-
             ((GL2C_EA_RDREQ_sum * 128
             + GL2C_EA_WRREQ_sum * 64) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
             / HBM_BANDWIDTH_GBS * 100
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     # --- Total HBM/VRAM bytes ---
     # Sum of all read + write bytes through L2-to-Fabric interface.
@@ -317,18 +289,9 @@ rocprofiler-sdk:
             + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
           architectures: [gfx90a]
         - expression: >-
-            GL2C_EA_RDREQ_32B_sum * 32
-            + GL2C_EA_RDREQ_64B_sum * 64
-            + GL2C_EA_RDREQ_96B_sum * 96
-            + GL2C_EA_RDREQ_128B_sum * 128
-            + GL2C_EA_WRREQ_64B_sum * 64
-            + (GL2C_MC_WRREQ_sum - GL2C_EA_WRREQ_64B_sum) * 32
-          architectures: [gfx1030, gfx1031, gfx1032, gfx1100, gfx1101, gfx1102, gfx1103]
-        # gfx1201/gfx1151: per-size breakdowns broken. Reads 128B, writes 64B.
-        - expression: >-
             GL2C_EA_RDREQ_sum * 128
             + GL2C_EA_WRREQ_sum * 64
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     # --- Atomic latency ---
     # Average L2 cache atomic operation latency in GPU cycles.
