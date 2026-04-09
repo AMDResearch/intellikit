@@ -522,9 +522,7 @@ def generate_triton_reproducer(
     autotune_config = metadata.get("autotune_config")
     if autotune_config is None:
         config_args = {
-            a["name"]: a["value"]
-            for a in metadata.get("args", [])
-            if a.get("is_autotune_config")
+            a["name"]: a["value"] for a in metadata.get("args", []) if a.get("is_autotune_config")
         }
         if config_args:
             autotune_config = {"kwargs": config_args}
