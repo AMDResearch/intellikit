@@ -346,15 +346,15 @@ def _extract_triton_kernel_standalone(
 
         Autotune decorators reference module-level variables (e.g.
         ``autotune_configs``) that the standalone module won't have.
-        We keep only ``@triton.jit`` so the reproducer can call ``.fn``
-        directly with pinned config kwargs.
+        We keep ``@triton.jit`` while removing ``@triton.autotune`` so the
+        extracted kernel remains directly callable with pinned meta-parameters.
         """
         kept_decorator_lines: List[str] = []
         for dec in func_node.decorator_list:
             if _decorator_name(dec) in _autotune_decorator_names:
                 continue
             dec_start = dec.lineno - 1
-            dec_end = dec.end_lineno  # 1-indexed inclusive
+            dec_end = dec.end_lineno  # AST end_lineno is 1-based inclusive; using it as the slice end makes source_lines[dec_start:dec_end] include the final decorator line.
             kept_decorator_lines.extend(source_lines[dec_start:dec_end])
 
         func_start = func_node.lineno - 1
