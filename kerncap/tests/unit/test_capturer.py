@@ -50,6 +50,25 @@ class TestLdPreload:
 
     @patch("kerncap.capturer.subprocess.run")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
+    def test_strips_hsa_tools_lib(self, _mock_lib, mock_run, tmp_path):
+        dispatch = tmp_path / "dispatch.json"
+        dispatch.write_text("{}")
+
+        mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+
+        with patch.dict(os.environ, {"HSA_TOOLS_LIB": "/some/other_tool.so"}):
+            run_capture(
+                kernel_name="kern",
+                cmd=["./app"],
+                output_dir=str(tmp_path),
+            )
+
+        env = mock_run.call_args.kwargs["env"]
+        assert "HSA_TOOLS_LIB" not in env
+        assert "LD_PRELOAD" in env
+
+    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_sets_kerncap_env_vars(self, _mock_lib, mock_run, tmp_path):
         dispatch = tmp_path / "dispatch.json"
         dispatch.write_text("{}")

@@ -65,6 +65,9 @@ def run_capture(
     os.makedirs(output_dir, exist_ok=True)
 
     env = os.environ.copy()
+    # Strip legacy HSA tool variables that can conflict with LD_PRELOAD-based capture
+    env.pop("HSA_TOOLS_LIB", None)
+    env.pop("HSA_TOOLS_REPORT_LOAD_FAILURE", None)
     if "LD_PRELOAD" in env:
         env["LD_PRELOAD"] = lib_path + ":" + env["LD_PRELOAD"]
     else:
