@@ -74,6 +74,7 @@ def run_capture(
         env["LD_PRELOAD"] = lib_path
     env["KERNCAP_KERNEL"] = kernel_name
     env["KERNCAP_OUTPUT"] = output_dir
+    env["KERNCAP_CAPTURE_CHILD"] = "1"
 
     if dispatch >= 0:
         env["KERNCAP_DISPATCH"] = str(dispatch)

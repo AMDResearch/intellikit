@@ -107,6 +107,23 @@ class TestLdPreload:
 
     @patch("kerncap.capturer.subprocess.run")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
+    def test_sets_capture_child_env(self, _mock_lib, mock_run, tmp_path):
+        dispatch = tmp_path / "dispatch.json"
+        dispatch.write_text("{}")
+
+        mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+
+        run_capture(
+            kernel_name="kern",
+            cmd=["./app"],
+            output_dir=str(tmp_path),
+        )
+
+        env = mock_run.call_args.kwargs["env"]
+        assert env.get("KERNCAP_CAPTURE_CHILD") == "1"
+
+    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_triton_delegates_to_triton_capture(self, _mock_lib, mock_run, tmp_path):
         with patch("kerncap.triton_capture.run_triton_capture") as mock_triton:
             mock_triton.return_value = str(tmp_path)

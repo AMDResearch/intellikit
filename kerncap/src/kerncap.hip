@@ -19,6 +19,7 @@
 #include <cinttypes>
 #include <cxxabi.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -82,6 +83,17 @@ CaptureState::CaptureState(
     const char* disp_env = std::getenv("KERNCAP_DISPATCH");
     target_dispatch_ = disp_env ? std::atoi(disp_env) : -1;
 
+    // Fork safety: record PID and check for multi-process mode
+    initial_pid_ = getpid();
+    capture_child_mode_ = (std::getenv("KERNCAP_CAPTURE_CHILD") != nullptr);
+
+    if (capture_child_mode_) {
+        pthread_atfork(nullptr, CaptureState::atfork_parent_handler, nullptr);
+    }
+
+    KERNCAP_INFO("Process pid=%d, capture_child_mode=%s",
+                 initial_pid_, capture_child_mode_ ? "true" : "false");
+
     if (target_kernel_.empty()) {
         KERNCAP_WARN("KERNCAP_KERNEL not set — will not capture any kernel");
     } else {
@@ -103,6 +115,51 @@ CaptureState::~CaptureState() {
     delete saved_api_.amd_ext_;
     delete saved_api_.finalizer_ext_;
     delete saved_api_.image_ext_;
+}
+
+// ---------------------------------------------------------------------------
+// Fork safety — multi-process support
+// ---------------------------------------------------------------------------
+void CaptureState::atfork_parent_handler() {
+    auto* inst = get_instance();
+    if (inst) {
+        inst->fork_detected_ = true;
+        KERNCAP_INFO("fork() detected in parent (pid=%d) — "
+                     "parent will become passive, child will capture",
+                     getpid());
+    }
+}
+
+void CaptureState::reset_inherited_state() {
+    if (child_state_reset_) return;
+    child_state_reset_ = true;
+
+    KERNCAP_INFO("Child process (pid=%d) resetting inherited state "
+                 "from parent (pid=%d)",
+                 getpid(), initial_pid_);
+
+    pointer_sizes_.clear();
+    vmem_tracked_.clear();
+    symbol_names_.clear();
+    handle_to_symbol_.clear();
+    symbol_to_executable_.clear();
+    pending_reader_blobs_.clear();
+    executable_blobs_.clear();
+    kernel_hsaco_.clear();
+    queue_agents_.clear();
+    target_dispatch_count_ = 0;
+    captured_ = false;
+    gpu_arch_.clear();
+}
+
+bool CaptureState::is_active_process() {
+    if (!capture_child_mode_) return true;
+    pid_t current = getpid();
+    if (current != initial_pid_) {
+        reset_inherited_state();
+        return true;
+    }
+    return !fork_detected_;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +217,10 @@ hsa_status_t CaptureState::hsa_executable_get_symbol_by_name(
         hsa_executable_t executable, const char* symbol_name,
         const hsa_agent_t* agent, hsa_executable_symbol_t* symbol) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_core_call(inst, hsa_executable_get_symbol_by_name,
+                             executable, symbol_name, agent, symbol);
+    }
     auto result = hsa_core_call(inst, hsa_executable_get_symbol_by_name,
                                 executable, symbol_name, agent, symbol);
     if (result == HSA_STATUS_SUCCESS) {
@@ -174,6 +235,10 @@ hsa_status_t CaptureState::hsa_executable_symbol_get_info(
         hsa_executable_symbol_t symbol,
         hsa_executable_symbol_info_t attribute, void* value) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_core_call(inst, hsa_executable_symbol_get_info,
+                             symbol, attribute, value);
+    }
     auto result = hsa_core_call(inst, hsa_executable_symbol_get_info,
                                 symbol, attribute, value);
     if (result == HSA_STATUS_SUCCESS &&
@@ -203,6 +268,10 @@ hsa_status_t CaptureState::hsa_code_object_reader_create_from_memory(
         const void* code_object, size_t size,
         hsa_code_object_reader_t* code_object_reader) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_core_call(inst, hsa_code_object_reader_create_from_memory,
+                             code_object, size, code_object_reader);
+    }
     auto result = hsa_core_call(inst, hsa_code_object_reader_create_from_memory,
                                 code_object, size, code_object_reader);
     if (result == HSA_STATUS_SUCCESS && code_object_reader) {
@@ -221,6 +290,11 @@ hsa_status_t CaptureState::hsa_executable_load_agent_code_object(
         hsa_code_object_reader_t code_object_reader,
         const char* options, hsa_loaded_code_object_t* loaded_code_object) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_core_call(inst, hsa_executable_load_agent_code_object,
+                             executable, agent, code_object_reader,
+                             options, loaded_code_object);
+    }
     auto result = hsa_core_call(inst, hsa_executable_load_agent_code_object,
                                 executable, agent, code_object_reader,
                                 options, loaded_code_object);
@@ -249,6 +323,10 @@ hsa_status_t CaptureState::hsa_executable_load_agent_code_object(
 hsa_status_t CaptureState::hsa_amd_memory_pool_allocate(
         hsa_amd_memory_pool_t pool, size_t size, uint32_t flags, void** ptr) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_ext_call(inst, hsa_amd_memory_pool_allocate,
+                            pool, size, flags, ptr);
+    }
     auto result = hsa_ext_call(inst, hsa_amd_memory_pool_allocate,
                                pool, size, flags, ptr);
     if (result == HSA_STATUS_SUCCESS && *ptr) {
@@ -260,6 +338,9 @@ hsa_status_t CaptureState::hsa_amd_memory_pool_allocate(
 
 hsa_status_t CaptureState::hsa_amd_memory_pool_free(void* ptr) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_ext_call(inst, hsa_amd_memory_pool_free, ptr);
+    }
     auto result = hsa_ext_call(inst, hsa_amd_memory_pool_free, ptr);
     if (result == HSA_STATUS_SUCCESS && ptr) {
         std::lock_guard lock(inst->ptr_mutex_);
@@ -271,6 +352,9 @@ hsa_status_t CaptureState::hsa_amd_memory_pool_free(void* ptr) {
 hsa_status_t CaptureState::hsa_memory_allocate(
         hsa_region_t region, size_t size, void** ptr) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_core_call(inst, hsa_memory_allocate, region, size, ptr);
+    }
     auto result = hsa_core_call(inst, hsa_memory_allocate, region, size, ptr);
     if (result == HSA_STATUS_SUCCESS && *ptr) {
         std::lock_guard lock(inst->ptr_mutex_);
@@ -285,6 +369,10 @@ hsa_status_t CaptureState::hsa_memory_allocate(
 hsa_status_t CaptureState::hsa_amd_vmem_address_reserve(
         void** va, size_t size, uint64_t address, uint64_t flags) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_ext_call(inst, hsa_amd_vmem_address_reserve,
+                            va, size, address, flags);
+    }
     auto result = hsa_ext_call(inst, hsa_amd_vmem_address_reserve,
                                va, size, address, flags);
     if (result == HSA_STATUS_SUCCESS && va && *va) {
@@ -298,6 +386,9 @@ hsa_status_t CaptureState::hsa_amd_vmem_address_reserve(
 hsa_status_t CaptureState::hsa_amd_vmem_address_free(
         void* va, size_t size) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_ext_call(inst, hsa_amd_vmem_address_free, va, size);
+    }
     auto result = hsa_ext_call(inst, hsa_amd_vmem_address_free, va, size);
     if (result == HSA_STATUS_SUCCESS && va) {
         std::lock_guard lock(inst->ptr_mutex_);
@@ -311,6 +402,10 @@ hsa_status_t CaptureState::hsa_amd_vmem_map(
         void* va, size_t size, size_t in_offset,
         hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_ext_call(inst, hsa_amd_vmem_map,
+                            va, size, in_offset, memory_handle, flags);
+    }
     auto result = hsa_ext_call(inst, hsa_amd_vmem_map,
                                va, size, in_offset, memory_handle, flags);
     if (result == HSA_STATUS_SUCCESS && va) {
@@ -324,6 +419,9 @@ hsa_status_t CaptureState::hsa_amd_vmem_map(
 hsa_status_t CaptureState::hsa_amd_vmem_unmap(
         void* va, size_t size) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_ext_call(inst, hsa_amd_vmem_unmap, va, size);
+    }
     auto result = hsa_ext_call(inst, hsa_amd_vmem_unmap, va, size);
     if (result == HSA_STATUS_SUCCESS && va) {
         std::lock_guard lock(inst->ptr_mutex_);
@@ -341,8 +439,18 @@ hsa_status_t CaptureState::hsa_queue_create(
         void (*callback)(hsa_status_t, hsa_queue_t*, void*),
         void* data, uint32_t private_segment_size,
         uint32_t group_segment_size, hsa_queue_t** queue) {
-    KERNCAP_INFO("Intercepted hsa_queue_create (size=%u, type=%u)", size, type);
     auto* inst = get_instance();
+
+    if (!inst->is_active_process()) {
+        KERNCAP_INFO("Passive mode (pid=%d): passing through hsa_queue_create",
+                     getpid());
+        return hsa_core_call(inst, hsa_queue_create, agent, size, type,
+                             callback, data, private_segment_size,
+                             group_segment_size, queue);
+    }
+
+    KERNCAP_INFO("Active mode (pid=%d): intercepting hsa_queue_create "
+                 "(size=%u, type=%u)", getpid(), size, type);
 
     auto result = hsa_ext_call(inst, hsa_amd_queue_intercept_create,
                                agent, size, type, callback, data,
@@ -370,6 +478,9 @@ hsa_status_t CaptureState::hsa_queue_create(
 
 hsa_status_t CaptureState::hsa_queue_destroy(hsa_queue_t* queue) {
     auto* inst = get_instance();
+    if (!inst->is_active_process()) {
+        return hsa_core_call(inst, hsa_queue_destroy, queue);
+    }
     {
         std::lock_guard g(mutex_);
         inst->queue_agents_.erase(queue);
