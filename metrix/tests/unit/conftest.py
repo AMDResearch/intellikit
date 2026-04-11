@@ -54,6 +54,14 @@ def requires_arch(arch: str):
     )
 
 
+def requires_cdna():
+    """Decorator: skip a test unless the machine has a CDNA GPU (gfx9xx)."""
+    return pytest.mark.skipif(
+        HW_ARCH is None or not HW_ARCH.startswith("gfx9"),
+        reason=f"requires CDNA (gfx9xx) but this machine has {HW_ARCH}",
+    )
+
+
 def requires_metric(*metric_names: str):
     """Decorator: skip a test unless the detected GPU supports the given metric(s).
 

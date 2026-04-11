@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from metrix import Metrix
-from ..unit.conftest import requires_arch, requires_metric
+from ..unit.conftest import requires_arch, requires_cdna, requires_metric
 
 # ---------------------------------------------------------------------------
 # HIP compilation helper
@@ -81,6 +81,7 @@ def _profile(binary: Path, metrics: list, tmp_dir: Path, num_replays: int = 2) -
 # =========================================================================
 
 
+@requires_cdna()
 class TestHBMBandwidth:
     """Validate HBM bandwidth derived metrics."""
 
@@ -189,14 +190,9 @@ class TestHBMBandwidth:
             )
         # 3% floor: on high-peak-BW parts (e.g. gfx950) the same absolute
         # copy BW yields a smaller % utilization. Absolute BW is checked below.
-        from metrix.backends.detect import detect_gpu_arch
-
-        arch = detect_gpu_arch()
-        util_upper = 250.0 if arch.startswith("gfx120") else 100.0
-        assert 3.0 <= m["memory.hbm_bandwidth_utilization"] <= util_upper
+        assert 3.0 <= m["memory.hbm_bandwidth_utilization"] <= 100.0
         assert m["memory.hbm_read_bandwidth"] > 50.0
-        wr_floor = 20.0 if arch.startswith("gfx120") else 50.0
-        assert m["memory.hbm_write_bandwidth"] > wr_floor
+        assert m["memory.hbm_write_bandwidth"] > 50.0
 
 
 # =========================================================================
@@ -423,6 +419,7 @@ class TestLDSBankConflicts:
             m = _profile(b, ["memory.lds_bank_conflicts"], p)
         assert m["memory.lds_bank_conflicts"] < 2.0
 
+    @requires_cdna()
     def test_high_conflicts_with_stride32(self):
         """Stride-32 LDS access should cause many bank conflicts."""
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
@@ -738,17 +735,11 @@ class TestMetricBounds:
             p = Path(d)
             b = _compile_hip(_BOUNDS_COPY_SRC, "bounds_copy", p)
             m = _profile(b, pct_metrics, p)
-        from metrix.backends.detect import detect_gpu_arch
-
-        arch = detect_gpu_arch()
         for name in pct_metrics:
             if name not in m:
                 continue
             val = m[name]
-            if name == "memory.hbm_bandwidth_utilization" and arch.startswith("gfx120"):
-                assert 0.0 <= val <= 250.0, f"{name} = {val} is outside [0, 250]"
-            else:
-                assert 0.0 <= val <= 100.0, f"{name} = {val} is outside [0, 100]"
+            assert 0.0 <= val <= 100.0, f"{name} = {val} is outside [0, 100]"
 
     def test_memory_metrics_non_negative(self):
         """Bandwidth, bytes transferred, and LDS conflicts must be >= 0."""

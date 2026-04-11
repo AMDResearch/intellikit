@@ -31,9 +31,6 @@ rocprofiler-sdk:
     # --- GPU utilization ---
     # Fraction of elapsed cycles the GPU was actively executing work.
 
-    # --- GPU utilization ---
-    # Fraction of elapsed cycles the GPU was actively executing work.
-
     - name: compute.gpu_utilization
       unit: Percent
       definitions:
@@ -212,10 +209,6 @@ rocprofiler-sdk:
             + TCC_EA_RDREQ_32B_sum * 32) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx90a]
-        - expression: >-
-            ((GL2C_EA_RDREQ_sum * 128) / 1e9)
-            / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx1201]
 
     # --- HBM/VRAM write bandwidth ---
     # Total bytes written to HBM / kernel active time.
@@ -234,10 +227,6 @@ rocprofiler-sdk:
             + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx90a]
-        - expression: >-
-            ((GL2C_EA_WRREQ_sum * 64) / 1e9)
-            / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-          architectures: [gfx1201]
 
     # --- HBM/VRAM bandwidth utilization ---
     # (actual read+write bandwidth) / (peak HBM bandwidth) * 100.
@@ -262,12 +251,6 @@ rocprofiler-sdk:
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
             / HBM_BANDWIDTH_GBS * 100
           architectures: [gfx90a]
-        - expression: >-
-            ((GL2C_EA_RDREQ_sum * 128
-            + GL2C_EA_WRREQ_sum * 64) / 1e9)
-            / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
-            / HBM_BANDWIDTH_GBS * 100
-          architectures: [gfx1201]
 
     # --- Total HBM/VRAM bytes ---
     # Sum of all read + write bytes through L2-to-Fabric interface.
@@ -288,10 +271,6 @@ rocprofiler-sdk:
             + TCC_EA_WRREQ_64B_sum * 64
             + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
           architectures: [gfx90a]
-        - expression: >-
-            GL2C_EA_RDREQ_sum * 128
-            + GL2C_EA_WRREQ_sum * 64
-          architectures: [gfx1201]
 
     # --- Atomic latency ---
     # Average L2 cache atomic operation latency in GPU cycles.
