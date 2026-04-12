@@ -23,10 +23,12 @@ logger = logging.getLogger(__name__)
 def _get_template_env() -> jinja2.Environment:
     """Create a Jinja2 environment pointing at our templates directory."""
     templates_dir = os.path.join(os.path.dirname(__file__), "templates")
-    return jinja2.Environment(
+    env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(templates_dir),
         keep_trailing_newline=True,
     )
+    env.filters["pyrepr"] = repr
+    return env
 
 
 def generate_hsaco_reproducer(
@@ -337,14 +339,29 @@ def _extract_triton_kernel_standalone(
             return _decorator_name(node.func)
         return ""
 
+    _autotune_decorator_names = {"triton.autotune", "autotune"}
+
     def _node_source_with_decorators(func_node: ast.FunctionDef) -> str:
-        """Return the full source text for *func_node* including decorators."""
-        if func_node.decorator_list:
-            start = func_node.decorator_list[0].lineno - 1
-        else:
-            start = func_node.lineno - 1
-        end = func_node.end_lineno  # 1-indexed inclusive; works as 0-indexed exclusive slice bound
-        return "\n".join(source_lines[start:end])
+        """Return the full source text for *func_node*, stripping @triton.autotune.
+
+        Autotune decorators reference module-level variables (e.g.
+        ``autotune_configs``) that the standalone module won't have.
+        We keep ``@triton.jit`` while removing ``@triton.autotune`` so the
+        extracted kernel remains directly callable with pinned meta-parameters.
+        """
+        kept_decorator_lines: List[str] = []
+        for dec in func_node.decorator_list:
+            if _decorator_name(dec) in _autotune_decorator_names:
+                continue
+            dec_start = dec.lineno - 1
+            dec_end = dec.end_lineno  # AST end_lineno is 1-based inclusive; using it as the slice end makes source_lines[dec_start:dec_end] include the final decorator line.
+            kept_decorator_lines.extend(source_lines[dec_start:dec_end])
+
+        func_start = func_node.lineno - 1
+        func_end = func_node.end_lineno
+        func_body_lines = source_lines[func_start:func_end]
+
+        return "\n".join(kept_decorator_lines + func_body_lines)
 
     triton_funcs: List[ast.FunctionDef] = []
     for node in ast.walk(tree):
@@ -479,7 +496,8 @@ def generate_triton_reproducer(
     # effects (e.g. vLLM custom-op registrations via direct_register_custom_op)
     # that collide with the already-registered ops from the editable install.
     pkg_init = os.path.join(main_dir, "__init__.py")
-    if os.path.isfile(pkg_init):
+    is_standalone = os.path.isfile(pkg_init)
+    if is_standalone:
         variant_path = os.path.join(output_dir, "kernel_variant.py")
         _extract_triton_kernel_standalone(
             main_file,
@@ -501,6 +519,14 @@ def generate_triton_reproducer(
                 shutil.copy2(src_file, dest)
         kernel_module = Path(main_file).stem
 
+    autotune_config = metadata.get("autotune_config")
+    if autotune_config is None:
+        config_args = {
+            a["name"]: a["value"] for a in metadata.get("args", []) if a.get("is_autotune_config")
+        }
+        if config_args:
+            autotune_config = {"kwargs": config_args}
+
     context = {
         "kernel_name": metadata["kernel_name"],
         "grid": metadata["grid"],
@@ -508,7 +534,8 @@ def generate_triton_reproducer(
         "args": metadata.get("args", []),
         "kernel_module": kernel_module,
         "kernel_function": kernel_source.kernel_function,
-        "autotune_config": metadata.get("autotune_config"),
+        "autotune_config": autotune_config,
+        "autotune_stripped": is_standalone and autotune_config is not None,
     }
 
     # Render reproducer.py

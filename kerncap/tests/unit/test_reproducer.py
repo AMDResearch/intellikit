@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from kerncap.reproducer import (
+    _extract_triton_kernel_standalone,
     generate_hsaco_reproducer,
     generate_triton_reproducer,
 )
@@ -502,3 +503,275 @@ class TestTritonReproducer:
         assert "strides=[8, 1]" in repro
         assert "storage_offset=0" in repro
         assert "as_strided" in repro
+
+    def test_standalone_strips_autotune_decorator(self, tmp_path):
+        """@triton.autotune should be stripped, leaving only @triton.jit."""
+        output_path = str(tmp_path / "kernel_variant.py")
+        _extract_triton_kernel_standalone(
+            str(FIXTURES / "sample_autotuned_kernel.py"),
+            "attn_fwd",
+            output_path,
+        )
+
+        standalone = Path(output_path).read_text()
+        assert "@triton.jit" in standalone
+        assert "@triton.autotune" not in standalone
+        assert "autotune_configs" not in standalone
+        assert "use_cuda_graph" not in standalone
+        assert "def attn_fwd(" in standalone
+        assert "def _helper_kernel(" in standalone
+
+    def test_non_autotuned_kernel_unchanged(self, tmp_path):
+        """A kernel with only @triton.jit should pass through unchanged."""
+        output_path = str(tmp_path / "kernel_variant.py")
+        _extract_triton_kernel_standalone(
+            str(FIXTURES / "sample_triton_kernel.py"),
+            "vector_add_kernel",
+            output_path,
+        )
+
+        standalone = Path(output_path).read_text()
+        assert "@triton.jit" in standalone
+        assert "def vector_add_kernel(" in standalone
+        assert "tl.load" in standalone
+        assert "tl.store" in standalone
+        assert "@triton.autotune" not in standalone
+
+    def test_autotune_config_synthesized_from_args(self, tmp_path):
+        """When autotune_config is absent but args have is_autotune_config,
+        the reproducer should pin config kwargs.  Because the kernel comes
+        from a standalone module (autotune stripped), it must NOT use .fn."""
+        pkg_dir = tmp_path / "src" / "attn"
+        pkg_dir.mkdir(parents=True)
+        (pkg_dir / "__init__.py").write_text("")
+        kernel_file = pkg_dir / "attn_fwd.py"
+        kernel_file.write_text(
+            "import triton\n"
+            "import triton.language as tl\n"
+            "\n"
+            "@triton.jit\n"
+            "def attn_fwd(Q, K, Out, N: tl.constexpr, BLOCK_M: tl.constexpr):\n"
+            "    pid = tl.program_id(0)\n"
+            "    tl.store(Out + pid, 0.0)\n"
+        )
+
+        cap_dir = tmp_path / "capture"
+        cap_dir.mkdir()
+        meta = {
+            "kernel_name": "attn_fwd",
+            "grid": {"x": 4, "y": 1, "z": 1},
+            "block": {"x": 64, "y": 1, "z": 1},
+            "args": [
+                {
+                    "index": 0,
+                    "name": "Q",
+                    "is_pointer": True,
+                    "is_const": True,
+                    "is_autotune_config": False,
+                    "file": "arg_0.bin",
+                    "buffer_size": 256,
+                    "shape": [64],
+                    "torch_dtype": "torch.float16",
+                },
+                {
+                    "index": 1,
+                    "name": "K",
+                    "is_pointer": True,
+                    "is_const": True,
+                    "is_autotune_config": False,
+                    "file": "arg_1.bin",
+                    "buffer_size": 256,
+                    "shape": [64],
+                    "torch_dtype": "torch.float16",
+                },
+                {
+                    "index": 2,
+                    "name": "Out",
+                    "is_pointer": True,
+                    "is_const": False,
+                    "is_autotune_config": False,
+                    "file": "arg_2.bin",
+                    "buffer_size": 256,
+                    "shape": [64],
+                    "torch_dtype": "torch.float16",
+                },
+                {
+                    "index": 3,
+                    "name": "N",
+                    "type": "int",
+                    "value": 64,
+                    "is_pointer": False,
+                    "is_autotune_config": False,
+                },
+                {
+                    "index": 4,
+                    "name": "BLOCK_M",
+                    "type": "int",
+                    "value": 64,
+                    "is_pointer": False,
+                    "is_autotune_config": True,
+                },
+            ],
+        }
+        (cap_dir / "metadata.json").write_text(json.dumps(meta))
+        (cap_dir / "arg_0.bin").write_bytes(b"\x00" * 256)
+        (cap_dir / "arg_1.bin").write_bytes(b"\x00" * 256)
+        (cap_dir / "arg_2.bin").write_bytes(b"\x00" * 256)
+
+        output = str(tmp_path / "repro")
+        ks = KernelSource(
+            language="triton",
+            kernel_name="attn_fwd",
+            main_file=str(kernel_file),
+            source_files=[str(kernel_file)],
+            kernel_function="attn_fwd",
+        )
+
+        generate_triton_reproducer(str(cap_dir), ks, output)
+
+        repro = Path(os.path.join(output, "reproducer.py")).read_text()
+        assert "_kernel = attn_fwd\n" in repro
+        assert "attn_fwd.fn" not in repro
+        assert "BLOCK_M=64" in repro or "BLOCK_M= 64" in repro
+
+    def test_non_standalone_autotune_uses_fn_bypass(self, tmp_path):
+        """When the kernel is NOT from a standalone module (no __init__.py),
+        the reproducer should use .fn to unwrap the autotuner."""
+        src_dir = tmp_path / "src"
+        src_dir.mkdir(parents=True)
+        kernel_file = src_dir / "attn_fwd.py"
+        kernel_file.write_text(
+            "import triton\n"
+            "import triton.language as tl\n"
+            "\n"
+            "@triton.jit\n"
+            "def attn_fwd(Q, Out, N: tl.constexpr, BLOCK_M: tl.constexpr):\n"
+            "    pid = tl.program_id(0)\n"
+            "    tl.store(Out + pid, 0.0)\n"
+        )
+
+        cap_dir = tmp_path / "capture"
+        cap_dir.mkdir()
+        meta = {
+            "kernel_name": "attn_fwd",
+            "grid": {"x": 4, "y": 1, "z": 1},
+            "block": {"x": 64, "y": 1, "z": 1},
+            "autotune_config": {
+                "kwargs": {"BLOCK_M": 64},
+                "num_warps": 4,
+            },
+            "args": [
+                {
+                    "index": 0,
+                    "name": "Q",
+                    "is_pointer": True,
+                    "is_const": True,
+                    "is_autotune_config": False,
+                    "file": "arg_0.bin",
+                    "buffer_size": 256,
+                    "shape": [64],
+                    "torch_dtype": "torch.float16",
+                },
+                {
+                    "index": 1,
+                    "name": "Out",
+                    "is_pointer": True,
+                    "is_const": False,
+                    "is_autotune_config": False,
+                    "file": "arg_1.bin",
+                    "buffer_size": 256,
+                    "shape": [64],
+                    "torch_dtype": "torch.float16",
+                },
+                {
+                    "index": 2,
+                    "name": "N",
+                    "type": "int",
+                    "value": 64,
+                    "is_pointer": False,
+                    "is_autotune_config": False,
+                },
+                {
+                    "index": 3,
+                    "name": "BLOCK_M",
+                    "type": "int",
+                    "value": 64,
+                    "is_pointer": False,
+                    "is_autotune_config": True,
+                },
+            ],
+        }
+        (cap_dir / "metadata.json").write_text(json.dumps(meta))
+        (cap_dir / "arg_0.bin").write_bytes(b"\x00" * 256)
+        (cap_dir / "arg_1.bin").write_bytes(b"\x00" * 256)
+
+        output = str(tmp_path / "repro")
+        ks = KernelSource(
+            language="triton",
+            kernel_name="attn_fwd",
+            main_file=str(kernel_file),
+            source_files=[str(kernel_file)],
+            kernel_function="attn_fwd",
+        )
+
+        generate_triton_reproducer(str(cap_dir), ks, output)
+
+        repro = Path(os.path.join(output, "reproducer.py")).read_text()
+        assert "attn_fwd.fn" in repro
+        assert "BLOCK_M" in repro
+        assert "num_warps=4" in repro
+
+    def test_explicit_autotune_config_takes_precedence(self, tmp_path):
+        """When autotune_config is present in metadata, it should be used
+        directly without synthesizing from args."""
+        cap_dir = tmp_path / "capture"
+        cap_dir.mkdir()
+        meta = {
+            "kernel_name": "attn_fwd",
+            "grid": {"x": 4, "y": 1, "z": 1},
+            "block": {"x": 64, "y": 1, "z": 1},
+            "autotune_config": {
+                "kwargs": {"BLOCK_M": 128, "BLOCK_N": 128},
+                "num_warps": 8,
+                "num_stages": 3,
+            },
+            "args": [
+                {
+                    "index": 0,
+                    "name": "Q",
+                    "is_pointer": True,
+                    "is_const": True,
+                    "is_autotune_config": False,
+                    "file": "arg_0.bin",
+                    "buffer_size": 256,
+                    "shape": [64],
+                    "torch_dtype": "torch.float16",
+                },
+                {
+                    "index": 1,
+                    "name": "BLOCK_M",
+                    "type": "int",
+                    "value": 64,
+                    "is_pointer": False,
+                    "is_autotune_config": True,
+                },
+            ],
+        }
+        (cap_dir / "metadata.json").write_text(json.dumps(meta))
+        (cap_dir / "arg_0.bin").write_bytes(b"\x00" * 256)
+
+        output = str(tmp_path / "repro")
+        ks = KernelSource(
+            language="triton",
+            kernel_name="attn_fwd",
+            main_file=str(FIXTURES / "sample_triton_kernel.py"),
+            source_files=[str(FIXTURES / "sample_triton_kernel.py")],
+            kernel_function="vector_add_kernel",
+        )
+
+        generate_triton_reproducer(str(cap_dir), ks, output)
+
+        repro = Path(os.path.join(output, "reproducer.py")).read_text()
+        assert "BLOCK_M" in repro
+        assert "num_warps=8" in repro
+        assert "num_stages=3" in repro

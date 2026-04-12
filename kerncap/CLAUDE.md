@@ -100,7 +100,7 @@ kerncap -v extract ...
 
 ### HIP Interception Library (`src/`)
 
-- **kerncap.hip**: HSA tool library loaded via `HSA_TOOLS_LIB` environment variable
+- **kerncap.hip**: HSA tool library loaded via `LD_PRELOAD` (rocprofiler-sdk registration)
   - Hooks `hsa_queue_create` to install packet intercept callback (same pattern as rocscope/Accordo)
   - Hooks `hsa_amd_memory_pool_allocate` to track device buffer sizes
   - On target kernel dispatch: interposes completion signal, waits for kernel finish, walks kernarg buffer
@@ -109,7 +109,7 @@ kerncap -v extract ...
 - **kerncap.hpp**: C++ declarations
 - **kerncap_log.hpp**: Logging macros
 
-Built with CMake + HIP language support. Requires HSA headers (present in standard ROCm installations).
+Built with CMake + HIP language support. Requires ROCm 7.0+ (HSA headers and rocprofiler-sdk, present in standard ROCm installations).
 
 ### Key Technical Details
 

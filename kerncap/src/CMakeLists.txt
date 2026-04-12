@@ -1,5 +1,6 @@
 find_package(hsa-runtime64 REQUIRED)
 find_package(hip REQUIRED)
+find_package(rocprofiler-sdk REQUIRED HINTS ${ROCM_PATH})
 
 # Vendored header-only dependencies
 set(VENDOR_DIR "${CMAKE_SOURCE_DIR}/vendor")
@@ -22,6 +23,7 @@ target_include_directories(kerncap PRIVATE
 
 target_link_libraries(kerncap PRIVATE
     hsa-runtime64::hsa-runtime64
+    rocprofiler-sdk::rocprofiler-sdk
 )
 
 target_compile_definitions(kerncap PRIVATE AMD_INTERNAL_BUILD)
