@@ -88,7 +88,10 @@ CaptureState::CaptureState(
     capture_child_mode_ = (std::getenv("KERNCAP_CAPTURE_CHILD") != nullptr);
 
     if (capture_child_mode_) {
-        pthread_atfork(nullptr, CaptureState::atfork_parent_handler, nullptr);
+        if (pthread_atfork(nullptr, CaptureState::atfork_parent_handler, nullptr) != 0) {
+            KERNCAP_WARN("pthread_atfork failed — disabling capture_child_mode");
+            capture_child_mode_ = false;
+        }
     }
 
     KERNCAP_INFO("Process pid=%d, capture_child_mode=%s",
