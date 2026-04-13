@@ -717,6 +717,22 @@ def _find_translation_unit(
     return candidates[0]
 
 
+def _nm_has_symbol(nm_output: str, symbol: str) -> bool:
+    """Check whether *symbol* appears as an exact symbol in ``nm`` output.
+
+    Each ``nm`` output line has the form ``[address] type symbol``.  We compare
+    the symbol column for exact equality to avoid false positives when the
+    target is a prefix/substring of another symbol.
+    """
+    for line in nm_output.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[2] == symbol:
+            return True
+        if len(parts) == 2 and parts[1] == symbol:
+            return True
+    return False
+
+
 def _match_tu_via_object_symbols(
     mangled_name: str,
     candidates: List[Tuple[str, str, str]],
@@ -776,7 +792,7 @@ def _match_tu_via_object_symbols(
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             continue
 
-        if mangled_name in proc.stdout:
+        if _nm_has_symbol(proc.stdout, mangled_name):
             _logger.debug(
                 "Matched translation unit %s via nm on %s",
                 tu_path,
@@ -857,7 +873,7 @@ def _find_tu_by_symbol(
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             continue
 
-        if mangled_name in proc.stdout:
+        if _nm_has_symbol(proc.stdout, mangled_name):
             cmd = cmd_str
             if not cmd:
                 cmd = " ".join(shlex.quote(a) for a in args) if args else ""
