@@ -1048,6 +1048,12 @@ def _find_hip_kernel_via_dwarf(
         _logger.debug("DWARF: no debug info in %s", obj_path)
         return None
 
+    if compile_dir:
+        dwarf_files = [
+            os.path.join(compile_dir, f) if not os.path.isabs(f) else f
+            for f in dwarf_files
+        ]
+
     abs_source_dir = os.path.abspath(source_dir)
     user_files = [
         f
