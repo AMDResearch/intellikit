@@ -993,7 +993,7 @@ def _parse_readelf_output(output: str) -> List[str]:
         if path and "/" in path:
             files.add(os.path.normpath(path))
 
-    return list(files)
+    return sorted(files)
 
 
 def _pick_main_file(user_files: List[str], base_name: str) -> str:
