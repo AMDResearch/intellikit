@@ -216,7 +216,7 @@ def _write_profile_json(kernels: List[KernelStat], path: str, cmd: List[str]) ->
                 "stddev_ns": k.stddev_ns,
             }
             for k in kernels
-        ]
+        ],
     }
     with open(path, "w") as f:
         json.dump(data, f, indent=2)

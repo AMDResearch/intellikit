@@ -93,9 +93,9 @@ class TestParseLlvmDwarfdumpOutput:
     def test_absolute_name_ignores_dir_index(self):
         output = (
             'include_directories[  0] = "/should/not/use"\n'
-            'file_names[  0]:\n'
+            "file_names[  0]:\n"
             '           name: "/absolute/path/file.cpp"\n'
-            '      dir_index: 0\n'
+            "      dir_index: 0\n"
         )
         files = _parse_llvm_dwarfdump_output(output)
         assert len(files) == 1
@@ -104,22 +104,18 @@ class TestParseLlvmDwarfdumpOutput:
     def test_deduplication(self):
         output = (
             'include_directories[  0] = "/path"\n'
-            'file_names[  0]:\n'
+            "file_names[  0]:\n"
             '           name: "file.cpp"\n'
-            '      dir_index: 0\n'
-            'file_names[  1]:\n'
+            "      dir_index: 0\n"
+            "file_names[  1]:\n"
             '           name: "file.cpp"\n'
-            '      dir_index: 0\n'
+            "      dir_index: 0\n"
         )
         files = _parse_llvm_dwarfdump_output(output)
         assert len(files) == 1
 
     def test_missing_dir_index_uses_name_as_is(self):
-        output = (
-            'file_names[  0]:\n'
-            '           name: "orphan.cpp"\n'
-            '      dir_index: 99\n'
-        )
+        output = 'file_names[  0]:\n           name: "orphan.cpp"\n      dir_index: 99\n'
         files = _parse_llvm_dwarfdump_output(output)
         assert len(files) == 1
         assert files[0] == "orphan.cpp"
@@ -129,16 +125,16 @@ class TestParseLlvmDwarfdumpOutput:
         output = (
             'include_directories[  1] = "/home/user/src"\n'
             'include_directories[  2] = "/home/user/include"\n'
-            'file_names[  1]:\n'
+            "file_names[  1]:\n"
             '           name: "kernel.cu"\n'
-            '      dir_index: 1\n'
-            '           mod_time: 0x00000000\n'
-            '             length: 0x00000000\n'
-            'file_names[  2]:\n'
+            "      dir_index: 1\n"
+            "           mod_time: 0x00000000\n"
+            "             length: 0x00000000\n"
+            "file_names[  2]:\n"
             '           name: "types.h"\n'
-            '      dir_index: 2\n'
-            '           mod_time: 0x00000000\n'
-            '             length: 0x00000000\n'
+            "      dir_index: 2\n"
+            "           mod_time: 0x00000000\n"
+            "             length: 0x00000000\n"
         )
         files = _parse_llvm_dwarfdump_output(output)
         assert len(files) == 2
@@ -235,9 +231,7 @@ class TestSourceDirFiltering:
         abs_source_dir = os.path.abspath(source_dir)
 
         user_files = [
-            f
-            for f in dwarf_files
-            if os.path.abspath(f).startswith(abs_source_dir + os.sep)
+            f for f in dwarf_files if os.path.abspath(f).startswith(abs_source_dir + os.sep)
         ]
 
         assert len(user_files) == 2
@@ -255,9 +249,7 @@ class TestSourceDirFiltering:
         abs_source_dir = os.path.abspath(source_dir)
 
         user_files = [
-            f
-            for f in dwarf_files
-            if os.path.abspath(f).startswith(abs_source_dir + os.sep)
+            f for f in dwarf_files if os.path.abspath(f).startswith(abs_source_dir + os.sep)
         ]
         assert len(user_files) == 0
 
@@ -322,9 +314,7 @@ class TestFindTuBySymbol:
         assert result is None
 
     def test_returns_none_when_no_compile_commands(self, tmp_path):
-        result = _find_tu_by_symbol(
-            "_Z10my_kernelPfPfi", str(tmp_path / "nonexistent.json")
-        )
+        result = _find_tu_by_symbol("_Z10my_kernelPfPfi", str(tmp_path / "nonexistent.json"))
         assert result is None
 
     def test_handles_nm_failure(self, tmp_path):
@@ -409,9 +399,7 @@ class TestDwarfFallback:
         """Without compile_commands.json, DWARF is skipped, grep path used."""
         kernel = tmp_path / "kernel.hip"
         kernel.write_text(
-            "__global__ void my_kernel(float* a, int n) {\n"
-            "    int i = threadIdx.x;\n"
-            "}\n"
+            "__global__ void my_kernel(float* a, int n) {\n    int i = threadIdx.x;\n}\n"
         )
 
         result = find_kernel_source(
@@ -426,9 +414,7 @@ class TestDwarfFallback:
 
     def test_fallback_tools_not_found(self, tmp_path):
         """When all DWARF tools raise FileNotFoundError, returns None."""
-        with patch(
-            "subprocess.run", side_effect=FileNotFoundError("tool not found")
-        ):
+        with patch("subprocess.run", side_effect=FileNotFoundError("tool not found")):
             result = _extract_dwarf_source_files(str(tmp_path / "kernel.o"))
 
         assert result is None

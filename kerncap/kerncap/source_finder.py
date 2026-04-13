@@ -1036,8 +1036,7 @@ def _find_hip_kernel_via_dwarf(
     user_files = [
         f
         for f in dwarf_files
-        if os.path.abspath(f).startswith(abs_source_dir + os.sep)
-        and os.path.isfile(f)
+        if os.path.abspath(f).startswith(abs_source_dir + os.sep) and os.path.isfile(f)
     ]
 
     if not user_files:
@@ -1069,9 +1068,7 @@ def _find_hip_kernel_via_dwarf(
             for d in extra_defines or []:
                 k, _, v = d.partition("=")
                 merged_defs[k] = v or None
-            compile_defines = [
-                f"{k}={v}" if v else k for k, v in merged_defs.items()
-            ]
+            compile_defines = [f"{k}={v}" if v else k for k, v in merged_defs.items()]
         if cc_includes:
             include_paths = cc_includes
 
