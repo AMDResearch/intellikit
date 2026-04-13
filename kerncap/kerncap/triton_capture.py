@@ -339,7 +339,7 @@ _HOOK_INSTALLER = textwrap.dedent('''\
 #   - If the hook fails (e.g. triton not installed), the error is
 #     swallowed and the process continues normally
 # ---------------------------------------------------------------------------
-_SITECUSTOMIZE = textwrap.dedent('''\
+_SITECUSTOMIZE = textwrap.dedent("""\
     import os as _os
     _hook = _os.environ.get("_KERNCAP_TRITON_HOOK")
     if _hook and _os.path.isfile(_hook):
@@ -347,7 +347,7 @@ _SITECUSTOMIZE = textwrap.dedent('''\
             exec(compile(open(_hook).read(), _hook, "exec"))
         except Exception:
             pass
-''')
+""")
 
 
 def run_triton_capture(
@@ -392,7 +392,9 @@ def run_triton_capture(
     # Create temp dir for sitecustomize.py and the hook script
     site_dir = tempfile.mkdtemp(prefix="kerncap_site_")
     hook_fd, hook_path = tempfile.mkstemp(
-        suffix=".py", prefix="kerncap_triton_hook_", dir=site_dir,
+        suffix=".py",
+        prefix="kerncap_triton_hook_",
+        dir=site_dir,
     )
 
     try:
@@ -415,7 +417,8 @@ def run_triton_capture(
 
         logger.debug(
             "Triton capture: sitecustomize at %s, hook at %s",
-            site_dir, hook_path,
+            site_dir,
+            hook_path,
         )
 
         try:
