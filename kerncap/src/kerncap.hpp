@@ -12,6 +12,7 @@
 #include <hsa/hsa_api_trace.h>
 #include <hsa/hsa_ven_amd_loader.h>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -223,13 +224,13 @@ private:
     int target_dispatch_ = -1;      // KERNCAP_DISPATCH (-1 = first match)
     std::string output_dir_;        // KERNCAP_OUTPUT
     std::string gpu_arch_;          // e.g. "gfx90a" (queried at init)
-    bool captured_ = false;         // true after a successful capture
+    std::atomic<bool> captured_{false};  // true after a successful capture
 
     // Fork safety (multi-process support)
-    pid_t initial_pid_ = 0;           // PID when CaptureState was created
-    bool capture_child_mode_ = false; // KERNCAP_CAPTURE_CHILD env var present
-    bool fork_detected_ = false;      // set by atfork parent handler after fork()
-    bool child_state_reset_ = false;  // true after inherited state cleared in child
+    pid_t initial_pid_ = 0;              // PID when CaptureState was created
+    bool capture_child_mode_ = false;    // KERNCAP_CAPTURE_CHILD env var present
+    std::atomic<bool> fork_detected_{false};    // set by atfork parent handler after fork()
+    std::atomic<bool> child_state_reset_{false}; // true after inherited state cleared in child
 };
 
 }  // namespace kerncap

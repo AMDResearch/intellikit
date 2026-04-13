@@ -126,7 +126,7 @@ CaptureState::~CaptureState() {
 void CaptureState::atfork_parent_handler() {
     auto* inst = get_instance();
     if (inst) {
-        inst->fork_detected_ = true;
+        inst->fork_detected_.store(true, std::memory_order_relaxed);
         KERNCAP_INFO("fork() detected in parent (pid=%d) — "
                      "parent will become passive, child will capture",
                      getpid());
@@ -134,8 +134,7 @@ void CaptureState::atfork_parent_handler() {
 }
 
 void CaptureState::reset_inherited_state() {
-    if (child_state_reset_) return;
-    child_state_reset_ = true;
+    if (child_state_reset_.exchange(true, std::memory_order_relaxed)) return;
 
     KERNCAP_INFO("Child process (pid=%d) resetting inherited state "
                  "from parent (pid=%d)",
@@ -151,7 +150,7 @@ void CaptureState::reset_inherited_state() {
     kernel_hsaco_.clear();
     queue_agents_.clear();
     target_dispatch_count_ = 0;
-    captured_ = false;
+    captured_.store(false, std::memory_order_relaxed);
     gpu_arch_.clear();
 }
 
@@ -162,7 +161,7 @@ bool CaptureState::is_active_process() {
         reset_inherited_state();
         return true;
     }
-    return !fork_detected_;
+    return !fork_detected_.load(std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------
@@ -753,7 +752,7 @@ void CaptureState::capture_kernel(
     snapshot_all_tracked_memory(disp);
 
     KERNCAP_INFO("Capture complete -> %s", meta_path.c_str());
-    captured_ = true;
+    captured_.store(true, std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------
@@ -792,7 +791,7 @@ void CaptureState::handle_packets(
         bool is_target = !target_kernel_.empty() &&
                          kernel_name.find(target_kernel_) != std::string::npos;
 
-        if (is_target && !captured_) {
+        if (is_target && !captured_.load(std::memory_order_relaxed)) {
             // Check dispatch index filter
             bool should_capture = false;
             if (target_dispatch_ < 0) {
