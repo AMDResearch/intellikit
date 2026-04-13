@@ -37,7 +37,7 @@ namespace kerncap {
 // Static members
 // ---------------------------------------------------------------------------
 CaptureState* CaptureState::singleton_{nullptr};
-std::mutex CaptureState::mutex_{};
+std::shared_mutex CaptureState::mutex_{};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,7 +60,7 @@ static const char* safe_getenv(const char* name, const char* fallback = "") {
 CaptureState* CaptureState::get_instance(
         HsaApiTable* table, uint64_t runtime_version,
         uint64_t failed_tool_count, const char* const* failed_tool_names) {
-    const std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard lock(mutex_);
     if (!singleton_ && table) {
         singleton_ = new CaptureState(
             table, runtime_version, failed_tool_count, failed_tool_names);
@@ -494,6 +494,7 @@ hsa_status_t CaptureState::hsa_queue_destroy(hsa_queue_t* queue) {
 // Kernel name resolution
 // ---------------------------------------------------------------------------
 std::string CaptureState::get_kernel_name(uint64_t kernel_object) {
+    std::shared_lock g(mutex_);
     auto hit = handle_to_symbol_.find(kernel_object);
     if (hit == handle_to_symbol_.end()) return "<unknown>";
     auto sit = symbol_names_.find(hit->second);
@@ -502,6 +503,7 @@ std::string CaptureState::get_kernel_name(uint64_t kernel_object) {
 }
 
 std::string CaptureState::get_kernel_symbol(uint64_t kernel_object) {
+    std::shared_lock g(mutex_);
     auto hit = handle_to_symbol_.find(kernel_object);
     if (hit == handle_to_symbol_.end()) return "";
     auto sit = symbol_names_.find(hit->second);
@@ -631,10 +633,19 @@ void CaptureState::capture_kernel(
     // dump exactly the right number of bytes (not a fixed 4096 slab).
     uint32_t kernarg_segment_size = 0;
     {
-        auto hit = handle_to_symbol_.find(disp->kernel_object);
-        if (hit != handle_to_symbol_.end()) {
+        hsa_executable_symbol_t sym{};
+        bool found = false;
+        {
+            std::shared_lock g(mutex_);
+            auto hit = handle_to_symbol_.find(disp->kernel_object);
+            if (hit != handle_to_symbol_.end()) {
+                sym = hit->second;
+                found = true;
+            }
+        }
+        if (found) {
             hsa_core_call(this, hsa_executable_symbol_get_info,
-                          hit->second,
+                          sym,
                           HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
                           &kernarg_segment_size);
         }
@@ -683,8 +694,11 @@ void CaptureState::capture_kernel(
 
         // Query agent/ISA info
         hsa_agent_t agent{};
-        if (!queue_agents_.empty()) {
-            agent = queue_agents_.begin()->second;
+        {
+            std::shared_lock g(mutex_);
+            if (!queue_agents_.empty()) {
+                agent = queue_agents_.begin()->second;
+            }
         }
 
         char agent_name[64] = {};

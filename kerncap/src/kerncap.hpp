@@ -190,7 +190,7 @@ private:
     // ---- State ----
 
     static CaptureState* singleton_;
-    static std::mutex mutex_;
+    static std::shared_mutex mutex_;
 
     HsaApiTable* api_table_;   // live table (hooked)
 
