@@ -762,7 +762,7 @@ void CaptureState::on_submit_packet(
         const void* packets, uint64_t count, uint64_t /*user_que_idx*/,
         void* data, hsa_amd_queue_intercept_packet_writer writer) {
     auto* inst = get_instance();
-    if (!inst) {
+    if (!inst || !inst->is_active_process()) {
         writer(packets, count);
         return;
     }
