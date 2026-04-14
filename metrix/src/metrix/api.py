@@ -131,25 +131,50 @@ class Metrix:
             # Default: all available metrics
             metrics_to_compute = self.backend.get_available_metrics()
 
-        # Check for unsupported metrics
+        # Check for unsupported metrics (explicitly marked with a reason)
         unsupported = {
             m: self.backend._unsupported_metrics[m]
             for m in metrics_to_compute
             if m in self.backend._unsupported_metrics
         }
-        if unsupported:
+
+        # Check for unavailable metrics (no definition for this architecture)
+        available = set(self.backend.get_available_metrics())
+        unavailable = {m for m in metrics_to_compute if m not in available and m not in unsupported}
+
+        if unsupported or unavailable:
             if explicitly_requested:
-                # User explicitly requested unsupported metric - fail with error
-                metric_name = list(unsupported.keys())[0]
-                reason = unsupported[metric_name]
-                raise ValueError(f"Metric '{metric_name}' is not supported: {reason}")
+                # User explicitly requested unsupported/unavailable metric - fail with error
+                if unsupported:
+                    metric_name = list(unsupported.keys())[0]
+                    reason = unsupported[metric_name]
+                    raise ValueError(f"Metric '{metric_name}' is not supported: {reason}")
+                else:
+                    metric_name = next(iter(unavailable))
+                    raise ValueError(
+                        f"Metric '{metric_name}' is not available on {self.backend.device_specs.arch}. "
+                        f"Available metrics: {', '.join(sorted(available))}"
+                    )
             else:
                 # Metrics from profile/category - filter and warn
                 for metric_name, reason in unsupported.items():
                     logger.warning(
                         f"Skipping '{metric_name}' (not supported on {self.backend.device_specs.arch}): {reason}"
                     )
-                metrics_to_compute = [m for m in metrics_to_compute if m not in unsupported]
+                for metric_name in unavailable:
+                    logger.warning(
+                        f"Skipping '{metric_name}' (not available on {self.backend.device_specs.arch})"
+                    )
+                metrics_to_compute = [
+                    m for m in metrics_to_compute if m not in unsupported and m not in unavailable
+                ]
+
+        if not metrics_to_compute and not time_only:
+            logger.warning(
+                f"No metrics available on {self.backend.device_specs.arch} "
+                f"for the requested profile/metrics. Running in time-only mode."
+            )
+            time_only = True
 
         # Use simple kernel filter (no regex)
         rocprof_filter = kernel_filter

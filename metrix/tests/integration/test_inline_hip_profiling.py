@@ -95,9 +95,9 @@ def test_profile_vector_add_time_only(time_only, num_replays):
         assert isinstance(kernel.metrics, dict)
 
 
-@pytest.mark.parametrize("metric", ["memory.l2_hit_rate", "memory.coalescing_efficiency"])
-def test_profile_vector_add_single_metric(metric):
-    """Profile with a single metric."""
+def test_profile_vector_add_single_metric():
+    """Profile with a single metric (l2_hit_rate — available on all architectures)."""
+    metric = "memory.l2_hit_rate"
     with tempfile.TemporaryDirectory(prefix="metrix_test_") as tmp_dir:
         tmp_path = Path(tmp_dir)
         bin_path = _compile_hip(VECTOR_ADD_HIP, "vector_add", tmp_path)

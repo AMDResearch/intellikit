@@ -10,11 +10,12 @@
 # Counter naming conventions (from rocm-systems / rocprofiler-compute):
 #   GRBM_GUI_ACTIVE — GPU active cycles (convert to seconds: cycles / (clock_MHz * 1e6))
 #   GRBM_COUNT — total elapsed cycles (including idle)
-#   TCC_* — L2 cache (Texture Cache Channel) counters
-#   TCP_* — L1 vector cache (Texture Cache per Pipe) counters
+#   TCC_* — L2 cache (Texture Cache Channel) counters (CDNA)
+#   GL2C_* — L2 cache (Global L2 Cache) counters (RDNA)
+#   TCP_* — L1 vector cache (Texture Cache per Pipe) counters (CDNA only)
 #   SQ_* — Shader Sequencer instruction counters
 #
-# HBM request sizes and counter differences between architectures:
+# HBM/VRAM request sizes and counter differences between architectures:
 #   gfx942 (MI300) / gfx950 (MI350): L2-to-Fabric requests can be 32B, 64B, or 128B.
 #     TCC_EA0_RDREQ_sum — total read requests (all sizes) via EA0 port
 #     TCC_EA0_RDREQ_32B_sum — 32-byte read requests
@@ -24,7 +25,6 @@
 #     TCC_EA_RDREQ_sum — total read requests (aggregate of EA0+EA1 ports)
 #     TCC_EA_RDREQ_32B_sum — 32-byte read requests
 #     Remaining reads are 64B: (RDREQ - RDREQ_32B)
-
 rocprofiler-sdk:
   counters:
 
@@ -35,7 +35,65 @@ rocprofiler-sdk:
       unit: Percent
       definitions:
         - expression: (GRBM_GUI_ACTIVE / GRBM_COUNT) * 100
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx1201]
+
+    # --- rocprofiler-sdk built-in derived counters (gfx1201) ---
+    # Passthrough — no expression needed; the SDK computes these internally.
+
+    - name: OccupancyPercent
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: VALUBusy
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: MemUnitBusy
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: L0CacheHit
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: LdsUtil
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: WriteUnitStalled
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: VALUInsts
+      unit: Instructions/Work-item
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: SALUInsts
+      unit: Instructions/Work-item
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: Wavefronts
+      unit: Count
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: WAVE_DEP_WAIT
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
+
+    - name: WAVE_ISSUE_WAIT
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201]
 
     # --- Cache hit rates ---
     # L2 (TCC): hits / (hits + misses). L1 (TCP): misses go to L2 via TCC_READ_REQ.
@@ -46,7 +104,7 @@ rocprofiler-sdk:
         - expression: (TCC_HIT_sum / (TCC_HIT_sum + TCC_MISS_sum)) * 100
           architectures: [gfx942, gfx950, gfx90a]
         - expression: (GL2C_HIT_sum / (GL2C_HIT_sum + GL2C_MISS_sum)) * 100
-          architectures: [gfx1201, gfx1151]
+          architectures: [gfx1201]
 
     - name: memory.l1_hit_rate
       unit: Percent
@@ -67,6 +125,10 @@ rocprofiler-sdk:
             (((TCC_HIT_sum + TCC_MISS_sum) * 128) / 1e9)
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx942, gfx950, gfx90a]
+        - expression: >-
+            (((GL2C_HIT_sum + GL2C_MISS_sum) * 128) / 1e9)
+            / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
+          architectures: [gfx1201]
 
     # --- Bytes transferred ---
     # Raw byte counts: requests * cacheline size.
@@ -77,6 +139,8 @@ rocprofiler-sdk:
       definitions:
         - expression: TCC_REQ_sum * 128
           architectures: [gfx942, gfx950, gfx90a]
+        - expression: (GL2C_HIT_sum + GL2C_MISS_sum) * 128
+          architectures: [gfx1201]
 
     - name: memory.bytes_transferred_l1
       unit: Bytes
@@ -123,9 +187,11 @@ rocprofiler-sdk:
       definitions:
         - expression: SQ_LDS_BANK_CONFLICT / SQ_INSTS_LDS
           architectures: [gfx942, gfx950, gfx90a]
+        - expression: LDSBankConflict
+          architectures: [gfx1201]
 
-    # --- HBM read bandwidth ---
-    # Total bytes read from HBM / kernel active time.
+    # --- HBM/VRAM read bandwidth ---
+    # Total bytes read from HBM (CDNA) or VRAM (RDNA) / kernel active time.
     # gfx942/gfx950: 3 request sizes — 128B (TCC_BUBBLE), 64B (remainder), 32B.
     # gfx90a: 2 request sizes — 64B (remainder), 32B. No 128B reads.
 
@@ -144,7 +210,7 @@ rocprofiler-sdk:
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx90a]
 
-    # --- HBM write bandwidth ---
+    # --- HBM/VRAM write bandwidth ---
     # Total bytes written to HBM / kernel active time.
     # Writes are 64B or 32B only (no 128B writes on any arch).
 
@@ -162,7 +228,7 @@ rocprofiler-sdk:
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx90a]
 
-    # --- HBM bandwidth utilization ---
+    # --- HBM/VRAM bandwidth utilization ---
     # (actual read+write bandwidth) / (peak HBM bandwidth) * 100.
 
     - name: memory.hbm_bandwidth_utilization
@@ -186,7 +252,7 @@ rocprofiler-sdk:
             / HBM_BANDWIDTH_GBS * 100
           architectures: [gfx90a]
 
-    # --- Total HBM bytes ---
+    # --- Total HBM/VRAM bytes ---
     # Sum of all read + write bytes through L2-to-Fabric interface.
 
     - name: memory.bytes_transferred_hbm
