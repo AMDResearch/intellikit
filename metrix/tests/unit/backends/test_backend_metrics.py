@@ -1,9 +1,9 @@
 """
-Unit tests for backend metric computations (gfx942, gfx950, and gfx90a)
+Unit tests for backend metric computations (gfx942, gfx950, gfx90a, and gfx1201)
 
 Tests use MOCK counter data (no hardware counters in test code!)
-Tests are parametrized to run on MI300X (gfx942), MI350X (gfx950), and MI200 (gfx90a).
-All metrics are loaded from counter_defs.yaml.
+Tests are parametrized to run on MI300X (gfx942), MI350X (gfx950), MI200 (gfx90a),
+and RDNA4 (gfx1201). All metrics are loaded from counter_defs.yaml.
 """
 
 import pytest
@@ -44,6 +44,17 @@ _TEST_SPECS = {
         hbm_bandwidth_gbs=1600.0,
         l2_size_mb=8.0,
         lds_size_per_cu_kb=64.0,
+    ),
+    "gfx1201": DeviceSpecs(
+        arch="gfx1201",
+        name="AMD Radeon RX 9070 XT",
+        num_cu=32,
+        max_waves_per_cu=32,
+        wavefront_size=32,
+        base_clock_mhz=2950.0,
+        hbm_bandwidth_gbs=608.0,
+        l2_size_mb=6.0,
+        lds_size_per_cu_kb=128.0,
     ),
 }
 
@@ -593,3 +604,171 @@ class TestComputeMetrics:
 
         result = compute(backend, "compute.hbm_arithmetic_intensity")
         assert result == 0.01
+
+
+# ═══════════════════════════════════════════════════════════════════
+# RDNA4 (gfx1201) tests
+# ═══════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def rdna_backend():
+    """Fixture for gfx1201 (RDNA4) backend"""
+    with patch(
+        "metrix.backends.gfx1201.query_device_specs",
+        return_value=_TEST_SPECS["gfx1201"],
+    ):
+        return get_backend("gfx1201")
+
+
+class TestRDNA4MetricDiscovery:
+    """Test gfx1201 discovers VRAM bandwidth metrics from YAML"""
+
+    def test_discovers_vram_bandwidth_metrics(self, rdna_backend):
+        metrics = rdna_backend.get_available_metrics()
+        assert "memory.hbm_read_bandwidth" in metrics
+        assert "memory.hbm_write_bandwidth" in metrics
+        assert "memory.hbm_bandwidth_utilization" in metrics
+        assert "memory.bytes_transferred_hbm" in metrics
+
+    def test_discovers_l2_metrics(self, rdna_backend):
+        metrics = rdna_backend.get_available_metrics()
+        assert "memory.l2_hit_rate" in metrics
+        assert "memory.l2_bandwidth" in metrics
+        assert "memory.bytes_transferred_l2" in metrics
+
+    def test_required_counters_use_gl2c(self, rdna_backend):
+        """RDNA4 must request GL2C_EA_* counters, not TCC_EA0_*"""
+        counters = rdna_backend.get_required_counters(["memory.hbm_bandwidth_utilization"])
+        gl2c_counters = [c for c in counters if c.startswith("GL2C_")]
+        assert len(gl2c_counters) > 0
+        tcc_counters = [c for c in counters if c.startswith("TCC_")]
+        assert len(tcc_counters) == 0
+
+    def test_yaml_units_loaded(self, rdna_backend):
+        expected_units = {
+            "memory.hbm_read_bandwidth": "GB/s",
+            "memory.hbm_write_bandwidth": "GB/s",
+            "memory.hbm_bandwidth_utilization": "Percent",
+            "memory.bytes_transferred_hbm": "Bytes",
+            "memory.l2_hit_rate": "Percent",
+        }
+        for metric_name, expected_unit in expected_units.items():
+            actual_unit = rdna_backend._metrics[metric_name].get("unit", "")
+            assert actual_unit == expected_unit, (
+                f"{metric_name}: expected unit '{expected_unit}', got '{actual_unit}'"
+            )
+
+
+class TestRDNA4VRAMReadBandwidth:
+    """Test VRAM read bandwidth on gfx1201 — 256 bytes per EA request"""
+
+    def test_read_bandwidth(self, rdna_backend):
+        """1000 read requests × 256B = 256000B in 0.001s → 0.256 GB/s"""
+        active_cycles = int(rdna_backend.device_specs.base_clock_mhz * 1000)
+        rdna_backend._raw_data = {
+            "GL2C_EA_RDREQ_sum": 1000,
+            "GRBM_GUI_ACTIVE": active_cycles,
+        }
+
+        result = compute(rdna_backend, "memory.hbm_read_bandwidth")
+        expected = (1000 * 256 / 1e9) / 0.001
+        assert abs(result - expected) < 0.001
+
+    def test_read_bandwidth_zero_cycles(self, rdna_backend):
+        rdna_backend._raw_data = {
+            "GL2C_EA_RDREQ_sum": 1000,
+            "GRBM_GUI_ACTIVE": 0,
+        }
+
+        result = compute(rdna_backend, "memory.hbm_read_bandwidth")
+        assert result == 0.0
+
+
+class TestRDNA4VRAMWriteBandwidth:
+    """Test VRAM write bandwidth on gfx1201 — 256 bytes per EA request"""
+
+    def test_write_bandwidth(self, rdna_backend):
+        """1000 write requests × 256B = 256000B in 0.001s → 0.256 GB/s"""
+        active_cycles = int(rdna_backend.device_specs.base_clock_mhz * 1000)
+        rdna_backend._raw_data = {
+            "GL2C_EA_WRREQ_sum": 1000,
+            "GRBM_GUI_ACTIVE": active_cycles,
+        }
+
+        result = compute(rdna_backend, "memory.hbm_write_bandwidth")
+        expected = (1000 * 256 / 1e9) / 0.001
+        assert abs(result - expected) < 0.001
+
+    def test_write_bandwidth_zero_cycles(self, rdna_backend):
+        rdna_backend._raw_data = {
+            "GL2C_EA_WRREQ_sum": 1000,
+            "GRBM_GUI_ACTIVE": 0,
+        }
+
+        result = compute(rdna_backend, "memory.hbm_write_bandwidth")
+        assert result == 0.0
+
+
+class TestRDNA4BandwidthUtilization:
+    """Test VRAM bandwidth utilization % on gfx1201"""
+
+    def test_utilization_percentage(self, rdna_backend):
+        """Known traffic / known peak → predictable %"""
+        active_cycles = int(rdna_backend.device_specs.base_clock_mhz * 1000)
+        peak_bw = rdna_backend.device_specs.hbm_bandwidth_gbs
+
+        rdna_backend._raw_data = {
+            "GL2C_EA_RDREQ_sum": 1000,
+            "GL2C_EA_WRREQ_sum": 500,
+            "GRBM_GUI_ACTIVE": active_cycles,
+        }
+
+        result = compute(rdna_backend, "memory.hbm_bandwidth_utilization")
+        expected_bw = ((1000 + 500) * 256 / 1e9) / 0.001
+        expected_pct = expected_bw / peak_bw * 100
+        assert abs(result - expected_pct) < 0.01
+
+    def test_utilization_zero_traffic(self, rdna_backend):
+        active_cycles = int(rdna_backend.device_specs.base_clock_mhz * 1000)
+        rdna_backend._raw_data = {
+            "GL2C_EA_RDREQ_sum": 0,
+            "GL2C_EA_WRREQ_sum": 0,
+            "GRBM_GUI_ACTIVE": active_cycles,
+        }
+
+        result = compute(rdna_backend, "memory.hbm_bandwidth_utilization")
+        assert result == 0.0
+
+    def test_utilization_zero_cycles(self, rdna_backend):
+        rdna_backend._raw_data = {
+            "GL2C_EA_RDREQ_sum": 100,
+            "GL2C_EA_WRREQ_sum": 100,
+            "GRBM_GUI_ACTIVE": 0,
+        }
+
+        result = compute(rdna_backend, "memory.hbm_bandwidth_utilization")
+        assert result == 0.0
+
+
+class TestRDNA4BytesTransferred:
+    """Test total VRAM bytes transferred on gfx1201"""
+
+    def test_bytes_read_and_write(self, rdna_backend):
+        """(1000 + 500) requests × 256B = 384000 bytes"""
+        rdna_backend._raw_data = {
+            "GL2C_EA_RDREQ_sum": 1000,
+            "GL2C_EA_WRREQ_sum": 500,
+        }
+
+        result = compute(rdna_backend, "memory.bytes_transferred_hbm")
+        assert result == (1000 + 500) * 256
+
+    def test_bytes_zero_traffic(self, rdna_backend):
+        rdna_backend._raw_data = {
+            "GL2C_EA_RDREQ_sum": 0,
+            "GL2C_EA_WRREQ_sum": 0,
+        }
+
+        result = compute(rdna_backend, "memory.bytes_transferred_hbm")
+        assert result == 0

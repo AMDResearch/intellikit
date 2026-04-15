@@ -159,8 +159,7 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     #   HBM2/HBM2e (gfx90a): MCLK = data strobe clock, DDR → 2x multiplier
     #   HBM3 (gfx94x):       MCLK = CK (command clock) = half the data strobe → 4x
     #   HBM3e (gfx95x):      same as HBM3 → 4x
-    #   GDDR6 (RDNA):        MCLK = data clock, DDR → 2x
-    # Ref: ROCm/rocm-systems projects/clr/rocclr/device/rocm/rocdevice.cpp
+    #   GDDR6 (RDNA):        MCLK = base CK; 16n prefetch → 16x multiplier
     mem_clock = gpu["memory_clock_rate_khz"]
     bus_width = gpu["memory_bus_width_bits"]
     if mem_clock <= 0 or bus_width <= 0:
@@ -168,7 +167,12 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
             f"Device {device_id} ({arch}) reported invalid memory specs: "
             f"memory_clock_rate_khz={mem_clock}, memory_bus_width_bits={bus_width}"
         )
-    mem_multiplier = 4.0 if arch.startswith(("gfx94", "gfx95")) else 2.0
+    if arch.startswith(("gfx94", "gfx95")):
+        mem_multiplier = 4.0   # HBM3/HBM3e: CK → 4x
+    elif arch.startswith("gfx1"):
+        mem_multiplier = 16.0  # GDDR6: base CK → 16x (16n prefetch)
+    else:
+        mem_multiplier = 2.0   # HBM2/HBM2e: data strobe → 2x (DDR)
     hbm_bw_gbs = mem_multiplier * mem_clock * 1e3 * bus_width / 8.0 / 1e9
 
     return DeviceSpecs(
