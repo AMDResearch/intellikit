@@ -444,3 +444,65 @@ def _grow_note_section(
         )
 
     return data
+
+
+# ─── CLI Entry Point ────────────────────────────────────────────────────────
+# Called by the C++ interceptor via subprocess:
+#   python3 -m proboscis.patcher <code_object_path> <plan_output_path> [--target kernel]
+#
+# Patches the code object in-place and writes a JSON plan to plan_output_path.
+
+def main():
+    import json
+    import sys
+
+    args = sys.argv[1:]
+    if len(args) < 2:
+        print("Usage: python3 -m proboscis.patcher <code_object> <plan_output> [--target kernel]",
+              file=sys.stderr)
+        sys.exit(1)
+
+    co_path = args[0]
+    plan_path = args[1]
+    target_kernel = None
+    if "--target" in args:
+        idx = args.index("--target")
+        if idx + 1 < len(args):
+            target_kernel = args[idx + 1]
+
+    try:
+        data = Path(co_path).read_bytes()
+    except Exception as e:
+        print(f"Failed to read code object: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    target_kernels = [target_kernel] if target_kernel else None
+    config = PatchConfig(target_kernels=target_kernels)
+
+    try:
+        patched_data, plans = patch_code_object(data, config)
+    except Exception as e:
+        print(f"Patching failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Write patched code object back
+    Path(co_path).write_bytes(patched_data)
+
+    # Write plan JSON
+    plan_json = []
+    for plan in plans:
+        plan_json.append({
+            "kernel": plan.kernel_name,
+            "symbol": plan.symbol or "",
+            "orig_size": plan.source_kernarg_size,
+            "new_size": plan.new_kernarg_size,
+            "probe_ctx_offset": plan.insertion_offset,
+            "explicit_len": plan.explicit_args_length,
+        })
+
+    Path(plan_path).write_text(json.dumps(plan_json, indent=2))
+    print(f"Patched {len(plans)} kernel(s)", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

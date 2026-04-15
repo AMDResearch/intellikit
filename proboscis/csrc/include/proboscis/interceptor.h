@@ -44,6 +44,46 @@ struct SymbolEqual {
     }
 };
 
+/// Static instruction analysis per kernel.
+struct InstructionAnalysis {
+    uint32_t global_loads = 0;
+    uint32_t global_stores = 0;
+    uint32_t flat_loads = 0;
+    uint32_t flat_stores = 0;
+    uint32_t buffer_loads = 0;
+    uint32_t buffer_stores = 0;
+    uint32_t ds_reads = 0;
+    uint32_t ds_writes = 0;
+    uint32_t atomics = 0;
+
+    // By size
+    uint32_t loads_1b = 0;
+    uint32_t loads_2b = 0;
+    uint32_t loads_4b = 0;
+    uint32_t loads_8b = 0;
+    uint32_t loads_12b = 0;
+    uint32_t loads_16b = 0;
+    uint32_t stores_1b = 0;
+    uint32_t stores_2b = 0;
+    uint32_t stores_4b = 0;
+    uint32_t stores_8b = 0;
+    uint32_t stores_12b = 0;
+    uint32_t stores_16b = 0;
+
+    uint32_t total_loads() const {
+        return global_loads + flat_loads + buffer_loads + ds_reads;
+    }
+    uint32_t total_stores() const {
+        return global_stores + flat_stores + buffer_stores + ds_writes;
+    }
+    uint32_t loads_gt_4b() const {
+        return loads_8b + loads_12b + loads_16b;
+    }
+    uint32_t stores_gt_4b() const {
+        return stores_8b + stores_12b + stores_16b;
+    }
+};
+
 /// Proboscis HSA interceptor — hooks queue creation and kernel dispatch
 /// to inject probe instrumentation via the hidden-argument ABI trick.
 class ProboscisInterceptor {
@@ -69,6 +109,10 @@ public:
         hsa_executable_t executable, const char* symbol_name,
         const hsa_agent_t* agent, hsa_executable_symbol_t* symbol);
 
+    static hsa_status_t hsa_code_object_reader_create_from_memory(
+        const void* code_object, size_t size,
+        hsa_code_object_reader_t* code_object_reader);
+
     static void OnSubmitPackets(
         const void* in_packets, uint64_t count,
         uint64_t user_que_idx, void* data,
@@ -90,6 +134,12 @@ private:
     void doPackets(hsa_queue_t* queue, const hsa_kernel_dispatch_packet_t* packets,
                    uint64_t count, hsa_amd_queue_intercept_packet_writer writer);
 
+    // Code object patching
+    bool patchCodeObject(const void* code_object, size_t size,
+                         std::vector<uint8_t>& patched);
+    void analyzeInstructions(const std::string& kernel_name,
+                             const void* code_object, size_t size);
+
     static ProboscisInterceptor* singleton_;
     static std::mutex singleton_mutex_;
 
@@ -105,4 +155,23 @@ private:
 
     // Dispatch recording
     std::map<std::string, std::vector<DispatchRecord>> dispatch_records_;
+
+    // Per-kernel metadata from code object patching
+    std::map<std::string, ArgDescriptor> kernel_arg_descs_;
+
+    // Static instruction analysis per kernel
+    std::map<std::string, InstructionAnalysis> instruction_analysis_;
+
+    // Patched code objects (keep alive so HSA can read them)
+    std::vector<std::vector<uint8_t>> patched_code_objects_;
+
+    // Per-dispatch probe buffers (for readback)
+    struct ProbeBufferInfo {
+        void* buffer;
+        size_t size;
+        uint64_t max_records;
+        uint64_t record_size;
+        hsa_agent_t agent;
+    };
+    std::map<std::string, std::vector<ProbeBufferInfo>> probe_buffer_records_;
 };

@@ -100,6 +100,59 @@ def format_register_snapshot(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def format_instruction_analysis(analysis: Dict[str, Any], dispatches: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Combine static instruction analysis with runtime dispatch data.
+
+    Produces per-thread instruction counts and estimated total operations
+    based on grid dimensions.
+    """
+    if not analysis:
+        return {}
+
+    total_threads = sum(d.get("threads", 0) for d in dispatches)
+    dispatch_count = len(dispatches)
+
+    total_loads = analysis.get("total_loads", 0)
+    total_stores = analysis.get("total_stores", 0)
+    atomics = analysis.get("atomics", 0)
+    loads_gt_4b = analysis.get("loads_gt_4B", 0)
+    stores_gt_4b = analysis.get("stores_gt_4B", 0)
+
+    result = {
+        "per_thread": {
+            "loads": total_loads,
+            "stores": total_stores,
+            "atomics": atomics,
+            "loads_gt_4B": loads_gt_4b,
+            "stores_gt_4B": stores_gt_4b,
+        },
+        "by_type": {
+            "global_loads": analysis.get("global_loads", 0),
+            "global_stores": analysis.get("global_stores", 0),
+            "flat_loads": analysis.get("flat_loads", 0),
+            "flat_stores": analysis.get("flat_stores", 0),
+            "buffer_loads": analysis.get("buffer_loads", 0),
+            "buffer_stores": analysis.get("buffer_stores", 0),
+            "ds_reads": analysis.get("ds_reads", 0),
+            "ds_writes": analysis.get("ds_writes", 0),
+        },
+        "loads_by_size": analysis.get("loads_by_size", {}),
+        "stores_by_size": analysis.get("stores_by_size", {}),
+    }
+
+    if total_threads > 0:
+        result["estimated_totals"] = {
+            "total_load_ops": total_loads * total_threads,
+            "total_store_ops": total_stores * total_threads,
+            "total_atomic_ops": atomics * total_threads,
+            "total_load_ops_gt_4B": loads_gt_4b * total_threads,
+            "total_threads": total_threads,
+            "dispatch_count": dispatch_count,
+        }
+
+    return result
+
+
 FORMATTERS = {
     "memory_trace": format_memory_trace,
     "block_count": format_block_count,
@@ -107,9 +160,19 @@ FORMATTERS = {
 }
 
 
-def format_results(probe_type: str, records: List[Dict[str, Any]]) -> Dict[str, Any]:
+def format_results(probe_type: str, records: List[Dict[str, Any]],
+                   instruction_analysis: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Format probe results with a type-appropriate summary."""
     formatter = FORMATTERS.get(probe_type)
+    result = {}
     if formatter:
-        return {"records": records, "summary": formatter(records)}
-    return {"records": records, "summary": {}}
+        result = {"records": records, "summary": formatter(records)}
+    else:
+        result = {"records": records, "summary": {}}
+
+    if instruction_analysis:
+        result["instruction_analysis"] = format_instruction_analysis(
+            instruction_analysis, records
+        )
+
+    return result

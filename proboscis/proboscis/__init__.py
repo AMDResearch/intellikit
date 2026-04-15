@@ -59,11 +59,20 @@ class ProbeResult:
         return self._data.get("summary", {})
 
     @property
+    def instruction_analysis(self) -> Dict[str, Any]:
+        return self._data.get("instruction_analysis", {})
+
+    @property
+    def instrumented(self) -> bool:
+        return self._data.get("summary", {}).get("instrumented", False)
+
+    @property
     def record_count(self) -> int:
         return len(self.records)
 
     def __repr__(self) -> str:
-        return f"ProbeResult(kernel={self.kernel_name!r}, type={self.probe_type!r}, records={self.record_count})"
+        tag = " [instrumented]" if self.instrumented else ""
+        return f"ProbeResult(kernel={self.kernel_name!r}, type={self.probe_type!r}, records={self.record_count}{tag})"
 
 
 class InstrumentationResult:
@@ -71,10 +80,11 @@ class InstrumentationResult:
 
     def __init__(self, data: Dict[str, Any]):
         self._data = data
-        self._results = {
-            name: ProbeResult(name, data.get("probe_type", "unknown"), info)
-            for name, info in data.get("kernels", {}).items()
-        }
+        self._results = {}
+        for name, info in data.get("kernels", {}).items():
+            self._results[name] = ProbeResult(
+                name, data.get("probe_type", "unknown"), info
+            )
 
     @property
     def kernels(self) -> List[ProbeResult]:
