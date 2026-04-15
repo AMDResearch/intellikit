@@ -611,34 +611,24 @@ void ProboscisInterceptor::doPackets(
             if (probe_buf) {
                 initProbeBuffer(probe_buf, config_.max_records, record_size);
 
-                // Allocate new kernarg buffer from system memory (CPU-visible,
-                // accessible by GPU). We iterate CPU agents to find a kernarg pool.
+                // Allocate new kernarg buffer from the GPU agent's global pool.
                 void* new_kernarg = nullptr;
-                hsa_amd_memory_pool_t kernarg_pool{};
-                // Find a kernarg pool from any agent
-                hsa_iterate_agents(
-                    [](hsa_agent_t ag, void* data) -> hsa_status_t {
-                        hsa_device_type_t dev_type;
-                        hsa_agent_get_info(ag, HSA_AGENT_INFO_DEVICE, &dev_type);
-                        if (dev_type != HSA_DEVICE_TYPE_CPU) return HSA_STATUS_SUCCESS;
-                        return hsa_amd_agent_iterate_memory_pools(ag,
-                            [](hsa_amd_memory_pool_t p, void* d) -> hsa_status_t {
-                                hsa_amd_segment_t seg;
-                                hsa_amd_memory_pool_get_info(p,
-                                    HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &seg);
-                                if (seg == HSA_AMD_SEGMENT_GLOBAL) {
-                                    uint32_t flags = 0;
-                                    hsa_amd_memory_pool_get_info(p,
-                                        HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flags);
-                                    if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT) {
-                                        *static_cast<hsa_amd_memory_pool_t*>(d) = p;
-                                        return HSA_STATUS_INFO_BREAK;
-                                    }
-                                }
-                                return HSA_STATUS_SUCCESS;
-                            }, d);
-                    }, &kernarg_pool);
-                auto& pool = kernarg_pool;
+                hsa_amd_memory_pool_t pool{};
+                hsa_amd_agent_iterate_memory_pools(agent,
+                    [](hsa_amd_memory_pool_t p, void* data) -> hsa_status_t {
+                        hsa_amd_segment_t seg;
+                        hsa_amd_memory_pool_get_info(p, HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &seg);
+                        if (seg == HSA_AMD_SEGMENT_GLOBAL) {
+                            bool accessible = false;
+                            hsa_amd_memory_pool_get_info(p,
+                                HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED, &accessible);
+                            if (accessible) {
+                                *static_cast<hsa_amd_memory_pool_t*>(data) = p;
+                                return HSA_STATUS_INFO_BREAK;
+                            }
+                        }
+                        return HSA_STATUS_SUCCESS;
+                    }, &pool);
 
                 if (hsa_amd_memory_pool_allocate(pool, desc.instrumented_kernarg_length,
                                                   0, &new_kernarg) == HSA_STATUS_SUCCESS) {
