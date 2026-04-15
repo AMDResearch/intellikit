@@ -156,13 +156,17 @@ class Proboscis:
             InstrumentationResult with per-kernel probe data
         """
         from .planner import plan_probe
-        from .patcher import PatchConfig
 
         probe_spec = plan_probe(probe, target_kernel, sample_rate, max_records)
 
-        # Write probe config for the C++ runtime
+        # Write probe config for the C++ runtime (flat keys — the C++
+        # loadConfig() extracts "probe_type" and "target_kernel" by name)
+        spec = probe_spec.to_dict()
         config = {
-            "probe_spec": probe_spec.to_dict(),
+            "probe_type": spec["probe_type"],
+            "target_kernel": spec.get("target_kernel") or "",
+            "sample_rate": spec.get("sample_rate", 1),
+            "max_records": spec.get("max_records", 10000),
             "log_level": self.log_level,
         }
 

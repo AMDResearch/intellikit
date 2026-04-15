@@ -30,10 +30,26 @@ def load_results(results_path: str) -> Dict[str, Any]:
 
 
 def format_memory_trace(records: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Summarize memory trace records."""
+    """Summarize memory trace records.
+
+    Handles two record formats:
+    - Per-access records (from probe buffer): {op, address, size, thread_id}
+    - Dispatch-level records (from interceptor): {dispatch_id, grid_size, workgroup_size, threads}
+    """
     if not records:
         return {"total_accesses": 0, "loads": 0, "stores": 0, "atomics": 0}
 
+    # Dispatch-level records (from the interceptor, before probe buffers are wired)
+    if "dispatch_id" in records[0]:
+        total_threads = sum(r.get("threads", 0) for r in records)
+        return {
+            "dispatch_count": len(records),
+            "total_threads": total_threads,
+            "grid_sizes": [r.get("grid_size") for r in records],
+            "workgroup_sizes": [r.get("workgroup_size") for r in records],
+        }
+
+    # Per-access records (from probe buffer)
     loads = sum(1 for r in records if r.get("op") == "load")
     stores = sum(1 for r in records if r.get("op") == "store")
     atomics = sum(1 for r in records if r.get("op") == "atomic")
