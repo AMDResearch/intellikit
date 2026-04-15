@@ -457,8 +457,12 @@ def main():
     import sys
 
     args = sys.argv[1:]
+    plan_only = "--plan-only" in args
+    if plan_only:
+        args.remove("--plan-only")
+
     if len(args) < 2:
-        print("Usage: python3 -m proboscis.patcher <code_object> <plan_output> [--target kernel]",
+        print("Usage: python3 -m proboscis.patcher [--plan-only] <code_object> <plan_output> [--target kernel]",
               file=sys.stderr)
         sys.exit(1)
 
@@ -485,8 +489,9 @@ def main():
         print(f"Patching failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Write patched code object back
-    Path(co_path).write_bytes(patched_data)
+    # Write patched code object back (unless plan-only)
+    if not plan_only:
+        Path(co_path).write_bytes(patched_data)
 
     # Write plan JSON
     plan_json = []
@@ -501,7 +506,8 @@ def main():
         })
 
     Path(plan_path).write_text(json.dumps(plan_json, indent=2))
-    print(f"Patched {len(plans)} kernel(s)", file=sys.stderr)
+    mode = "Planned" if plan_only else "Patched"
+    print(f"{mode} {len(plans)} kernel(s)", file=sys.stderr)
 
 
 if __name__ == "__main__":

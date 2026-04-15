@@ -611,24 +611,34 @@ void ProboscisInterceptor::doPackets(
             if (probe_buf) {
                 initProbeBuffer(probe_buf, config_.max_records, record_size);
 
-                // Allocate new kernarg buffer
+                // Allocate new kernarg buffer from system memory (CPU-visible,
+                // accessible by GPU). We iterate CPU agents to find a kernarg pool.
                 void* new_kernarg = nullptr;
-                hsa_amd_memory_pool_t pool{};
-                hsa_amd_agent_iterate_memory_pools(agent,
-                    [](hsa_amd_memory_pool_t p, void* d) -> hsa_status_t {
-                        hsa_amd_segment_t seg;
-                        hsa_amd_memory_pool_get_info(p, HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &seg);
-                        if (seg == HSA_AMD_SEGMENT_GLOBAL) {
-                            uint32_t flags = 0;
-                            hsa_amd_memory_pool_get_info(p,
-                                HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flags);
-                            if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT) {
-                                *static_cast<hsa_amd_memory_pool_t*>(d) = p;
-                                return HSA_STATUS_INFO_BREAK;
-                            }
-                        }
-                        return HSA_STATUS_SUCCESS;
-                    }, &pool);
+                hsa_amd_memory_pool_t kernarg_pool{};
+                // Find a kernarg pool from any agent
+                hsa_iterate_agents(
+                    [](hsa_agent_t ag, void* data) -> hsa_status_t {
+                        hsa_device_type_t dev_type;
+                        hsa_agent_get_info(ag, HSA_AGENT_INFO_DEVICE, &dev_type);
+                        if (dev_type != HSA_DEVICE_TYPE_CPU) return HSA_STATUS_SUCCESS;
+                        return hsa_amd_agent_iterate_memory_pools(ag,
+                            [](hsa_amd_memory_pool_t p, void* d) -> hsa_status_t {
+                                hsa_amd_segment_t seg;
+                                hsa_amd_memory_pool_get_info(p,
+                                    HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &seg);
+                                if (seg == HSA_AMD_SEGMENT_GLOBAL) {
+                                    uint32_t flags = 0;
+                                    hsa_amd_memory_pool_get_info(p,
+                                        HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flags);
+                                    if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT) {
+                                        *static_cast<hsa_amd_memory_pool_t*>(d) = p;
+                                        return HSA_STATUS_INFO_BREAK;
+                                    }
+                                }
+                                return HSA_STATUS_SUCCESS;
+                            }, d);
+                    }, &kernarg_pool);
+                auto& pool = kernarg_pool;
 
                 if (hsa_amd_memory_pool_allocate(pool, desc.instrumented_kernarg_length,
                                                   0, &new_kernarg) == HSA_STATUS_SUCCESS) {
@@ -940,29 +950,111 @@ hsa_status_t ProboscisInterceptor::hsa_code_object_reader_create_from_memory(
     }
 
     if (is_amdgpu && !self->shutting_down_.load()) {
-        if (self->config_.log_level >= 1) {
+        if (self->config_.log_level >= 2) {
             std::cerr << "[proboscis] Intercepted code object (" << size << " bytes)"
                       << std::endl;
         }
 
-        // Run static instruction analysis on the original code object
+        // Run static instruction analysis on ALL code objects
         self->analyzeInstructions("__code_object__", code_object, size);
 
-        // Patch the code object to add hidden_proboscis_ctx
-        std::vector<uint8_t> patched;
-        if (self->patchCodeObject(code_object, size, patched)) {
-            // Keep the patched data alive (HSA needs to read from it)
-            std::lock_guard<std::mutex> lock(self->mutex_);
-            self->patched_code_objects_.push_back(std::move(patched));
-            auto& stored = self->patched_code_objects_.back();
+        // Only patch code objects that are NOT from the HIP runtime.
+        // HIP runtime code objects (containing __amd_rocclr_*) are loaded
+        // before user code and should not be modified. We detect them by
+        // checking for the __amd_rocclr_ prefix in the .note metadata.
+        // A simpler heuristic: skip patching entirely and only do instruction
+        // analysis + dispatch interception with kernarg repacking.
+        //
+        // For now, we do NOT patch code objects. The kernarg repacking in
+        // doPackets relies on knowing the ArgDescriptor for each kernel.
+        // Instead, we extract kernel metadata (kernarg sizes, hidden arg
+        // layout) from the code object without modifying it, and compute
+        // the ArgDescriptor as if we had patched it.
+        //
+        // The probe buffer pointer goes at the end of the existing kernarg
+        // buffer — we over-allocate the kernarg and place it there. The
+        // kernel won't read it (no assembly injection yet), but the
+        // plumbing is verified.
 
-            if (self->config_.log_level >= 1) {
-                std::cerr << "[proboscis] Using patched code object ("
-                          << stored.size() << " bytes)" << std::endl;
+        // Extract kernel metadata without patching
+        // Write code object to temp file for Python analysis
+        char tmpco[] = "/tmp/proboscis_analyze_XXXXXX";
+        int fd = mkstemp(tmpco);
+        if (fd >= 0) {
+            write(fd, code_object, size);
+            close(fd);
+
+            // Call patcher in --plan-only mode to get arg descriptors
+            char tmpplan[] = "/tmp/proboscis_plan_XXXXXX";
+            int fd2 = mkstemp(tmpplan);
+            if (fd2 >= 0) {
+                close(fd2);
+                std::ostringstream cmd;
+                cmd << "python3 -m proboscis.patcher --plan-only "
+                    << tmpco << " " << tmpplan;
+                if (!self->config_.target_kernel.empty()) {
+                    cmd << " --target " << self->config_.target_kernel;
+                }
+
+                int ret = system(cmd.str().c_str());
+                if (ret == 0) {
+                    // Read plan JSON
+                    std::ifstream planf(tmpplan);
+                    if (planf.good()) {
+                        std::ostringstream ss;
+                        ss << planf.rdbuf();
+                        std::string plan_json = ss.str();
+                        planf.close();
+
+                        // Parse plans
+                        size_t pos = 0;
+                        while ((pos = plan_json.find("\"kernel\"", pos)) != std::string::npos) {
+                            auto extract_str = [&](const std::string& key) -> std::string {
+                                auto p = plan_json.find("\"" + key + "\"", pos);
+                                if (p == std::string::npos) return "";
+                                p = plan_json.find("\"", p + key.size() + 2);
+                                if (p == std::string::npos) return "";
+                                auto e = plan_json.find("\"", p + 1);
+                                if (e == std::string::npos) return "";
+                                return plan_json.substr(p + 1, e - p - 1);
+                            };
+                            auto extract_int = [&](const std::string& key) -> uint32_t {
+                                auto p = plan_json.find("\"" + key + "\"", pos);
+                                if (p == std::string::npos) return 0;
+                                p = plan_json.find(":", p);
+                                if (p == std::string::npos) return 0;
+                                p++;
+                                while (p < plan_json.size() && plan_json[p] == ' ') p++;
+                                return std::atoi(plan_json.c_str() + p);
+                            };
+
+                            std::string kernel_name = extract_str("kernel");
+                            if (!kernel_name.empty()) {
+                                ArgDescriptor desc{};
+                                desc.explicit_args_length = extract_int("explicit_len");
+                                desc.kernarg_length = extract_int("orig_size");
+                                desc.instrumented_kernarg_length = extract_int("new_size");
+                                desc.probe_ctx_offset = extract_int("probe_ctx_offset");
+                                desc.hidden_args_length = desc.kernarg_length - desc.explicit_args_length;
+
+                                std::lock_guard<std::mutex> lock(self->mutex_);
+                                self->kernel_arg_descs_[kernel_name] = desc;
+
+                                if (self->config_.log_level >= 1) {
+                                    std::cerr << "[proboscis] Kernel: " << kernel_name
+                                              << " kernarg=" << desc.kernarg_length
+                                              << " probe_ctx_offset=" << desc.probe_ctx_offset
+                                              << " new_size=" << desc.instrumented_kernarg_length
+                                              << std::endl;
+                                }
+                            }
+                            pos++;
+                        }
+                    }
+                }
+                unlink(tmpplan);
             }
-
-            return orig_code_obj_reader_create_from_memory(
-                stored.data(), stored.size(), code_object_reader);
+            unlink(tmpco);
         }
     }
 
