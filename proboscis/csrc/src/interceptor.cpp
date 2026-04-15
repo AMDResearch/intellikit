@@ -403,7 +403,7 @@ void ProboscisInterceptor::analyzeInstructions(
     close(fd2);
 
     std::ostringstream cmd;
-    cmd << objdump << " -d --no-show-raw-insn " << tmpco << " > " << tmpout << " 2>/dev/null";
+    cmd << objdump << " -d " << tmpco << " > " << tmpout << " 2>/dev/null";
     int ret = system(cmd.str().c_str());
     if (ret != 0) {
         if (config_.log_level >= 2) {
@@ -428,18 +428,32 @@ void ProboscisInterceptor::analyzeInstructions(
         if (start == std::string::npos) continue;
         std::string trimmed = line.substr(start);
 
-        // Skip non-instruction lines (labels, directives, etc.)
-        // Instruction lines in llvm-objdump start with hex address like "  100:"
-        // After --no-show-raw-insn, format is: "  addr:  mnemonic  operands"
+        // Skip non-instruction lines
         if (trimmed.empty() || trimmed[0] == ';' || trimmed[0] == '.' || trimmed[0] == '<') continue;
 
-        // Extract mnemonic (first word after the colon and whitespace)
+        // llvm-objdump AMDGPU format with raw bytes:
+        //   "  100:\t01 02 03 04\t\tglobal_load_dword v0, v[0:1], off"
+        // The mnemonic starts after the last \t sequence.
         auto colon = trimmed.find(':');
         if (colon == std::string::npos) continue;
         std::string after_colon = trimmed.substr(colon + 1);
-        start = after_colon.find_first_not_of(" \t");
-        if (start == std::string::npos) continue;
-        std::string insn = after_colon.substr(start);
+
+        // Find the last group of text — that's the mnemonic + operands.
+        // llvm-objdump uses \t to separate fields.
+        // Strategy: find the last non-hex-looking word as the mnemonic.
+        // Simpler: scan for known instruction prefixes in the whole line.
+        std::string insn;
+        for (const char* prefix : {"global_load", "global_store", "global_atomic",
+                                    "flat_load", "flat_store", "flat_atomic",
+                                    "buffer_load", "buffer_store", "buffer_atomic",
+                                    "ds_read", "ds_write", "ds_add", "ds_inc", "ds_cmpst"}) {
+            auto pos = after_colon.find(prefix);
+            if (pos != std::string::npos) {
+                insn = after_colon.substr(pos);
+                break;
+            }
+        }
+        if (insn.empty()) continue;
 
         // Determine access size from suffix
         auto classify_size = [](const std::string& inst, bool is_load,
@@ -576,15 +590,39 @@ void ProboscisInterceptor::doPackets(
             dispatch_records_[name].push_back(rec);
         }
 
-        // Check if we have an arg descriptor for this kernel (i.e., it was patched)
+        // Check if we have an arg descriptor for this kernel.
+        // kernel_arg_descs_ keys are mangled names from the code object metadata
+        // (e.g. "_Z7vec_addPKfS0_Pfi"), but dispatch names are demangled
+        // (e.g. "vec_add(float const*, float const*, float*, int)").
+        // Also try matching with ".kd" suffix stripped.
         ArgDescriptor desc{};
         bool has_desc = false;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            // Try exact match first, then substring match (kernel names may be demangled)
             for (const auto& kv : kernel_arg_descs_) {
+                // Try: mangled name contains demangled, or vice versa
                 if (name.find(kv.first) != std::string::npos ||
                     kv.first.find(name) != std::string::npos) {
+                    desc = kv.second;
+                    has_desc = true;
+                    break;
+                }
+                // Try demangling the stored key and comparing
+                std::string demangled_key = demangle(kv.first.c_str());
+                if (name.find(demangled_key) != std::string::npos ||
+                    demangled_key.find(name) != std::string::npos) {
+                    desc = kv.second;
+                    has_desc = true;
+                    break;
+                }
+                // Try with .kd suffix stripped from dispatch name
+                std::string name_stripped = name;
+                if (name_stripped.size() > 3 &&
+                    name_stripped.substr(name_stripped.size() - 3) == ".kd") {
+                    name_stripped = name_stripped.substr(0, name_stripped.size() - 3);
+                }
+                if (name_stripped.find(kv.first) != std::string::npos ||
+                    kv.first.find(name_stripped) != std::string::npos) {
                     desc = kv.second;
                     has_desc = true;
                     break;
