@@ -435,33 +435,23 @@ void ProboscisInterceptor::analyzeInstructions(
     // We parse the entire code object — if there are multiple kernels, we aggregate.
     // A more precise approach would track kernel boundaries via labels.
     while (std::getline(disasm, line)) {
-        // Trim leading whitespace
-        size_t start = line.find_first_not_of(" \t");
-        if (start == std::string::npos) continue;
-        std::string trimmed = line.substr(start);
-
-        // Skip non-instruction lines
-        if (trimmed.empty() || trimmed[0] == ';' || trimmed[0] == '.' || trimmed[0] == '<') continue;
-
-        // llvm-objdump AMDGPU format with raw bytes:
-        //   "  100:\t01 02 03 04\t\tglobal_load_dword v0, v[0:1], off"
-        // The mnemonic starts after the last \t sequence.
-        auto colon = trimmed.find(':');
-        if (colon == std::string::npos) continue;
-        std::string after_colon = trimmed.substr(colon + 1);
-
-        // Find the last group of text — that's the mnemonic + operands.
-        // llvm-objdump uses \t to separate fields.
-        // Strategy: find the last non-hex-looking word as the mnemonic.
-        // Simpler: scan for known instruction prefixes in the whole line.
+        // AMDGPU llvm-objdump format:
+        //   "\tglobal_load_dword v6, v[4:5], off    // addr: raw"
+        // Instruction lines start with \t and the mnemonic directly.
+        // Labels look like: "addr <name>:"
+        // Just scan the whole line for known memory instruction prefixes.
         std::string insn;
         for (const char* prefix : {"global_load", "global_store", "global_atomic",
                                     "flat_load", "flat_store", "flat_atomic",
                                     "buffer_load", "buffer_store", "buffer_atomic",
                                     "ds_read", "ds_write", "ds_add", "ds_inc", "ds_cmpst"}) {
-            auto pos = after_colon.find(prefix);
+            auto pos = line.find(prefix);
             if (pos != std::string::npos) {
-                insn = after_colon.substr(pos);
+                insn = line.substr(pos);
+                // Truncate at // comment
+                auto comment = insn.find("//");
+                if (comment != std::string::npos)
+                    insn = insn.substr(0, comment);
                 break;
             }
         }
@@ -834,10 +824,16 @@ void ProboscisInterceptor::writeResults() {
         // Add instrumentation info if kernel was patched
         auto desc_it = kernel_arg_descs_.find(kernel_name);
         if (desc_it == kernel_arg_descs_.end()) {
-            // Try substring match
+            // Try substring match with demangling (same logic as doPackets)
             for (const auto& d : kernel_arg_descs_) {
                 if (kernel_name.find(d.first) != std::string::npos ||
                     d.first.find(kernel_name) != std::string::npos) {
+                    desc_it = kernel_arg_descs_.find(d.first);
+                    break;
+                }
+                std::string demangled_key = demangle(d.first.c_str());
+                if (kernel_name.find(demangled_key) != std::string::npos ||
+                    demangled_key.find(kernel_name) != std::string::npos) {
                     desc_it = kernel_arg_descs_.find(d.first);
                     break;
                 }
