@@ -19,10 +19,27 @@
 #include <hsa/hsa.h>
 #include <hsa/hsa_ext_amd.h>
 
-// Minimal HsaApiTable definitions — the installed hsa_api_trace.h has broken
-// relative includes (inc/hsa_ext_image.h) in ROCm 6.x/7.x. We only need
-// the function pointer slots we actually dereference, so define the structs
-// inline with the exact ABI-compatible layout from rocr-runtime.
+#include <algorithm>
+
+// ─── Declarations from hsa_api_trace.h ─────────────────────────────────────
+// The installed hsa_api_trace.h in ROCm 6.x/7.x has broken relative includes
+// (inc/hsa_ext_image.h) that prevent compilation. We reproduce the minimal
+// declarations needed: intercept API functions, callback typedef, and the
+// API table structs with ABI-compatible layout verified against rocprofiler-sdk
+// ROCP_SDK_ENFORCE_ABI static assertions.
+
+// Intercept queue callback and API functions (from hsa_api_trace.h)
+typedef void (*hsa_amd_queue_intercept_packet_writer)(const void* pkts, uint64_t pkt_count);
+typedef void (*hsa_amd_queue_intercept_handler)(const void* pkts, uint64_t pkt_count,
+                                                uint64_t user_pkt_index, void* data,
+                                                hsa_amd_queue_intercept_packet_writer writer);
+hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
+                                              hsa_amd_queue_intercept_handler callback,
+                                              void* user_data);
+hsa_status_t hsa_amd_queue_intercept_create(
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
+    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
+    uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue);
 
 struct ApiTableVersion {
     uint32_t major_id;

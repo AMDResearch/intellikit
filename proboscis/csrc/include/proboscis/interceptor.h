@@ -17,6 +17,10 @@
 #include <hsa/hsa.h>
 #include <hsa/hsa_ext_amd.h>
 
+// Forward declarations from hsa_api_trace.h (can't include directly due to
+// broken relative includes in ROCm 6.x/7.x installed headers).
+typedef void (*hsa_amd_queue_intercept_packet_writer)(const void* pkts, uint64_t pkt_count);
+
 #ifndef PUBLIC_API
 #define PUBLIC_API __attribute__((visibility("default")))
 #endif
