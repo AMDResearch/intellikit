@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cxxabi.h>
+#include <dlfcn.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -118,6 +119,43 @@ static decltype(hsa_executable_get_symbol_by_name)* orig_get_symbol_by_name = nu
 using code_obj_reader_create_from_memory_t =
     hsa_status_t (*)(const void*, size_t, hsa_code_object_reader_t*);
 static code_obj_reader_create_from_memory_t orig_code_obj_reader_create_from_memory = nullptr;
+
+// ---- Python package path discovery ----------------------------------------
+// Find the parent directory of the proboscis Python package by locating
+// this .so (via dladdr) and walking up to find proboscis/__init__.py.
+
+static std::string find_python_package_dir() {
+    Dl_info info;
+    if (dladdr(reinterpret_cast<void*>(find_python_package_dir), &info) && info.dli_fname) {
+        std::string so_path(info.dli_fname);
+        // Walk up from .so location looking for proboscis/__init__.py
+        // Typical layout: .../proboscis/build/lib/libproboscis.so
+        //                  .../proboscis/proboscis/__init__.py
+        size_t pos = so_path.rfind('/');
+        while (pos != std::string::npos && pos > 0) {
+            std::string dir = so_path.substr(0, pos);
+            std::string init = dir + "/proboscis/__init__.py";
+            if (access(init.c_str(), F_OK) == 0) {
+                return dir;
+            }
+            pos = dir.rfind('/');
+        }
+    }
+    return "";
+}
+
+static std::string python_cmd_prefix() {
+    static std::string prefix;
+    static bool computed = false;
+    if (!computed) {
+        computed = true;
+        std::string pkg_dir = find_python_package_dir();
+        if (!pkg_dir.empty()) {
+            prefix = "PYTHONPATH=" + pkg_dir + ":$PYTHONPATH ";
+        }
+    }
+    return prefix;
+}
 
 // ---- Singleton ------------------------------------------------------------
 
@@ -282,7 +320,7 @@ bool ProboscisInterceptor::patchCodeObject(
 
     // Call Python patcher
     std::ostringstream cmd;
-    cmd << "python3 -m proboscis.patcher " << tmpco << " " << tmpplan;
+    cmd << python_cmd_prefix() << "python3 -m proboscis.patcher " << tmpco << " " << tmpplan;
     if (!config_.target_kernel.empty()) {
         cmd << " --target " << config_.target_kernel;
     }
@@ -1060,7 +1098,7 @@ hsa_status_t ProboscisInterceptor::hsa_code_object_reader_create_from_memory(
             if (fd2 >= 0) {
                 close(fd2);
                 std::ostringstream cmd;
-                cmd << "python3 -m proboscis.patcher --plan-only "
+                cmd << python_cmd_prefix() << "python3 -m proboscis.patcher --plan-only "
                     << tmpco << " " << tmpplan;
                 if (!self->config_.target_kernel.empty()) {
                     cmd << " --target " << self->config_.target_kernel;
