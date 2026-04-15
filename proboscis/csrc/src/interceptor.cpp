@@ -430,16 +430,54 @@ void ProboscisInterceptor::analyzeInstructions(
     std::ifstream disasm(tmpout);
     if (!disasm.good()) { unlink(tmpco); unlink(tmpout); return; }
 
-    InstructionAnalysis analysis{};
+    // Determine access size from suffix
+    auto classify_size = [](const std::string& inst, bool is_load,
+                           InstructionAnalysis& a) {
+        if (inst.find("dwordx4") != std::string::npos ||
+            inst.find("b128") != std::string::npos) {
+            if (is_load) a.loads_16b++; else a.stores_16b++;
+        } else if (inst.find("dwordx3") != std::string::npos ||
+                   inst.find("b96") != std::string::npos) {
+            if (is_load) a.loads_12b++; else a.stores_12b++;
+        } else if (inst.find("dwordx2") != std::string::npos ||
+                   inst.find("b64") != std::string::npos ||
+                   inst.find("d16_hi") != std::string::npos) {
+            if (is_load) a.loads_8b++; else a.stores_8b++;
+        } else if (inst.find("short") != std::string::npos ||
+                   inst.find("b16") != std::string::npos ||
+                   inst.find("u16") != std::string::npos) {
+            if (is_load) a.loads_2b++; else a.stores_2b++;
+        } else if (inst.find("ubyte") != std::string::npos ||
+                   inst.find("sbyte") != std::string::npos ||
+                   inst.find("b8") != std::string::npos) {
+            if (is_load) a.loads_1b++; else a.stores_1b++;
+        } else {
+            // Default: dword (4 bytes)
+            if (is_load) a.loads_4b++; else a.stores_4b++;
+        }
+    };
+
+    // Track per-kernel analysis by detecting function labels in objdump output.
+    // Labels look like: "0000000000000000 <_Z7vec_addPKfS0_Pfi>:"
+    std::string current_kernel;
+    std::map<std::string, InstructionAnalysis> per_kernel;
     std::string line;
-    // We parse the entire code object — if there are multiple kernels, we aggregate.
-    // A more precise approach would track kernel boundaries via labels.
+
     while (std::getline(disasm, line)) {
-        // AMDGPU llvm-objdump format:
-        //   "\tglobal_load_dword v6, v[4:5], off    // addr: raw"
-        // Instruction lines start with \t and the mnemonic directly.
-        // Labels look like: "addr <name>:"
-        // Just scan the whole line for known memory instruction prefixes.
+        // Check for function label: "<name>:"
+        auto langle = line.find('<');
+        auto rangle = line.find(">:");
+        if (langle != std::string::npos && rangle != std::string::npos && rangle > langle) {
+            current_kernel = line.substr(langle + 1, rangle - langle - 1);
+            // Demangle for matching against dispatch names
+            std::string demangled = demangle(current_kernel.c_str());
+            if (!demangled.empty()) current_kernel = demangled;
+            if (per_kernel.find(current_kernel) == per_kernel.end())
+                per_kernel[current_kernel] = InstructionAnalysis{};
+            continue;
+        }
+
+        // Scan for known memory instruction prefixes
         std::string insn;
         for (const char* prefix : {"global_load", "global_store", "global_atomic",
                                     "flat_load", "flat_store", "flat_atomic",
@@ -448,7 +486,6 @@ void ProboscisInterceptor::analyzeInstructions(
             auto pos = line.find(prefix);
             if (pos != std::string::npos) {
                 insn = line.substr(pos);
-                // Truncate at // comment
                 auto comment = insn.find("//");
                 if (comment != std::string::npos)
                     insn = insn.substr(0, comment);
@@ -457,32 +494,10 @@ void ProboscisInterceptor::analyzeInstructions(
         }
         if (insn.empty()) continue;
 
-        // Determine access size from suffix
-        auto classify_size = [](const std::string& inst, bool is_load,
-                               InstructionAnalysis& a) {
-            if (inst.find("dwordx4") != std::string::npos ||
-                inst.find("b128") != std::string::npos) {
-                if (is_load) a.loads_16b++; else a.stores_16b++;
-            } else if (inst.find("dwordx3") != std::string::npos ||
-                       inst.find("b96") != std::string::npos) {
-                if (is_load) a.loads_12b++; else a.stores_12b++;
-            } else if (inst.find("dwordx2") != std::string::npos ||
-                       inst.find("b64") != std::string::npos ||
-                       inst.find("d16_hi") != std::string::npos) {
-                if (is_load) a.loads_8b++; else a.stores_8b++;
-            } else if (inst.find("short") != std::string::npos ||
-                       inst.find("b16") != std::string::npos ||
-                       inst.find("u16") != std::string::npos) {
-                if (is_load) a.loads_2b++; else a.stores_2b++;
-            } else if (inst.find("ubyte") != std::string::npos ||
-                       inst.find("sbyte") != std::string::npos ||
-                       inst.find("b8") != std::string::npos) {
-                if (is_load) a.loads_1b++; else a.stores_1b++;
-            } else {
-                // Default: dword (4 bytes)
-                if (is_load) a.loads_4b++; else a.stores_4b++;
-            }
-        };
+        // Get the analysis struct for the current kernel (or a fallback)
+        InstructionAnalysis& analysis = current_kernel.empty()
+            ? per_kernel["__unknown__"]
+            : per_kernel[current_kernel];
 
         // Classify instruction
         if (insn.find("global_load") == 0) {
@@ -523,18 +538,20 @@ void ProboscisInterceptor::analyzeInstructions(
     unlink(tmpco);
     unlink(tmpout);
 
-    if (analysis.total_loads() + analysis.total_stores() + analysis.atomics > 0) {
+    {
         std::lock_guard<std::mutex> lock(mutex_);
-        // Store under a generic key since we analyze the whole code object.
-        // We'll match kernel names at results time.
-        instruction_analysis_["__code_object__"] = analysis;
-
-        if (config_.log_level >= 1) {
-            std::cerr << "[proboscis] Instruction analysis: "
-                      << analysis.total_loads() << " loads, "
-                      << analysis.total_stores() << " stores, "
-                      << analysis.atomics << " atomics"
-                      << " (loads >4B: " << analysis.loads_gt_4b() << ")" << std::endl;
+        for (const auto& kv : per_kernel) {
+            const auto& a = kv.second;
+            if (a.total_loads() + a.total_stores() + a.atomics > 0) {
+                instruction_analysis_[kv.first] = a;
+                if (config_.log_level >= 1) {
+                    std::cerr << "[proboscis] Instruction analysis [" << kv.first << "]: "
+                              << a.total_loads() << " loads, "
+                              << a.total_stores() << " stores, "
+                              << a.atomics << " atomics"
+                              << " (loads >4B: " << a.loads_gt_4b() << ")" << std::endl;
+                }
+            }
         }
     }
 }
@@ -869,10 +886,27 @@ void ProboscisInterceptor::writeResults() {
         f << "}";
 
         // Add static instruction analysis
-        // Look for analysis matching this kernel or the global code object analysis
+        // Look for analysis matching this kernel (keys are demangled function names)
         auto ia_it = instruction_analysis_.find(kernel_name);
         if (ia_it == instruction_analysis_.end()) {
-            ia_it = instruction_analysis_.find("__code_object__");
+            // Try substring/demangling match
+            for (auto it = instruction_analysis_.begin(); it != instruction_analysis_.end(); ++it) {
+                if (kernel_name.find(it->first) != std::string::npos ||
+                    it->first.find(kernel_name) != std::string::npos) {
+                    ia_it = it;
+                    break;
+                }
+                // Strip .kd suffix from kernel_name
+                std::string stripped = kernel_name;
+                if (stripped.size() > 3 && stripped.substr(stripped.size() - 3) == ".kd") {
+                    stripped = stripped.substr(0, stripped.size() - 3);
+                    if (stripped.find(it->first) != std::string::npos ||
+                        it->first.find(stripped) != std::string::npos) {
+                        ia_it = it;
+                        break;
+                    }
+                }
+            }
         }
         if (ia_it != instruction_analysis_.end()) {
             const auto& ia = ia_it->second;
