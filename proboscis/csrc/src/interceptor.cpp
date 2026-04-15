@@ -383,18 +383,27 @@ void ProboscisInterceptor::analyzeInstructions(
     write(fd, code_object, size);
     close(fd);
 
-    // Run llvm-objdump (try ROCm path first, then system PATH)
+    // Run llvm-objdump (try several paths)
     std::string objdump;
     const char* rocm = std::getenv("ROCM_PATH");
     if (!rocm) rocm = "/opt/rocm";
-    std::string rocm_objdump = std::string(rocm) + "/llvm/bin/llvm-objdump";
-
-    // Check if ROCm objdump exists
-    std::ifstream check(rocm_objdump);
-    if (check.good()) {
-        objdump = rocm_objdump;
-    } else {
-        objdump = "llvm-objdump";
+    std::vector<std::string> candidates = {
+        std::string(rocm) + "/llvm/bin/llvm-objdump",
+        "/opt/rocm/llvm/bin/llvm-objdump",
+        "llvm-objdump",
+    };
+    for (const auto& c : candidates) {
+        std::string test_cmd = c + " --version > /dev/null 2>&1";
+        if (system(test_cmd.c_str()) == 0) {
+            objdump = c;
+            break;
+        }
+    }
+    if (objdump.empty()) {
+        if (config_.log_level >= 1)
+            std::cerr << "[proboscis] llvm-objdump not found, skipping analysis" << std::endl;
+        unlink(tmpco);
+        return;
     }
 
     char tmpout[] = "/tmp/proboscis_asm_XXXXXX";
@@ -404,9 +413,12 @@ void ProboscisInterceptor::analyzeInstructions(
 
     std::ostringstream cmd;
     cmd << objdump << " -d " << tmpco << " > " << tmpout << " 2>/dev/null";
+    if (config_.log_level >= 2) {
+        std::cerr << "[proboscis] Running: " << cmd.str() << std::endl;
+    }
     int ret = system(cmd.str().c_str());
     if (ret != 0) {
-        if (config_.log_level >= 2) {
+        if (config_.log_level >= 1) {
             std::cerr << "[proboscis] llvm-objdump failed (ret=" << ret << ")" << std::endl;
         }
         unlink(tmpco);
