@@ -18,7 +18,57 @@
 
 #include <hsa/hsa.h>
 #include <hsa/hsa_ext_amd.h>
-#include <hsa/hsa_api_trace.h>
+
+// Minimal HsaApiTable definitions — the installed hsa_api_trace.h has broken
+// relative includes (inc/hsa_ext_image.h) in ROCm 6.x/7.x. We only need
+// the function pointer slots we actually dereference, so define the structs
+// inline with the exact ABI-compatible layout from rocr-runtime.
+
+struct ApiTableVersion {
+    uint32_t major_id;
+    uint32_t minor_id;
+    uint32_t step_id;
+    uint32_t reserved;
+};
+
+// CoreApiTable: version + 7 fn ptrs before hsa_queue_create_fn (field 8).
+// We need fields 8 (hsa_queue_create_fn), 10 (hsa_queue_destroy_fn),
+// and 94 (hsa_executable_symbol_get_info_fn).
+struct CoreApiTable {
+    ApiTableVersion version;                                        // offset 0
+    decltype(hsa_init)* hsa_init_fn;                                // 1
+    decltype(hsa_shut_down)* hsa_shut_down_fn;                      // 2
+    decltype(hsa_system_get_info)* hsa_system_get_info_fn;          // 3
+    void* _pad_4;                                                   // 4
+    void* _pad_5;                                                   // 5
+    decltype(hsa_iterate_agents)* hsa_iterate_agents_fn;            // 6
+    decltype(hsa_agent_get_info)* hsa_agent_get_info_fn;            // 7
+    decltype(hsa_queue_create)* hsa_queue_create_fn;                // 8
+    decltype(hsa_soft_queue_create)* hsa_soft_queue_create_fn;      // 9
+    decltype(hsa_queue_destroy)* hsa_queue_destroy_fn;              // 10
+    // Fields 11-93: we don't need to enumerate them all, but the struct layout
+    // must place hsa_executable_symbol_get_info_fn at field 94.
+    // 94 - 11 = 83 padding slots.
+    void* _core_pad[83];                                            // 11-93
+    decltype(hsa_executable_symbol_get_info)* hsa_executable_symbol_get_info_fn; // 94
+    // There are more fields after 94 but we don't access them.
+};
+
+// AmdExtTable: ROCP_SDK_ENFORCE_ABI uses member-index counting (0-indexed):
+// member 0 = version, members 1-37 = 37 function pointers, member 38 = intercept_create.
+struct AmdExtTable {
+    ApiTableVersion version;                                        // member 0
+    void* _amd_pad[37];                                             // members 1-37
+    decltype(hsa_amd_queue_intercept_create)* hsa_amd_queue_intercept_create_fn;   // member 38
+    decltype(hsa_amd_queue_intercept_register)* hsa_amd_queue_intercept_register_fn; // member 39
+};
+
+struct HsaApiTable {
+    ApiTableVersion version;
+    CoreApiTable* core_;
+    AmdExtTable* amd_ext_;
+    // finalizer_ext_, image_ext_, tools_, pc_sampling_ext_ follow but we don't use them.
+};
 
 #include <cstdlib>
 #include <cstring>
