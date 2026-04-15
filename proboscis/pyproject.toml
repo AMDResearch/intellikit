@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
+[build-system]
+requires = ["scikit-build-core>=0.3.3", "setuptools-scm>=8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "proboscis"
+dynamic = ["version"]
+description = "Agent-driven GPU kernel instrumentation using the hidden-argument ABI trick"
+authors = [
+    { name = "Muhammad Awad", email = "muhaawad@amd.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]",
+    "pyelftools>=0.29",
+]
+
+[project.urls]
+Homepage = "https://github.com/AMDResearch/intellikit"
+Repository = "https://github.com/AMDResearch/intellikit"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+proboscis-mcp = "proboscis.mcp.server:main"
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = ["proboscis"]
+
+[tool.scikit-build.cmake.define]
+ROCM_PATH = {env="ROCM_PATH", default="/opt/rocm"}
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-date"
+fallback_version = "0.1.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

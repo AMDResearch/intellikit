@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include CMakeLists.txt
+
+recursive-include proboscis *.py
+recursive-include csrc *.cpp *.hpp *.h *.cmake CMakeLists.txt
+recursive-include skill *.md
+
+global-exclude *.pyc
+global-exclude __pycache__
+prune build
