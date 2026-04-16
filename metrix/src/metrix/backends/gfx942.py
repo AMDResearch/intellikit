@@ -68,7 +68,14 @@ class GFX942Backend(CounterBackend):
         kernel_filter: Optional[str] = None,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = 0,
+        kernel_iteration_range: Optional[str] = None,
     ) -> List[ProfileResult]:
         """Run rocprofv3 and return results (single pass only - base class handles multi-pass)"""
         wrapper = ROCProfV3Wrapper(timeout_seconds=timeout_seconds)
-        return wrapper.profile(command, counters, kernel_filter=kernel_filter, cwd=cwd)
+        return wrapper.profile(
+            command,
+            counters,
+            kernel_filter=kernel_filter,
+            cwd=cwd,
+            kernel_iteration_range=kernel_iteration_range,
+        )

@@ -19,6 +19,7 @@ Existing GPU profilers have challenges:
 - **20 metrics** across memory, cache, compute, and GPU utilization (availability varies by GPU architecture)
 - **Multi-Run Profiling**: Automatic aggregation with min/max/avg statistics
 - **Kernel Filtering**: Efficient regex filtering at rocprofv3 level
+- **Launch selection**: Optional rocprofv3 ``kernel_iteration_range`` (CLI ``--kernel-iteration`` / ``--kernel-iteration-range``) to target a specific Nth launch when kernels run in a loop or after warmups
 - **Multiple Output Formats**: Text, JSON, CSV
 
 ## Installation
@@ -110,6 +111,10 @@ metrix profile [options] <target>
   --time-only        Only collect timing, no hardware counters
   --kernel, -k       Filter kernels by name (regular expression, passed to rocprofv3)
   --num-replays, -n  Replay the application N times and aggregate (default: 10)
+  --kernel-iteration N
+                     Counters only for the Nth launch of each matched kernel (``[N,N]``)
+  --kernel-iteration-range RANGE
+                     Explicit ``jobs[].kernel_iteration_range`` in rocprofv3 ``--input`` YAML
   --aggregate        Aggregate metrics by kernel name across replays (default: per-dispatch across runs)
   --top K            Show only top K slowest kernels
   --output, -o       Output file (.json, .csv, .txt)
@@ -125,10 +130,20 @@ metrix info <metric|profile> <name>
 
 Note: GPU architecture is auto-detected using `rocminfo`.
 
+**rocprofv3 iteration field:** Metrix passes counters via `rocprofv3 --input <file>`. The launch-index
+window is the YAML key **`kernel_iteration_range`** on each object under top-level **`jobs`**
+(ROCprofiler-SDK input schema), not a separate `rocprofv3` argv flag.
+
+**Dispatch index and `--kernel`:** Launch indices are **per kernel name** (each matched kernel has its
+own 1-based counter). Use **`--kernel`** / **`-k`** whenever you use **`--kernel-iteration`** or
+**`--kernel-iteration-range`** so the Nth launch refers to the kernel you care about; without a
+narrow filter, results include every kernel that matches the default regex.
+
 ## Testing
 
 ```bash
-python3 -m pytest tests/ -v
+python3 -m pytest tests/unit/ -q   # fast, no GPU
+python3 -m pytest tests/ -v        # includes integration (GPU / binaries where applicable)
 ```
 
 ## Requirements
