@@ -4,6 +4,7 @@
 
 """MCP Server for Metrix - Human-Readable GPU Metrics."""
 
+import argparse
 from typing import List, Optional
 
 from fastmcp import FastMCP
