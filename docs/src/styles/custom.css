@@ -1,0 +1,84 @@
+/* AMD brand colors */
+:root {
+  --sl-color-accent-low: #3b0a0c;
+  --sl-color-accent: #ed1c24;
+  --sl-color-accent-high: #f5888c;
+  --sl-color-white: #f8f9fa;
+  --sl-color-gray-1: #e3e6e8;
+  --sl-color-gray-2: #b8bec4;
+  --sl-color-gray-3: #6b7785;
+  --sl-color-gray-4: #3d4752;
+  --sl-color-gray-5: #252b32;
+  --sl-color-gray-6: #181c21;
+  --sl-color-black: #12161a;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #fce8e9;
+  --sl-color-accent: #c8191f;
+  --sl-color-accent-high: #7a0f13;
+  --sl-color-white: #12161a;
+  --sl-color-gray-1: #252b32;
+  --sl-color-gray-2: #3d4752;
+  --sl-color-gray-3: #6b7785;
+  --sl-color-gray-4: #b8bec4;
+  --sl-color-gray-5: #e3e6e8;
+  --sl-color-gray-6: #f2f4f5;
+  --sl-color-black: #f8f9fa;
+}
+
+/* Hero section gradient */
+.hero {
+  background: linear-gradient(
+    135deg,
+    var(--sl-color-gray-6) 0%,
+    var(--sl-color-black) 100%
+  );
+  border-bottom: 1px solid var(--sl-color-gray-5);
+}
+
+/* Center hero content and reduce vertical space */
+.content-panel:has(.hero),
+[data-page-title] .hero,
+.hero {
+  text-align: center;
+  padding: 0.5rem 1.5rem !important;
+}
+
+.hero .stack {
+  align-items: center;
+  gap: 0.25rem;
+  padding-block: 0.25rem;
+}
+
+.hero .copy {
+  text-align: center;
+  align-items: center;
+}
+
+.hero .copy > * {
+  max-width: 100%;
+}
+
+.hero .copy .tagline {
+  white-space: nowrap;
+}
+
+.hero .actions {
+  justify-content: center;
+}
+
+/* IntelliKit title: "Intelli" in blue, "Kit" in red */
+.hero h1#_top {
+  background: linear-gradient(90deg, #4a9eed 67%, #ed1c24 67%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  width: fit-content;
+  margin-inline: auto;
+}
+
+/* Left-justify all content below the hero */
+.sl-markdown-content {
+  text-align: left;
+}

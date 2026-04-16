@@ -149,6 +149,63 @@ done
 
 require_python_ge_310
 
+# --- System dependency check for tools with C++ builds ---
+# accordo and nexus depend on KernelDB which requires cmake, libdwarf-dev,
+# and libzstd-dev to compile. Without these, pip install will fail during
+# the C++ build step.
+needs_native_deps() {
+  local t
+  for t in "$@"; do
+    [[ "$t" == "accordo" || "$t" == "nexus" ]] && return 0
+  done
+  return 1
+}
+
+check_system_deps() {
+  local missing=()
+  if ! command -v cmake >/dev/null 2>&1; then
+    missing+=(cmake)
+  fi
+  # Check for libdwarf and libzstd headers (dpkg on Debian/Ubuntu, rpm on Fedora/RHEL)
+  if command -v dpkg >/dev/null 2>&1; then
+    if ! dpkg -s libdwarf-dev >/dev/null 2>&1; then
+      missing+=(libdwarf-dev)
+    fi
+    if ! dpkg -s libzstd-dev >/dev/null 2>&1; then
+      missing+=(libzstd-dev)
+    fi
+  elif command -v rpm >/dev/null 2>&1; then
+    if ! rpm -q libdwarf-devel >/dev/null 2>&1; then
+      missing+=(libdwarf-devel)
+    fi
+    if ! rpm -q libzstd-devel >/dev/null 2>&1; then
+      missing+=(libzstd-devel)
+    fi
+  fi
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "" >&2
+    echo "Error: Missing system packages required by accordo/nexus: ${missing[*]}" >&2
+    echo "Install them first:" >&2
+    if command -v apt-get >/dev/null 2>&1; then
+      echo "  sudo apt-get update && sudo apt-get install -y ${missing[*]}" >&2
+    elif command -v dnf >/dev/null 2>&1; then
+      echo "  sudo dnf install -y ${missing[*]}" >&2
+    elif command -v yum >/dev/null 2>&1; then
+      echo "  sudo yum install -y ${missing[*]}" >&2
+    else
+      echo "  (use your system package manager to install: ${missing[*]})" >&2
+    fi
+    echo "" >&2
+    echo "Without these, the C++ build step for accordo/nexus (via KernelDB) will fail." >&2
+    echo "" >&2
+    if [[ "$DRY_RUN" == true ]]; then
+      echo "Dry run: continuing despite missing system dependencies." >&2
+      return 0
+    fi
+    exit 1
+  fi
+}
+
 INSTALL_TOOLS=()
 if [[ -z "${TOOL_SELECTION}" ]]; then
   INSTALL_TOOLS=("${ALL_TOOLS[@]}")
@@ -184,6 +241,11 @@ fi
 
 # Pip requires git+ prefix for VCS installs
 [[ "$REPO_URL" != git+* ]] && REPO_URL="git+${REPO_URL}"
+
+# Warn about missing system deps if installing tools that need C++ builds
+if needs_native_deps "${INSTALL_TOOLS[@]}"; then
+  check_system_deps
+fi
 
 for tool in "${INSTALL_TOOLS[@]}"; do
   url="${REPO_URL}@${REF}#subdirectory=${tool}"

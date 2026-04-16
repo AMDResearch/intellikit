@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
 from metrix.backends import Statistics
+from .conftest import requires_arch
 
 
 class TestMetrixInit:
@@ -15,7 +16,8 @@ class TestMetrixInit:
     def test_init_default(self):
         """Test default initialization (architecture from hardware detection)"""
         profiler = Metrix()
-        assert profiler.arch
+        # Default depends on hardware detection, but should succeed
+        assert profiler.arch in ["gfx942", "gfx950", "gfx90a", "gfx1201", "gfx1151"]
         assert profiler.backend is not None
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
@@ -70,7 +72,7 @@ class TestMetrixMetricListing:
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("memory.l2_hit_rate")
         assert info["name"] == "L2 Cache Hit Rate"
-        assert info["unit"] == "percent"
+        assert info["unit"] == "Percent"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_compute_metric_info(self, arch):
@@ -86,7 +88,7 @@ class TestMetrixMetricListing:
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("compute.hbm_arithmetic_intensity")
         assert info["name"] == "HBM Arithmetic Intensity"
-        assert info["unit"] == "FLOP/byte"
+        assert info["unit"] == "FLOPs/Byte"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_unknown_metric_raises(self, arch):
@@ -135,6 +137,7 @@ class TestProfilingResults:
 class TestUnsupportedMetricsAPI:
     """Test API-level handling of unsupported metrics"""
 
+    @requires_arch("gfx90a")
     def test_explicit_unsupported_metric_raises_error(self):
         """Explicitly requesting unsupported metric should raise ValueError"""
         profiler = Metrix(arch="gfx90a")
@@ -142,6 +145,7 @@ class TestUnsupportedMetricsAPI:
         # Verify atomic_latency is marked as unsupported
         assert "memory.atomic_latency" in profiler.backend._unsupported_metrics
 
+    @requires_arch("gfx90a")
     def test_profile_filters_unsupported_in_profile(self):
         """Using a profile that includes unsupported metrics should filter them"""
         profiler = Metrix(arch="gfx90a")

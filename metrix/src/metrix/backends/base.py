@@ -26,17 +26,8 @@ class DeviceSpecs:
 
     # Memory specs
     hbm_bandwidth_gbs: float = 0.0
-    l2_bandwidth_gbs: float = 0.0
     l2_size_mb: float = 0.0
     lds_size_per_cu_kb: float = 0.0
-
-    # Compute capabilities
-    fp32_tflops: float = 0.0
-    fp64_tflops: float = 0.0
-    int8_tops: float = 0.0
-
-    # Clock speeds
-    boost_clock_mhz: int = 0
 
 
 @dataclass
@@ -47,6 +38,7 @@ class Statistics:
     max: float
     avg: float
     count: int
+    unit: str = ""
 
 
 @dataclass
@@ -109,7 +101,11 @@ class CounterBackend(ABC):
                     self._unsupported_metrics[name] = method._unsupported_reason
                 else:
                     # Register as available
-                    self._metrics[name] = {"counters": method._metric_counters, "compute": method}
+                    self._metrics[name] = {
+                        "counters": method._metric_counters,
+                        "compute": method,
+                        "unit": getattr(method, "_metric_unit", ""),
+                    }
 
     def get_available_metrics(self) -> List[str]:
         """Get list of all metrics supported by this backend"""
@@ -127,16 +123,18 @@ class CounterBackend(ABC):
         arch = self.device_specs.arch
         yaml_path = Path(__file__).parent / "counter_defs.yaml"
 
+        from ..logger import logger
+
         if not yaml_path.exists():
             return
 
-        print(f"📄 Loading YAML-based metrics from {yaml_path.name}")
+        logger.debug(f"Loading YAML-based metrics from {yaml_path.name}")
 
         try:
             with open(yaml_path, "r") as f:
                 yaml_data = yaml.safe_load(f)
         except Exception as e:
-            print(f"⚠️  Failed to load YAML metrics: {e}")
+            logger.warning(f"Failed to load YAML metrics: {e}")
             return
 
         if not yaml_data or "rocprofiler-sdk" not in yaml_data:
@@ -144,6 +142,7 @@ class CounterBackend(ABC):
 
         # Parse YAML and collect metrics matching this architecture first
         yaml_metrics = {}
+        yaml_unsupported = {}
         counters_section = yaml_data["rocprofiler-sdk"].get("counters", [])
 
         for counter_def in counters_section:
@@ -164,21 +163,26 @@ class CounterBackend(ABC):
             if definition is None:
                 continue
 
+            # Check if this metric is marked unsupported for this architecture
+            unsupported_reason = definition.get("unsupported_reason")
+            if unsupported_reason:
+                yaml_unsupported[counter_name] = unsupported_reason
+                continue
+
             # Register counters: derived, reduce(), and built-in
             if "expression" in definition:
                 expression = definition["expression"]
-
-                # Check if this is a simple reduce() expression
-                import re
 
                 reduce_match = re.match(
                     r"^reduce\([A-Z_0-9]+,\s*(?:sum|max|min)\)$", expression.strip()
                 )
 
+                unit = counter_def.get("unit", "")
                 if reduce_match:
                     yaml_metrics[counter_name] = {
                         "counters": [counter_name],
                         "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
+                        "unit": unit,
                     }
                 else:
                     required_counters = self._extract_counters_from_expression(expression)
@@ -186,21 +190,40 @@ class CounterBackend(ABC):
                     yaml_metrics[counter_name] = {
                         "counters": required_counters,
                         "compute": compute_fn,
+                        "unit": unit,
                     }
             else:
+                unit = counter_def.get("unit", "")
                 yaml_metrics[counter_name] = {
                     "counters": [counter_name],
                     "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
+                    "unit": unit,
                 }
 
-        if not yaml_metrics:
+        if not yaml_metrics and not yaml_unsupported:
             return
 
         # YAML metrics found for this arch -- replace @metric-based metrics
         self._metrics.clear()
         self._unsupported_metrics.clear()
         self._metrics.update(yaml_metrics)
-        print(f"✓ Loaded {len(self._metrics)} YAML-based metrics for {arch}")
+        self._unsupported_metrics.update(yaml_unsupported)
+        logger.info(f"Loaded {len(self._metrics)} YAML-based metrics for {arch}")
+
+    @property
+    def _builtin_expression_vars(self) -> set:
+        """Variables injected into YAML expression namespace (not hardware counters).
+
+        Derived from DeviceSpecs fields + DURATION_US so it stays in sync
+        automatically when new spec fields are added.
+        """
+        import dataclasses
+
+        names = {f.name.upper() for f in dataclasses.fields(self.device_specs)}
+        names.discard("ARCH")
+        names.discard("NAME")
+        names.add("DURATION_US")
+        return names
 
     def _extract_counters_from_expression(self, expression: str) -> List[str]:
         """Extract counter names from YAML expression"""
@@ -212,10 +235,10 @@ class CounterBackend(ABC):
         for match in re.finditer(r"reduce\(([A-Z_0-9]+),\s*(?:sum|max|min)\)", expression):
             counters.add(match.group(1))
 
-        # Extract standalone counter names
+        # Extract standalone counter names (uppercase identifiers)
         for match in re.finditer(r"\b([A-Z][A-Z_0-9]*(?:_sum)?)\b", expression):
             counter_name = match.group(1)
-            if counter_name not in ["CU_NUM"]:
+            if counter_name not in self._builtin_expression_vars:
                 counters.add(counter_name)
 
         return sorted(list(counters))
@@ -225,8 +248,15 @@ class CounterBackend(ABC):
         import re
 
         def compute():
+            import dataclasses
+
             namespace = dict(self._raw_data)
-            namespace["CU_NUM"] = self.device_specs.num_cu
+
+            # Inject all DeviceSpecs fields as UPPER_CASE variables
+            for f in dataclasses.fields(self.device_specs):
+                if f.name not in ("arch", "name"):
+                    namespace[f.name.upper()] = getattr(self.device_specs, f.name)
+            namespace["DURATION_US"] = getattr(self, "_current_duration_us", 0.0)
 
             # Replace reduce(X, op) with X_op
             processed_expr = re.sub(
@@ -361,13 +391,6 @@ class CounterBackend(ABC):
         """
         from ..logger import logger
 
-        @dataclass
-        class MetricStats:
-            min: float
-            max: float
-            avg: float
-            count: int
-
         for kernel_name, kernel_data in kernel_results.items():
             # Get all available metrics for this backend
             available_metrics = self.get_available_metrics()
@@ -435,13 +458,19 @@ class CounterBackend(ABC):
                             elif hasattr(self, "_raw_data"):
                                 delattr(self, "_raw_data")
 
+                    # Get unit from metric definition
+                    metric_unit = (
+                        metric_info.get("unit", "") if isinstance(metric_info, dict) else ""
+                    )
+
                     # Add to kernel_data as a MetricStats object
                     # (use the same value for min/max/avg since it's derived from averages)
-                    kernel_data[metric_name] = MetricStats(
+                    kernel_data[metric_name] = Statistics(
                         min=derived_value,
                         max=derived_value,
                         avg=derived_value,
                         count=kernel_data[required_params[0]].count,  # Use count from first counter
+                        unit=metric_unit,
                     )
 
                 except Exception as e:
@@ -539,15 +568,8 @@ class CounterBackend(ABC):
 
             # Process each batch
             for batch_num, (batch_label, batch_metrics) in enumerate(batches, 1):
-                sep = "=" * 60
-                print(f"\n{sep}")
-                print(
-                    f"📊 Profiling {batch_label} ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
-                )
-                sep = "=" * 60
-                print(f"{sep}")
                 logger.info(
-                    f"Profiling {batch_label} metrics ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
+                    f"Profiling {batch_label} ({batch_num}/{total_batches}): {len(batch_metrics)} metrics"
                 )
 
                 # Recursively call profile with batch (won't recurse since len <= MAX_METRICS_PER_BATCH)
@@ -568,49 +590,20 @@ class CounterBackend(ABC):
                         all_kernel_results[kernel_name] = {}
                     all_kernel_results[kernel_name].update(kernel_data)
 
-                # Show results for this batch immediately (grouped by kernel)
-                print(f"\n✓ {batch_label} RESULTS:")
+                # Log results for this batch (grouped by kernel)
                 for kernel_name, kernel_data in batch_result._aggregated.items():
-                    print(f"  [{kernel_name}]")
                     for metric_name, metric_stats in sorted(kernel_data.items()):
                         if hasattr(metric_stats, "avg"):
-                            print(f"    {metric_name}: {metric_stats.avg:.2f}")
+                            logger.debug(
+                                f"  {batch_label} [{kernel_name}] {metric_name}: {metric_stats.avg:.2f}"
+                            )
 
-            logger.info(f"✓ Collected all {len(metrics)} metrics across {total_batches} batches")
+            logger.info(f"Collected all {len(metrics)} metrics across {total_batches} batches")
 
             # Compute derived metrics now that all counters are aggregated
-            print(f"\n{'=' * 60}")
-            print("📊 Computing derived metrics...")
-            print("=" * 60)
+            logger.info("Computing derived metrics...")
             all_kernel_results = self._compute_derived_metrics(all_kernel_results)
-            print("✓ Derived metrics computed\n")
-
-            # Display derived metrics
-            print("\n✓ DERIVED METRICS:")
-            for kernel_name, kernel_data in all_kernel_results.items():
-                derived_found = False
-                for metric_name in sorted(kernel_data.keys()):
-                    # Show metrics with common derived metric patterns
-                    if any(
-                        x in metric_name
-                        for x in ["percent", "rate", "efficiency", "utilization", "bandwidth"]
-                    ):
-                        if not derived_found:
-                            print(f"  {kernel_name}:")
-                            derived_found = True
-                        metric_stats = kernel_data[metric_name]
-                        if hasattr(metric_stats, "avg"):
-                            # Format as percentage if it's a percent metric
-                            if (
-                                "percent" in metric_name
-                                or "rate" in metric_name
-                                or "efficiency" in metric_name
-                                or "utilization" in metric_name
-                            ):
-                                print(f"    {metric_name}: {metric_stats.avg:.2f}%")
-                            else:
-                                print(f"    {metric_name}: {metric_stats.avg:.2f}")
-            print("")
+            logger.info("Derived metrics computed")
 
             # Return merged results - set our _aggregated and return self
             self._aggregated = all_kernel_results
@@ -749,7 +742,12 @@ class CounterBackend(ABC):
         first_counter = list(counter_stats.keys())[0]
         count = counter_stats[first_counter].count
 
-        return Statistics(min=metric_min, max=metric_max, avg=metric_avg, count=count)
+        # Get unit from metric definition
+        unit = (
+            self._metrics[metric].get("unit", "") if isinstance(self._metrics[metric], dict) else ""
+        )
+
+        return Statistics(min=metric_min, max=metric_max, avg=metric_avg, count=count, unit=unit)
 
     def _compute_with_stat_type(
         self, metric: str, counter_stats: Dict[str, Statistics], stat_type: str

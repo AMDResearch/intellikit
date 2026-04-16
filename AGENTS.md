@@ -6,7 +6,19 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** Python >= 3.10, ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
+**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; kerncap and linex target ROCm 7.0+ workflows. MI300+ GPUs are needed for the full profiling stack, while RDNA support (gfx1151/gfx1201) is available in metrix.
+
+## Tool Descriptions
+
+| Tool | Purpose | Key Use Case |
+| ------ | --------- | -------------- |
+| **accordo** | Kernel validation | Verify optimized GPU kernels match reference implementations (CLI + MCP) |
+| **kerncap** | Kernel extraction | Isolate and capture GPU kernel dispatches for standalone reproducers (HIP, Triton) |
+| **linex** | Source-line profiling | Map cycle-level timing and stall analysis to source code lines (MCP-only) |
+| **metrix** | Hardware counter metrics | Profile GPU kernels with human-readable performance insights (CLI + MCP) |
+| **nexus** | HSA packet interception | Capture GPU kernel launches and memory operations (MCP-only) |
+| **rocm_mcp** | ROCm MCP servers | LLM-accessible HIP compilation, docs, and system info |
+| **uprof_mcp** | uProf MCP server | LLM-accessible AMD uProf CPU profiling |
 
 ## Build Commands
 
@@ -36,21 +48,31 @@ pip install -e kerncap/
 
 ## Testing
 
-Test structure varies by tool:
+Most tools have pytest-based test suites under `tests/`:
 
-- **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (unit, integration, e2e, slow)
-- **kerncap**: `tests/unit/` and `tests/integration/` with pytest markers (docker, gpu)
+- **accordo**: `tests/` directory
+- **kerncap**: `tests/unit/` and `tests/integration/` with pytest markers (`docker`, `gpu`)
+- **linex**: `tests/` directory
+- **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (`unit`, `integration`, `e2e`, `slow`)
+- **nexus**: `tests/` directory
 - **rocm_mcp**: `tests/` directory
-- Other tools have `examples/` directories for usage demonstrations
+- **uprof_mcp**: no `tests/` directory yet; rely on examples/manual validation
+
+All tools also have `examples/` directories for usage demonstrations.
 
 ```bash
-# Run metrix tests (has most comprehensive test suite)
+# Run tests for individual tools
 cd metrix && pytest
+cd accordo && pytest
+cd nexus && pytest
+cd linex && pytest
 
 # Run specific test file
 pytest metrix/tests/unit/test_api.py
+pytest accordo/tests/test_mcp_server.py
+pytest kerncap/tests/unit/test_mcp_server.py
 
-# Run by marker (defined in metrix/pytest.ini)
+# Run metrix tests by marker (defined in metrix/pytest.ini)
 pytest -m unit      # Fast unit tests
 pytest -m integration  # Requires GPU/rocprof
 pytest -m e2e      # End-to-end tests (require GPU and benchmarks)
@@ -59,8 +81,14 @@ pytest -m slow     # Slow tests (> 5s)
 # Run kerncap unit tests (no GPU required)
 cd kerncap && pytest tests/unit/
 
+# Run MCP entrypoint tests (no GPU required; CLI transport parsing only)
+pytest accordo/tests/test_mcp_server.py
+pytest kerncap/tests/unit/test_mcp_server.py
+
 # Run rocm_mcp tests
 cd rocm_mcp && pytest tests/
+
+# uprof_mcp currently has examples but no pytest suite
 ```
 
 ## Linting
@@ -82,13 +110,13 @@ Each tool is a standalone Python package with its own `pyproject.toml`:
 
 | Tool | Build System | Description |
 | ------ | -------------- | ------------- |
-| **accordo** | scikit-build-core (CMake) | GPU kernel validation, C++ compiled at runtime |
-| **kerncap** | scikit-build-core (CMake) | Kernel extraction and isolation, C++ HSA interception |
-| **linex** | setuptools | Source-level SQTT profiling (`src/` layout) |
-| **metrix** | setuptools | Hardware counter profiling (`src/` layout) |
-| **nexus** | scikit-build-core (CMake) | HSA packet interception, C++ shared library |
+| **accordo** | scikit-build-core (CMake), setuptools-scm | GPU kernel validation, C++ compiled at runtime, CLI tool |
+| **kerncap** | scikit-build-core (CMake), setuptools-scm | Kernel extraction and isolation, C++ HSA interception, CLI tool |
+| **linex** | setuptools, setuptools-scm | Source-level SQTT profiling (`src/` layout), MCP-only |
+| **metrix** | setuptools, setuptools-scm | Hardware counter profiling (`src/` layout), CLI + MCP, RDNA support |
+| **nexus** | scikit-build-core (CMake), setuptools-scm | HSA packet interception, C++ shared library, MCP-only |
 | **rocm_mcp** | setuptools | MCP servers for ROCm tools (`src/` layout) |
-| **uprof_mcp** | setuptools | MCP server for uProf (`src/` layout) |
+| **uprof_mcp** | setuptools | MCP server for AMD uProf CPU profiling (`src/` layout) |
 
 ### Metrix Backend System
 
@@ -114,11 +142,11 @@ def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
 
 ### MCP Server Pattern
 
-All tools expose MCP servers via the MCP SDK's FastMCP module:
-
+All current MCP server implementations use `FastMCP`, and all tool packages now declare `fastmcp>=2.0.0` directly.
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
 - MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- `accordo` and `kerncap` both include lightweight pytest MCP entrypoint tests that stub `FastMCP` and verify CLI transport mapping (`stdio` vs `streamable-http`) without needing GPU or ROCm runtime access
 
 ### Nexus C++ Integration
 
@@ -131,41 +159,46 @@ All tools expose MCP servers via the MCP SDK's FastMCP module:
 
 - C++ source in `kerncap/src/` (`.hip`, `.cpp` files)
 - Headers in `kerncap/src/` (`.hpp` files: `kerncap.hpp`, `kerncap_log.hpp`)
-- `libkerncap.so`: HSA tool library loaded via `HSA_TOOLS_LIB` for kernel capture
-- `kerncap-replay`: VA-faithful HSA kernel replay binary
-- Vendored nlohmann/json in `kerncap/vendor/`
+- `libkerncap.so`: HSA tool library loaded via `LD_PRELOAD` (rocprofiler-sdk registration) for kernel capture
 - Built with scikit-build-core (CMake + HIP language support)
+- CLI commands: `kerncap profile`, `kerncap extract`, `kerncap replay`, `kerncap validate`
+- Supports both HIP and Triton kernel extraction
+- VA-faithful reproducers with complete device memory snapshots
 
 ### Accordo Runtime Compilation
 
 - C++ validation code in `accordo/src/` compiled at runtime (`.hip` and `.hpp` files)
 - Uses HSA for GPU memory interception
 - Python package in `accordo/accordo/` with validator implementation
-- Internal utilities in `accordo/_internal/` (outside main package)
-- Dependencies include external `kerneldb` library for kernel extraction
+- Internal utilities in `accordo/accordo/_internal/` (inside main package) for IPC and other internals
+- Dependencies include external `kerneldb` library for kernel extraction (pinned to specific commit in pyproject.toml)
+- CLI command: `accordo` for standalone kernel validation
+- Improved IPC failure handling with robustness tests (see commit 3699f5c)
 
 ## Package Layout Variations
 
 Not all tools follow the same directory structure:
 
-| Tool | Layout | Package Location |
-|------|--------|------------------|
-| **metrix** | `src/` layout | `metrix/src/metrix/` |
-| **linex** | `src/` layout | `linex/src/linex/` |
-| **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` |
-| **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` |
-| **accordo** | flat layout | `accordo/accordo/` |
-| **kerncap** | flat layout | `kerncap/kerncap/` |
-| **nexus** | flat layout | `nexus/nexus/` |
+| Tool | Layout | Package Location | C++ Source | Tests | Skills | CLI |
+|------|--------|------------------|------------|-------|--------|-----|
+| **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skill/` | Yes |
+| **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skill/` | No |
+| **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A | No |
+| **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | none yet | N/A | No |
+| **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` | Yes |
+| **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skill/` | Yes |
+| **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` | No |
 
-This affects import paths and where to find source code.
+This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skill/` directory containing `SKILL.md` files for AI agent integration.
 
 ## Dependency Management
 
-- **install.sh**: Installs packages from Git via `pip` (`install/tools/install.sh`); default is all tools, optional `--tools` for a subset
+- **install.sh**: Installs packages from Git via `pip` (`install/tools/install.sh`); default is all tools, optional `--tools` for a subset (see commit 73033fc for major installer improvements)
+- **No root metapackage**: Install individual tools directly (root metapackage removed in commit 73033fc)
 - **pip**: Editable installs per tool from a clone (`pip install -e <tool>/`)
 - **External dependencies**: Some tools depend on external repos (e.g., `accordo` requires `kerneldb` from GitHub)
 - **C++ dependencies**: `nexus` requires LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`); `kerncap` requires `hipcc`, `cmake`, and HSA headers (standard ROCm)
+- **Python version**: Global requirement is Python >= 3.10, but individual tools may support older versions (e.g., metrix supports >= 3.9, accordo and nexus support >= 3.8)
 
 ## CI/CD and Development Environment
 
@@ -173,8 +206,13 @@ This affects import paths and where to find source code.
 
 - **Runners**: Self-hosted with MI300+ GPUs
 - **Container**: Uses Apptainer for containerized testing
-- **Python versions**: Tests run on 3.10, 3.11, and 3.12
-- **Installation testing**: Each tool is installed individually to verify isolated installation works
+- **Selective testing**: CI only runs for packages that changed (see commit 4d73c5f)
+- **Installation testing** (`intellikit-ci-test.yml`): Tests three installation methods for each tool:
+  - Editable install: `pip install -e <tool>/`
+  - Non-editable install: `pip install ./<tool>/`
+  - GitHub install: `pip install 'git+https://github.com/AMDResearch/intellikit.git@<sha>#subdirectory=<tool>'`
+- **Pytest testing** (`intellikit-pytest.yml`): Currently runs `pytest` for `accordo`, `kerncap`, `linex`, `metrix`, and `nexus`
+- **Lint** (`lint.yml`): Runs `ruff check` and `ruff format` on changed files
 
 ### Linting Enforcement
 
@@ -186,6 +224,13 @@ This affects import paths and where to find source code.
 
 - `.github/scripts/container_build.sh`: Builds Apptainer container
 - `.github/scripts/container_exec.sh`: Executes commands inside container
+
+### Install Scripts
+
+The repository includes install scripts for both tools and agent skills:
+
+- `install/tools/install.sh`: Installs all IntelliKit tools from GitHub (supports editable/non-editable, custom pip commands, specific branches/tags)
+- `install/skills/install.sh`: Installs agent skills (SKILL.md files) for AI agents (supports multiple targets: agents, codex, cursor, claude, github; global or local installation)
 
 ## MCP Server Development
 
@@ -206,17 +251,53 @@ rocminfo-mcp = "rocm_mcp.sysinfo.rocminfo_mcp:main"
 uprof-profiler-mcp = "uprof_mcp.uprof_profiler_mcp:main"
 ```
 
+### MCP Transport Options
+
+All MCP servers expose transport selection via repo-local CLI arguments:
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--transport` | `stdio` | Transport type: `stdio` or `http` |
+| `--host` | `127.0.0.1` | HTTP server host (only for http transport) |
+| `--port` | `8000` | HTTP server port (only for http transport) |
+| `--path` | (varies) | HTTP endpoint path (only for http transport) |
+
+Repo-local default HTTP paths:
+
+| Server | Default Path |
+|--------|--------------|
+| `accordo-mcp` | `/accordo` |
+| `kerncap-mcp` | `/kerncap` |
+| `linex-mcp` | `/linex` |
+| `metrix-mcp` | `/metrix` |
+| `nexus-mcp` | `/nexus` |
+| `uprof-profiler-mcp` | `/uprof_mcp` |
+| `hip-compiler-mcp` | `/rocm_mcp/hip_compiler` |
+| `hip-docs-mcp` | `/rocm_mcp/hip_docs` |
+| `rocminfo-mcp` | `/rocm_mcp/rocminfo` |
+
 ### Testing MCP Servers Locally
 
 ```bash
 # Install the tool first
 pip install -e metrix/
 
-# Run MCP server directly (will use stdio transport)
+# Run MCP server with stdio transport (default)
 metrix-mcp
+
+# Run MCP server with http transport (streamable)
+metrix-mcp --transport http --port 8001
+
+# Other servers with repo-local transport wrappers
+accordo-mcp --transport http --port 8002
+kerncap-mcp --transport http --port 8003
+linex-mcp --transport http --port 8004
+hip-compiler-mcp --transport http --port 8005
+uprof-profiler-mcp --transport http --port 8006
 
 # Or from the package directory with uv
 cd metrix && uv run metrix-mcp
+cd metrix && uv run metrix-mcp --transport http --port 8001
 ```
 
 ### MCP Configuration Example
@@ -237,6 +318,10 @@ Add to your Claude Desktop or other MCP client config:
     "hip-compiler-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "hip-compiler-mcp"]
+    },
+    "uprof-profiler-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/uprof_mcp", "uprof-profiler-mcp"]
     }
   }
 }
@@ -244,12 +329,12 @@ Add to your Claude Desktop or other MCP client config:
 
 ### MCP Server Implementation Pattern
 
-All servers use the MCP SDK (`mcp[cli]` package) with the FastMCP module:
+Current implementation pattern:
 
-- Dependency: `mcp[cli]` in each tool's `pyproject.toml`
-- Import: `from mcp.server.fastmcp import FastMCP`
+- Import `FastMCP` via `from fastmcp import FastMCP`
+- Use `@mcp.tool()` decorators for tool definitions
+- `main()` parses `--transport`, `--host`, `--port`, and `--path` and maps HTTP mode to `streamable-http`
 - Server code in `<tool>/mcp/server.py` or `<tool>/<tool>_mcp.py`
-- Use `@mcp.tool()` decorator for tool definitions
 - Follow async patterns for I/O operations
 
 ## Common Development Workflows
@@ -257,10 +342,12 @@ All servers use the MCP SDK (`mcp[cli]` package) with the FastMCP module:
 ### Adding a New Metric to Metrix
 
 1. Identify the hardware counter(s) needed
-2. Add a method to the appropriate backend (e.g., `metrix/src/metrix/backends/gfx942.py`)
+2. Add a method to the appropriate backend (e.g., `metrix/src/metrix/backends/gfx942.py` for MI300, `gfx1151.py` or `gfx1201.py` for RDNA)
 3. Use `@metric("category.metric_name")` decorator
 4. Counter names as function parameters (auto-discovery)
 5. Add tests in `metrix/tests/unit/`
+
+**New**: RDNA (gfx1151/gfx1201) support added in commit 0cb3a54.
 
 Example:
 
@@ -274,6 +361,32 @@ def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
     """
     total = TCC_HIT_sum + TCC_MISS_sum
     return (TCC_HIT_sum / total) * 100 if total > 0 else 0.0
+```
+
+### Working with Kerncap
+
+Kerncap supports both HIP and Triton kernel extraction:
+
+```bash
+# Profile application to rank kernels
+kerncap profile -- ./my_app --args
+
+# Extract HIP kernel with preprocessor defines
+kerncap extract mul_mat_q \
+  --cmd "./llama-bench -m model.gguf -p test" \
+  --source-dir ./ggml/src \
+  -D GGML_USE_HIP -D GGML_CUDA_FA_ALL_QUANTS
+
+# Extract Triton kernel
+kerncap extract flash_attn_fwd \
+  --cmd "./my_app --args" \
+  --source-dir ./src \
+  --language triton \
+  --dispatch 0
+
+# Validate captured kernel
+kerncap validate ./isolated/mul_mat_q
+kerncap validate ./isolated/mul_mat_q --hsaco optimized.hsaco
 ```
 
 ### Working with C++ Components
@@ -311,6 +424,30 @@ Integration tests require GPU and ROCm:
 cd metrix
 pytest -m integration  # Requires GPU/rocprof
 pytest -m unit         # No GPU required
+
+# Run all tests for a specific tool
+cd accordo && pytest -v
+cd linex && pytest -v
+cd nexus && pytest -v
+```
+
+### Working with Agent Skills
+
+Each main tool (except rocm_mcp and uprof_mcp) has a `skill/` directory with `SKILL.md` files for AI agent integration:
+
+```bash
+# Skills are located at:
+accordo/skill/SKILL.md
+kerncap/skill/SKILL.md
+linex/skill/SKILL.md
+metrix/skill/SKILL.md
+nexus/skill/SKILL.md
+
+# Install skills for AI agents using the install script
+./install/skills/install.sh                    # local: ./.agents/skills/
+./install/skills/install.sh --target cursor     # local: ./.cursor/skills/
+./install/skills/install.sh --target claude --global  # global: ~/.claude/skills/
+./install/skills/install.sh --target github     # local: ./.github/agents/skills/ (added in commit 7f8f7ad)
 ```
 
 ## Key Design Principles for AI Agents
@@ -322,6 +459,7 @@ This project is built for LLM consumption:
 - Clean, human-readable APIs (not raw hardware counters)
 - MCP servers for all tools
 - Examples in every tool's `examples/` directory
+- Agent skills in `skill/SKILL.md` files for AI agent discovery
 - Comprehensive docstrings and type hints
 
 ### No Mapping Tables

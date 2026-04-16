@@ -82,7 +82,7 @@ COMPUTE_THROUGHPUT_METRICS = {
     "compute.hbm_gflops": {
         "name": "HBM Compute Throughput",
         "description": "Compute throughput (GFLOPS) normalized by kernel execution time",
-        "unit": "GFLOPS",
+        "unit": "GFLOP/s",
         "category": MetricCategory.COMPUTE,
         "derived_from": [
             # All FLOPS counters
@@ -150,7 +150,7 @@ ARITHMETIC_INTENSITY_METRICS = {
     "compute.hbm_arithmetic_intensity": {
         "name": "HBM Arithmetic Intensity",
         "description": "Ratio of floating-point operations to HBM bytes transferred (FLOP/byte)",
-        "unit": "FLOP/byte",
+        "unit": "FLOPs/Byte",
         "category": MetricCategory.COMPUTE,
         "derived_from": [
             # FLOPS counters (same across architectures)
@@ -229,7 +229,7 @@ ARITHMETIC_INTENSITY_METRICS = {
     "compute.l2_arithmetic_intensity": {
         "name": "L2 Arithmetic Intensity",
         "description": "Ratio of floating-point operations to L2 cache bytes accessed (FLOP/byte)",
-        "unit": "FLOP/byte",
+        "unit": "FLOPs/Byte",
         "category": MetricCategory.COMPUTE,
         "derived_from": [
             # FLOPS counters
@@ -292,7 +292,7 @@ ARITHMETIC_INTENSITY_METRICS = {
     "compute.l1_arithmetic_intensity": {
         "name": "L1 Arithmetic Intensity",
         "description": "Ratio of floating-point operations to L1 cache bytes accessed (FLOP/byte)",
-        "unit": "FLOP/byte",
+        "unit": "FLOPs/Byte",
         "category": MetricCategory.COMPUTE,
         "derived_from": [
             # FLOPS counters

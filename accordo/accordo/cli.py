@@ -8,7 +8,7 @@ Usage:
         --kernel-name "reduce_sum" \\
         --ref-binary ./ref \\
         --opt-binary ./opt \\
-        [--tolerance 1e-6] \\
+        [--tolerance 1e-6] [--atol 1e-8] [--rtol 1e-5] [--equal-nan] \\
         [--timeout 30] \\
         [--working-dir .] \\
         [--kernel-args "input:const float*,output:float*"] \\
@@ -59,7 +59,18 @@ def _build_validate_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Path to optimized executable (single path; use API or a wrapper for argv)",
     )
     p.add_argument(
-        "--tolerance", type=float, default=1e-6, help="Absolute tolerance (default: 1e-6)"
+        "--tolerance",
+        type=float,
+        default=None,
+        help="Legacy alias for --atol (overrides --atol when set)",
+    )
+    p.add_argument("--atol", type=float, default=1e-08, help="Absolute tolerance (default: 1e-08)")
+    p.add_argument("--rtol", type=float, default=1e-05, help="Relative tolerance (default: 1e-05)")
+    p.add_argument(
+        "--equal-nan",
+        action="store_true",
+        default=False,
+        help="Treat NaN values as equal (default: False)",
     )
     p.add_argument(
         "--timeout", type=int, default=30, help="Timeout per snapshot in seconds (default: 30)"
@@ -122,19 +133,23 @@ def _run_validate(args: argparse.Namespace) -> int:
             ref_snapshot,
             opt_snapshot,
             tolerance=args.tolerance,
+            atol=args.atol,
+            rtol=args.rtol,
+            equal_nan=args.equal_nan,
         )
 
         mismatches_serialized = []
         for m in result.mismatches or []:
-            mismatches_serialized.append(
-                {
-                    "arg_index": m.arg_index,
-                    "arg_name": m.arg_name,
-                    "arg_type": m.arg_type,
-                    "max_difference": m.max_difference,
-                    "mean_difference": m.mean_difference,
-                }
-            )
+            entry = {
+                "arg_index": m.arg_index,
+                "arg_name": m.arg_name,
+                "arg_type": m.arg_type,
+                "max_difference": m.max_difference,
+                "mean_difference": m.mean_difference,
+            }
+            if m.dispatch_index is not None:
+                entry["dispatch_index"] = m.dispatch_index
+            mismatches_serialized.append(entry)
 
         output = {
             "is_valid": result.is_valid,

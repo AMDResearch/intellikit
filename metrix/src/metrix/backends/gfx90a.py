@@ -1,13 +1,14 @@
 """
 GFX90a (MI200) Backend
 
-Each metric is defined with @metric decorator.
-Counter names appear EXACTLY ONCE - as function parameters.
+Metrics are loaded from counter_defs.yaml.
+This file provides architecture-specific infrastructure only.
+Device specs are queried from hipGetDeviceProperties at runtime.
 """
 
 from .base import CounterBackend, DeviceSpecs, ProfileResult
+from .device_info import query_device_specs
 from ..utils.common import split_counters_into_passes
-from .decorator import metric
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
 from typing import List, Optional, Dict
 
@@ -16,28 +17,11 @@ class GFX90aBackend(CounterBackend):
     """
     AMD MI200 (gfx90a) counter backend
 
-    All metrics are defined with @metric decorator.
-    Hardware counter names appear ONLY as function parameter names.
+    Metric definitions live in counter_defs.yaml.
     """
 
     def _get_device_specs(self) -> DeviceSpecs:
-        """MI200 specifications"""
-        return DeviceSpecs(
-            arch="gfx90a",
-            name="AMD Instinct MI200",
-            num_cu=104,
-            max_waves_per_cu=32,
-            wavefront_size=64,
-            base_clock_mhz=1700.0,
-            hbm_bandwidth_gbs=3200.0,
-            l2_bandwidth_gbs=11000.0,
-            l2_size_mb=16.0,
-            lds_size_per_cu_kb=64.0,
-            fp32_tflops=47.9,
-            fp64_tflops=47.9,
-            int8_tops=383,
-            boost_clock_mhz=1600,
-        )
+        return query_device_specs("gfx90a")
 
     def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
         """
@@ -63,33 +47,18 @@ class GFX90aBackend(CounterBackend):
 
         These limits define how many performance counters can be simultaneously
         collected from each hardware block in a single profiling pass.
-
-        Hardware blocks on MI200:
-        - SQ (Shader): Instruction counters (VALU, LDS, VMEM, etc.)
-        - TA (Texture Addresser): Texture address operations
-        - TD (Texture Data): Texture data fetch operations
-        - TCP (Texture Cache per Pipe): L1 vector cache
-        - TCC (Texture Cache Channel): L2 cache and memory controller
-        - CPC (Command Processor - Compute): Compute command processing
-        - CPF (Command Processor - Fetch): Command fetch operations
-        - SPI (Shader Processor Input): Wavefront dispatch and scheduling
-        - GRBM (Graphics Register Bus Manager): Global GPU activity
-        - GDS (Global Data Share): Inter-workgroup communication
-
-        Returns:
-            Dict mapping block_name -> max_counters_per_pass
         """
         return {
-            "SQ": 8,  # Shader - instruction counters
-            "TA": 2,  # Texture Addresser
-            "TD": 2,  # Texture Data
-            "TCP": 4,  # L1 Cache (Texture Cache per Pipe)
-            "TCC": 4,  # L2 Cache / Memory Controller
-            "CPC": 2,  # Command Processor - Compute
-            "CPF": 2,  # Command Processor - Fetch
-            "SPI": 6,  # Shader Processor Input
-            "GRBM": 2,  # Graphics Register Bus Manager
-            "GDS": 4,  # Global Data Share
+            "SQ": 8,  # Shader Sequencer — instruction issue & scheduling
+            "TA": 2,  # Texture Addresser — coalesces memory requests
+            "TD": 2,  # Texture Data — routes cache data back to SIMDs
+            "TCP": 4,  # Texture Cache per Pipe — L1 vector cache
+            "TCC": 4,  # Texture Cache Channel — L2 cache / memory controller
+            "CPC": 2,  # Command Processor Compute — decodes dispatches
+            "CPF": 2,  # Command Processor Fetch — fetches commands from memory
+            "SPI": 6,  # Shader Processor Input — workgroup manager, schedules waves to CUs
+            "GRBM": 2,  # Graphics Register Bus Manager — top-level GPU activity counters
+            "GDS": 4,  # Global Data Share — chip-wide shared memory
         }
 
     def _run_rocprof(
@@ -110,53 +79,6 @@ class GFX90aBackend(CounterBackend):
             cwd=cwd,
             kernel_iteration_range=kernel_iteration_range,
         )
-
-    # Memory bandwidth metrics
-
-    @metric("memory.hbm_read_bandwidth")
-    def _hbm_read_bandwidth(self, TCC_EA_RDREQ_sum, TCC_EA_RDREQ_32B_sum, GRBM_GUI_ACTIVE):
-        """
-        HBM read bandwidth in GB/s
-
-        Formula: (64B_requests * 64 + 32B_requests * 32) / (active_cycles / clock_freq)
-        """
-        # Calculate bytes with 32B/64B distinction
-        bytes_read_64B = (TCC_EA_RDREQ_sum - TCC_EA_RDREQ_32B_sum) * 64
-        bytes_read_32B = TCC_EA_RDREQ_32B_sum * 32
-        bytes_read = bytes_read_64B + bytes_read_32B
-
-        if GRBM_GUI_ACTIVE == 0:
-            return 0.0
-
-        time_seconds = GRBM_GUI_ACTIVE / (self.device_specs.base_clock_mhz * 1e6)
-        return (bytes_read / 1e9) / time_seconds if time_seconds > 0 else 0.0
-
-    @metric("memory.hbm_write_bandwidth")
-    def _hbm_write_bandwidth(self, TCC_EA_WRREQ_sum, TCC_EA_WRREQ_64B_sum, GRBM_GUI_ACTIVE):
-        """
-        HBM write bandwidth in GB/s (with 32B/64B request granularity)
-
-        Formula: (64B_requests * 64 + 32B_requests * 32) / (active_cycles / clock_freq)
-        """
-        # Calculate bytes with 32B/64B distinction
-        bytes_written_64B = TCC_EA_WRREQ_64B_sum * 64
-        bytes_written_32B = (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
-        bytes_written = bytes_written_64B + bytes_written_32B
-
-        if GRBM_GUI_ACTIVE == 0:
-            return 0.0
-
-        time_seconds = GRBM_GUI_ACTIVE / (self.device_specs.base_clock_mhz * 1e6)
-        return (bytes_written / 1e9) / time_seconds if time_seconds > 0 else 0.0
-
-    @metric("memory.hbm_bandwidth_utilization")
-    def _hbm_bandwidth_utilization(
-        self,
-        TCC_EA_RDREQ_sum,
-        TCC_EA_RDREQ_32B_sum,
-        TCC_EA_WRREQ_sum,
-        TCC_EA_WRREQ_64B_sum,
-        GRBM_GUI_ACTIVE,
     ):
         """
         HBM bandwidth utilization as percentage of peak

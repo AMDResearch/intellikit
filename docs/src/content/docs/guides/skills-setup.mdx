@@ -1,0 +1,113 @@
+---
+title: Skills Setup
+description: Install IntelliKit agent skills for Cursor, Claude Code, Codex, and GitHub Copilot
+---
+
+IntelliKit ships `SKILL.md` playbooks for five tools: Metrix, Accordo, Nexus, Linex, and Kerncap. These give AI coding assistants step-by-step instructions for profiling, inspecting, and validating GPU kernels.
+
+## What are skills?
+
+A skill is a markdown file (`SKILL.md`) that teaches an AI agent how to use a tool. When installed into a supported agent's skills directory, the agent can invoke the skill by name. Each skill includes:
+
+- When to activate (trigger conditions)
+- Step-by-step usage instructions
+- Expected inputs and outputs
+- Error handling guidance
+
+## Available skills
+
+| Skill | Tool | Triggers on |
+|-------|------|-------------|
+| `metrix-profiling` | Metrix | Performance analysis, GPU metrics, bandwidth, cache hit rates |
+| `test-kerncap` | Kerncap | Kernel extraction, reproducer validation, HIP/Triton isolation |
+| `linex-profiling` | Linex | Source-line profiling, stall analysis, cycle mapping |
+| `nexus-tracing` | Nexus | GPU execution inspection, HSA packet tracing, assembly extraction |
+| `accordo-validation` | Accordo | Kernel correctness checking, output comparison |
+
+## Quick install
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
+```
+
+This installs all 5 skills into `.agents/skills/` in the current directory (the default target).
+
+## Choosing a target
+
+The `--target` flag controls where skills are written:
+
+| Target | Project-level path | Global path (`--global`) |
+|--------|--------------------|--------------------------|
+| `agents` (default) | `.agents/skills/` | `~/.agents/skills/` |
+| `cursor` | `.cursor/skills/` | `~/.cursor/skills/` |
+| `claude` | `.claude/skills/` | `~/.claude/skills/` |
+| `codex` | `.codex/skills/` | `~/.codex/skills/` |
+| `github` | `.github/agents/skills/` | `~/.github/agents/skills/` |
+
+### Cursor
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh \
+  | bash -s -- --target cursor
+```
+
+Skills land in `.cursor/skills/{tool}/SKILL.md`. Cursor's agent picks them up automatically.
+
+### Claude Code
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh \
+  | bash -s -- --target claude
+```
+
+Skills land in `.claude/skills/{tool}/SKILL.md`.
+
+### Codex
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh \
+  | bash -s -- --target codex
+```
+
+### GitHub Copilot
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh \
+  | bash -s -- --target github
+```
+
+Skills land in `.github/agents/skills/{tool}/SKILL.md`.
+
+## Global vs project-level
+
+By default, skills are installed into the current directory (project-level). Add `--global` to install into your home directory so they're available across all projects:
+
+```bash
+curl -sSL .../install/skills/install.sh | bash -s -- --target cursor --global
+# Installs to ~/.cursor/skills/
+```
+
+## Other options
+
+```bash
+# Preview what would be installed
+curl -sSL .../install/skills/install.sh | bash -s -- --dry-run
+
+# Use a different branch or fork
+curl -sSL .../install/skills/install.sh | bash -s -- --base-url https://raw.githubusercontent.com/you/fork/my-branch
+```
+
+## Installed file structure
+
+After installation, you get one `SKILL.md` per tool:
+
+```
+.cursor/skills/          # or .claude/skills/, .agents/skills/, etc.
+├── metrix/SKILL.md
+├── kerncap/SKILL.md
+├── linex/SKILL.md
+├── nexus/SKILL.md
+└── accordo/SKILL.md
+```
+
+Each file has a YAML frontmatter with `name` and `description`, followed by the full skill playbook.

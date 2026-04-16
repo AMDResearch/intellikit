@@ -14,6 +14,7 @@ import time
 
 import numpy as np
 import torch
+import triton.language as tl
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -23,7 +24,7 @@ sys.path.insert(0, SCRIPT_DIR)
 # Import the kernel
 from {{ kernel_module }} import {{ kernel_function }}
 
-{% if autotune_config %}
+{% if autotune_config and not autotune_stripped %}
 # Bypass the autotuner — call the inner JITFunction directly with
 # the exact config that was captured, so outputs are reproducible.
 _kernel = {{ kernel_function }}.fn if hasattr({{ kernel_function }}, 'fn') else {{ kernel_function }}
@@ -46,17 +47,25 @@ TORCH_DTYPE_MAP = {
 }
 
 
-def load_tensor(path, dtype_str, shape):
-    """Load a binary file as a torch tensor on GPU."""
+def load_tensor(path, dtype_str, shape, strides=None, storage_offset=0):
+    """Load a binary file as a torch tensor on GPU.
+
+    When *strides* is provided the raw storage bytes are loaded and the
+    original non-contiguous view is reconstructed via torch.as_strided,
+    which correctly replays padded or otherwise non-contiguous layouts.
+    """
     np_dtype, torch_dtype = TORCH_DTYPE_MAP.get(dtype_str, (np.float32, torch.float32))
-    data = np.fromfile(path, dtype=np_dtype)
-    tensor = torch.from_numpy(data.copy())
+    raw = np.fromfile(path, dtype=np.uint8)
     if dtype_str == "torch.bfloat16":
-        tensor = tensor.view(torch.bfloat16)
+        data = raw.view(np.uint16)
+        tensor = torch.from_numpy(data.copy()).view(torch.bfloat16)
     else:
-        tensor = tensor.to(dtype=torch_dtype)
+        data = raw.view(np_dtype)
+        tensor = torch.from_numpy(data.copy()).to(dtype=torch_dtype)
     tensor = tensor.to(device="cuda")
-    if shape:
+    if strides is not None and shape:
+        tensor = torch.as_strided(tensor, shape, strides, storage_offset)
+    elif shape:
         tensor = tensor.reshape(shape)
     return tensor
 
@@ -68,11 +77,17 @@ def main():
 {% for arg in args %}
 {% if arg.is_pointer %}
     # {{ arg.name }}: {{ arg.torch_dtype }} {{ arg.shape }}
+{% if arg.strides %}
+    {{ arg.name }} = load_tensor(os.path.join(SCRIPT_DIR, "capture", "{{ arg.file }}"), "{{ arg.torch_dtype }}", {{ arg.shape }}, strides={{ arg.strides }}, storage_offset={{ arg.storage_offset if arg.storage_offset else 0 }})
+{% else %}
     {{ arg.name }} = load_tensor(os.path.join(SCRIPT_DIR, "capture", "{{ arg.file }}"), "{{ arg.torch_dtype }}", {{ arg.shape }})
+{% endif %}
 {% elif arg.value is none %}
     {{ arg.name }} = None
 {% elif arg.type == "bool" %}
     {{ arg.name }} = {{ arg.value | string | capitalize }}
+{% elif arg.type == "triton_dtype" %}
+    {{ arg.name }} = tl.{{ arg.value }}
 {% elif arg.type == "float" %}
     {{ arg.name }} = {{ arg.value }}
 {% elif arg.type == "int" %}
@@ -93,7 +108,7 @@ def main():
 {% endfor %}
 {% if autotune_config %}
 {% for key, value in autotune_config.get('kwargs', {}).items() %}
-        {{ key }}={{ value | tojson }},
+        {{ key }}={{ value | pyrepr }},
 {% endfor %}
 {% if autotune_config.get('num_warps') is not none %}
         num_warps={{ autotune_config['num_warps'] }},
@@ -115,7 +130,7 @@ def main():
 {% endfor %}
 {% if autotune_config %}
 {% for key, value in autotune_config.get('kwargs', {}).items() %}
-        {{ key }}={{ value }},
+        {{ key }}={{ value | pyrepr }},
 {% endfor %}
 {% if autotune_config.get('num_warps') is not none %}
         num_warps={{ autotune_config['num_warps'] }},

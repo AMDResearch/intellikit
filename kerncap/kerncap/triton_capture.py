@@ -4,35 +4,49 @@ Intercepts Triton kernel calls at the Python level to capture arguments
 including tensors, scalars, and constexpr values that are not visible
 at the HSA dispatch level.
 
-The capture works by generating a hook script that monkey-patches
-``triton.runtime.jit.JITFunction.run`` before executing the user's
-application.  When the target kernel fires, all Python-level arguments
-(torch tensors, scalars, None, etc.) are serialised to disk alongside
-a ``metadata.json`` that the reproducer generator consumes.
+The capture works by injecting a ``sitecustomize.py`` into ``PYTHONPATH``
+that installs a monkey-patch on ``triton.runtime.jit.JITFunction.run``
+at Python startup.  Because ``sitecustomize`` is imported by every Python
+interpreter (via the ``site`` module), this approach works across process
+boundaries — including child processes spawned via ``multiprocessing.spawn``
+(e.g. vLLM's EngineCore).
+
+When the target kernel fires, all Python-level arguments (torch tensors,
+scalars, None, etc.) are serialised to disk alongside a ``metadata.json``
+that the reproducer generator consumes.
 """
 
+import logging
 import os
+import shutil
 import subprocess
 import tempfile
 import textwrap
 from typing import List, Optional
 
+logger = logging.getLogger(__name__)
 
-# The hook script is written to a temp file and executed as the main
-# script, with the user's original script passed as argv[1].
-_CAPTURE_HOOK = textwrap.dedent('''\
+# ---------------------------------------------------------------------------
+# Hook code that monkey-patches triton.runtime.jit.JITFunction.run.
+#
+# This is written to a temp file and exec'd at Python startup via
+# sitecustomize.py.  It must be self-contained (no kerncap imports).
+# ---------------------------------------------------------------------------
+_HOOK_INSTALLER = textwrap.dedent('''\
     """kerncap Triton capture hook — auto-generated, do not edit."""
     import sys
     import os
     import json
     import inspect
-    import runpy
 
-    _target_kernel = os.environ["KERNCAP_KERNEL"]
-    _output_dir = os.environ["KERNCAP_OUTPUT"]
+    _target_kernel = os.environ.get("KERNCAP_KERNEL", "")
+    _output_dir = os.environ.get("KERNCAP_OUTPUT", "/tmp/kerncap_output")
     _dispatch = int(os.environ.get("KERNCAP_DISPATCH", "-1"))
     _call_count = 0
     _captured = False
+
+    if not _target_kernel:
+        raise RuntimeError("KERNCAP_KERNEL not set")
 
 
     def _install_hook():
@@ -40,14 +54,8 @@ _CAPTURE_HOOK = textwrap.dedent('''\
         import triton.runtime.jit
 
         _autotuner_config_keys = set()
-        # Tensor args from the capture, saved so the Autotuner hook can
-        # re-snapshot them AFTER the autotuner selects the best config.
-        _pending_ref = [None]  # use list for nonlocal mutation in Py 3
+        _pending_ref = [None]
 
-        # Hook the Autotuner so we can:
-        #   1. Learn which kwargs come from its configs (BLOCK_M, etc.)
-        #   2. Save reference outputs AFTER the best-config run (not
-        #      after the first benchmark run, which may use config[0]).
         try:
             from triton.runtime.autotuner import Autotuner
             import torch as _torch
@@ -62,14 +70,9 @@ _CAPTURE_HOOK = textwrap.dedent('''\
                             self_at.configs[0].kwargs.keys()
                         )
                 result = _OrigAutotunerRun(self_at, *args, **kwargs)
-                # After ALL autotuner configs have been benchmarked and
-                # the final best-config run is complete, snapshot the
-                # tensors — they now hold the definitive output.
                 if _pending_ref[0] is not None:
                     _torch.cuda.synchronize()
                     _save_reference_outputs(_pending_ref[0])
-                    # Capture the best autotuner config so the reproducer
-                    # can pin it and get bit-identical results.
                     _save_autotune_config(self_at)
                     _pending_ref[0] = None
                 return result
@@ -97,21 +100,13 @@ _CAPTURE_HOOK = textwrap.dedent('''\
 
             if should_capture:
                 _captured = True
-                # Save input tensors BEFORE the kernel runs
                 tensor_args = _save_capture(
                     self_jit, args, kwargs, grid, _autotuner_config_keys,
                 )
-                # Store tensor refs BEFORE _OrigRun so the autotuner
-                # hook can find them even if this config raises (the
-                # autotuner swallows per-config exceptions internally).
                 _pending_ref[0] = tensor_args
-                # Run the kernel
                 result = _OrigRun(
                     self_jit, *args, grid=grid, warmup=warmup, **kwargs,
                 )
-                # For non-autotuned kernels, save ref outputs now.
-                # For autotuned kernels, the autotuner hook will save
-                # after the best config run completes.
                 if not _autotuner_config_keys:
                     import torch as _torch
                     _torch.cuda.synchronize()
@@ -125,14 +120,9 @@ _CAPTURE_HOOK = textwrap.dedent('''\
 
 
     def _resolve_grid(grid, all_args=None):
-        """Normalise a Triton grid to a 3-tuple of ints.
-
-        Grid lambdas (e.g. ``lambda meta: (cdiv(N, meta['BLOCK_M']), …)``)
-        need a *meta* dict populated with scalar/constexpr values.
-        """
+        """Normalise a Triton grid to a 3-tuple of ints."""
         if callable(grid):
             if all_args:
-                # Build a meta dict from scalar/constexpr args
                 meta = {k: v for k, v in all_args.items()
                         if isinstance(v, (int, float, bool))}
                 try:
@@ -154,8 +144,18 @@ _CAPTURE_HOOK = textwrap.dedent('''\
         return grid + (1,) * max(0, 3 - len(grid))
 
 
+    def _save_tensor_storage(tensor, filepath):
+        """Save a tensor's full underlying storage to preserve stride layout."""
+        import torch
+        storage = tensor.detach().untyped_storage()
+        flat_gpu = torch.empty(storage.nbytes(), dtype=torch.uint8,
+                               device=tensor.device)
+        flat_gpu.set_(storage)
+        flat_cpu = flat_gpu.cpu()
+        flat_cpu.numpy().tofile(filepath)
+
     def _save_tensor(tensor, filepath):
-        """Save a tensor to a raw binary file."""
+        """Save a tensor's logical values as a contiguous binary file."""
         import torch
         cpu_tensor = tensor.detach().cpu().contiguous()
         if cpu_tensor.dtype == torch.bfloat16:
@@ -164,12 +164,25 @@ _CAPTURE_HOOK = textwrap.dedent('''\
             cpu_tensor.numpy().tofile(filepath)
 
 
-    def _save_capture(jit_fn, args, kwargs, grid, autotuner_config_keys):
-        """Save pre-kernel tensor inputs and scalar args.
+    def _is_triton_dtype(val):
+        """Return True if *val* is a triton.language dtype."""
+        try:
+            import triton.language as _tl
+            return isinstance(val, _tl.dtype)
+        except (ImportError, AttributeError):
+            return False
 
-        Returns a list of (index, name, tensor) for all tensor args so
-        the caller can save their post-kernel state as reference outputs.
-        """
+    def _triton_dtype_attr(val):
+        """Return the tl attribute name for a triton dtype object."""
+        import triton.language as _tl
+        for attr in dir(_tl):
+            if getattr(_tl, attr, None) is val:
+                return attr
+        return str(val)
+
+
+    def _save_capture(jit_fn, args, kwargs, grid, autotuner_config_keys):
+        """Save pre-kernel tensor inputs and scalar args."""
         import torch
         import numpy as np
 
@@ -177,8 +190,6 @@ _CAPTURE_HOOK = textwrap.dedent('''\
 
         param_names = list(inspect.signature(jit_fn.fn).parameters.keys())
 
-        # Merge positional + keyword args by parameter name (needed
-        # both for metadata and for resolving callable grids).
         all_args = {}
         for i, name in enumerate(param_names):
             if i < len(args):
@@ -204,7 +215,7 @@ _CAPTURE_HOOK = textwrap.dedent('''\
             if isinstance(val, torch.Tensor):
                 filename = f"arg_{i}.bin"
                 filepath = os.path.join(_output_dir, filename)
-                _save_tensor(val, filepath)
+                _save_tensor_storage(val, filepath)
 
                 metadata["args"].append({
                     "index": i,
@@ -216,6 +227,8 @@ _CAPTURE_HOOK = textwrap.dedent('''\
                     "ref_output_file": f"ref_output_{i}.bin",
                     "buffer_size": val.nelement() * val.element_size(),
                     "shape": list(val.shape),
+                    "strides": list(val.stride()),
+                    "storage_offset": val.storage_offset(),
                     "torch_dtype": str(val.dtype),
                 })
                 tensor_args.append((i, name, val))
@@ -240,6 +253,17 @@ _CAPTURE_HOOK = textwrap.dedent('''\
                     "is_autotune_config": is_config,
                     "value": val,
                     "type": type(val).__name__,
+                })
+
+            elif _is_triton_dtype(val):
+                metadata["args"].append({
+                    "index": i,
+                    "name": name,
+                    "is_pointer": False,
+                    "is_const": True,
+                    "is_autotune_config": is_config,
+                    "value": _triton_dtype_attr(val),
+                    "type": "triton_dtype",
                 })
 
             else:
@@ -303,13 +327,27 @@ _CAPTURE_HOOK = textwrap.dedent('''\
         )
 
 
-    # ---- main ---------------------------------------------------------
     _install_hook()
-
-    _user_script = sys.argv[1]
-    sys.argv = sys.argv[1:]
-    runpy.run_path(_user_script, run_name="__main__")
 ''')
+
+# ---------------------------------------------------------------------------
+# sitecustomize.py template — loaded at startup by every Python interpreter.
+#
+# Checks for _KERNCAP_TRITON_HOOK env var; if set, exec's the hook
+# installer.  Safe to shadow an existing sitecustomize because:
+#   - The env var is only set during a capture session
+#   - If the hook fails (e.g. triton not installed), the error is
+#     swallowed and the process continues normally
+# ---------------------------------------------------------------------------
+_SITECUSTOMIZE = textwrap.dedent("""\
+    import os as _os
+    _hook = _os.environ.get("_KERNCAP_TRITON_HOOK")
+    if _hook and _os.path.isfile(_hook):
+        try:
+            exec(compile(open(_hook).read(), _hook, "exec"))
+        except Exception:
+            pass
+""")
 
 
 def run_triton_capture(
@@ -321,10 +359,15 @@ def run_triton_capture(
 ) -> str:
     """Capture a Triton kernel's Python-level arguments.
 
-    Generates a temporary hook script that patches ``JITFunction.run``,
-    then re-invokes the user's Python command through it so that the
-    first non-warmup call to the target kernel is intercepted and all
-    arguments are serialised to *output_dir*.
+    Injects a ``sitecustomize.py`` via ``PYTHONPATH`` that installs the
+    Triton capture hook at interpreter startup.  This works across process
+    boundaries (e.g. ``multiprocessing.spawn``) because every Python
+    interpreter imports ``sitecustomize`` via the ``site`` module.
+
+    The command is run directly — no wrapping with ``runpy`` — so any
+    command that eventually spawns a Python process running Triton kernels
+    will be instrumented (``python script.py``, ``python -m module``,
+    ``vllm serve ...``, etc.).
 
     Parameters
     ----------
@@ -346,41 +389,20 @@ def run_triton_capture(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # Find the Python interpreter and the script in the command
-    python_bin = None
-    script_idx = None
-    for i, tok in enumerate(cmd):
-        if python_bin is None:
-            if "python" in os.path.basename(tok):
-                python_bin = tok
-                continue
-        else:
-            # After we've found the Python binary, explicitly reject
-            # unsupported invocation styles like `python -m` and `python -c`.
-            if tok in ("-m", "-c"):
-                raise ValueError(
-                    f"Triton capture does not support Python invocation styles like `{tok}`"
-                )
-            script_idx = i
-            break
+    # Create temp dir for sitecustomize.py and the hook script
+    site_dir = tempfile.mkdtemp(prefix="kerncap_site_")
+    hook_fd, hook_path = tempfile.mkstemp(
+        suffix=".py",
+        prefix="kerncap_triton_hook_",
+        dir=site_dir,
+    )
 
-    if python_bin is None or script_idx is None:
-        raise ValueError(
-            f"Triton capture requires a 'python <script>' command, got: {' '.join(cmd)}"
-        )
-
-    hook_fd, hook_path = tempfile.mkstemp(suffix=".py", prefix="kerncap_triton_hook_")
     try:
         with os.fdopen(hook_fd, "w") as f:
-            f.write(_CAPTURE_HOOK)
+            f.write(_HOOK_INSTALLER)
 
-        # python [flags] hook.py  original_script.py [script_args ...]
-        modified_cmd = (
-            [python_bin]
-            + cmd[1:script_idx]  # any python flags (-u, etc.)
-            + [hook_path]
-            + cmd[script_idx:]  # original script + its args
-        )
+        with open(os.path.join(site_dir, "sitecustomize.py"), "w") as f:
+            f.write(_SITECUSTOMIZE)
 
         env = os.environ.copy()
         env["KERNCAP_KERNEL"] = kernel_name
@@ -388,9 +410,20 @@ def run_triton_capture(
         if dispatch >= 0:
             env["KERNCAP_DISPATCH"] = str(dispatch)
 
+        # Point every Python process at our sitecustomize.py
+        env["_KERNCAP_TRITON_HOOK"] = hook_path
+        existing_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{site_dir}:{existing_pp}" if existing_pp else site_dir
+
+        logger.debug(
+            "Triton capture: sitecustomize at %s, hook at %s",
+            site_dir,
+            hook_path,
+        )
+
         try:
             proc = subprocess.run(
-                modified_cmd,
+                cmd,
                 env=env,
                 timeout=timeout,
                 capture_output=True,
@@ -401,16 +434,16 @@ def run_triton_capture(
 
         meta_file = os.path.join(output_dir, "metadata.json")
         if not os.path.exists(meta_file):
+            tail = 2000
+            stdout_tail = proc.stdout[-tail:] if proc.stdout else ""
+            stderr_tail = proc.stderr[-tail:] if proc.stderr else ""
             raise RuntimeError(
                 f"Triton capture did not produce metadata.json in "
                 f"{output_dir}.\n"
-                f"stdout: {proc.stdout[:500]}\n"
-                f"stderr: {proc.stderr[:500]}"
+                f"stdout (last {tail} chars): {stdout_tail}\n"
+                f"stderr (last {tail} chars): {stderr_tail}"
             )
 
         return output_dir
     finally:
-        try:
-            os.unlink(hook_path)
-        except OSError:
-            pass
+        shutil.rmtree(site_dir, ignore_errors=True)

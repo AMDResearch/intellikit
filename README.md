@@ -1,10 +1,14 @@
 <div align="center">
 
-<img src="./docs/intellikit.svg" alt="IntelliKit" width="200" />
+<img src="./docs/public/intellikit.svg" alt="IntelliKit" width="200" />
 
 # IntelliKit
 
-**Profiling and analysis for AMD software — GPU, host CPU, and LLM workflows**
+**Agent-first tooling for AMD hardware**
+
+<a href="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml"><img src="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml/badge.svg" alt="Intellikit Pytest"></a>
+<a href="https://amdresearch.github.io/intellikit"><img src="https://img.shields.io/badge/docs-live-blue" alt="Docs"></a>
+<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 
 </div>
 
@@ -55,7 +59,10 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 | Python | 3.10 or newer |
 | ROCm | 6.0+ for GPU packages (use **7.0+** for Linex); skip if you only use host-side tools like `uprof_mcp` |
 | GPU | **MI300+** for the full GPU experience; some pieces vary by tool — see each package’s README |
+| cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** only (C++ build via KernelDB) |
 | uProf | **AMD uProf** on **x86** for `uprof_mcp` only — see that README |
+
+> **System packages for accordo / nexus:** These tools compile C++ code (via [KernelDB](https://github.com/AMDResearch/KernelDB)) during `pip install`. Install `cmake`, `libdwarf-dev`, and `libzstd-dev` (`libdwarf-devel`/`libzstd-devel` on Fedora/RHEL) first, or the build will fail. The [IntelliKit Docker image](docker/Dockerfile) includes these packages; `install.sh` checks for them and exits with an error if missing. See [docs](https://amdresearch.github.io/intellikit/getting-started/installation/) for details.
 
 For **development** on a subset of packages only, use editable installs (nothing to install at the monorepo root):
 

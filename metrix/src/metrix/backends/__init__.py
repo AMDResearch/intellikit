@@ -9,6 +9,7 @@ Clean design:
 
 from .base import CounterBackend, DeviceSpecs, ProfileResult, Statistics
 from .gfx942 import GFX942Backend
+from .gfx950 import GFX950Backend
 from .gfx1201 import GFX1201Backend
 from .gfx90a import GFX90aBackend
 from .gfx1151 import GFX1151Backend
@@ -22,6 +23,7 @@ __all__ = [
     "ProfileResult",
     "Statistics",
     "GFX942Backend",
+    "GFX950Backend",
     "GFX1201Backend",
     "GFX90aBackend",
     "metric",
@@ -38,7 +40,10 @@ def get_backend(arch: str) -> CounterBackend:
         "gfx942": GFX942Backend,
         "mi300x": GFX942Backend,
         "mi300": GFX942Backend,
-        "gfx950": GFX942Backend,  # MI355X uses gfx942 backend
+        "gfx950": GFX950Backend,
+        "mi350x": GFX950Backend,
+        "mi350": GFX950Backend,
+        "mi355x": GFX950Backend,
         "gfx1201": GFX1201Backend,
         "gfx1151": GFX1151Backend,
     }

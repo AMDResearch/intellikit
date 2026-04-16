@@ -55,13 +55,12 @@ jobs:
       - name: Build package matrix
         id: build-matrix
         run: |
-          ALL='["accordo","kerncap","linex","metrix","nexus","rocm_mcp","uprof_mcp"]'
-
           # Infra changes or non-PR events → test everything
           if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
-            echo "packages=${ALL}" >> "$GITHUB_OUTPUT"
+            echo 'packages=["accordo","kerncap","linex","metrix","nexus","rocm_mcp","uprof_mcp"]' >> "$GITHUB_OUTPUT"
           else
-            echo "packages=${{ steps.filter.outputs.changes }}" >> "$GITHUB_OUTPUT"
+            CHANGES='${{ steps.filter.outputs.changes }}'
+            echo "packages=${CHANGES}" >> "$GITHUB_OUTPUT"
           fi
 
   build-container-image:

@@ -16,8 +16,7 @@ Existing GPU profilers have challenges:
 - **Clean Python API** with modern design
 - **Human-readable metrics** instead of raw counters
 - **Unit tested** and reliable
-- **13 Memory Metrics**: Bandwidth, cache, coalescing, LDS, atomic latency
-- **5 Compute Metrics**: FLOPS, arithmetic intensity (HBM/L2/L1), compute throughput
+- **20 metrics** across memory, cache, compute, and GPU utilization (availability varies by GPU architecture)
 - **Multi-Run Profiling**: Automatic aggregation with min/max/avg statistics
 - **Kernel Filtering**: Efficient regex filtering at rocprofv3 level
 - **Launch selection**: Optional rocprofv3 ``kernel_iteration_range`` (CLI ``--kernel-iteration`` / ``--kernel-iteration-range``) to target a specific Nth launch when kernels run in a loop or after warmups
@@ -65,6 +64,14 @@ for kernel in results.kernels:
 
 ## Available Metrics
 
+### Compute
+- `compute.gpu_utilization` - GPU utilization (%). *gfx1201/gfx1151 only.*
+- `compute.total_flops` - Total floating-point operations performed
+- `compute.hbm_gflops` - Compute throughput (GFLOP/s)
+- `compute.hbm_arithmetic_intensity` - Ratio of FLOPs to HBM bytes (FLOPs/Byte)
+- `compute.l2_arithmetic_intensity` - Ratio of FLOPs to L2 bytes (FLOPs/Byte)
+- `compute.l1_arithmetic_intensity` - Ratio of FLOPs to L1 bytes (FLOPs/Byte)
+
 ### Memory Bandwidth
 - `memory.hbm_read_bandwidth` - HBM read bandwidth (GB/s)
 - `memory.hbm_write_bandwidth` - HBM write bandwidth (GB/s)
@@ -84,17 +91,10 @@ for kernel in results.kernels:
 - `memory.global_store_efficiency` - Global store efficiency (%)
 
 ### Local Data Share
-- `memory.lds_bank_conflicts` - LDS bank conflicts per instruction
+- `memory.lds_bank_conflicts` - LDS bank conflicts per access
 
 ### Atomic Operations
 - `memory.atomic_latency` - Atomic operation latency (cycles)
-
-### Compute Metrics
-- `compute.total_flops` - Total floating-point operations performed
-- `compute.hbm_gflops` - Compute throughput (GFLOPS)
-- `compute.hbm_arithmetic_intensity` - Ratio of FLOPs to HBM bytes (FLOP/byte)
-- `compute.l2_arithmetic_intensity` - Ratio of FLOPs to L2 bytes (FLOP/byte)
-- `compute.l1_arithmetic_intensity` - Ratio of FLOPs to L1 bytes (FLOP/byte)
 
 ## CLI Options
 
@@ -126,10 +126,7 @@ metrix profile [options] <target>
 metrix list <metrics|profiles|devices> [--category CAT]
 
 metrix info <metric|profile> <name>
-
 ```
-
-`metrix list counters` and `metrix info counter <name>` exist but currently print “not yet implemented” in the CLI.
 
 Note: GPU architecture is auto-detected using `rocminfo`.
 
@@ -155,25 +152,6 @@ python3 -m pytest tests/ -v        # includes integration (GPU / binaries where 
 - ROCm 6.x with rocprofv3
 - pandas>=1.5.0
 
-## Architecture
-
-Metrix uses a clean backend architecture where hardware counter names appear **exactly once** as function parameters:
-
-```python
-@metric("memory.l2_hit_rate")
-def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
-    total = TCC_HIT_sum + TCC_MISS_sum
-    return (TCC_HIT_sum / total) * 100 if total > 0 else 0.0
-```
-
-This **eliminates error-prone mapping dictionaries** and makes the codebase maintainable.
-
-### Auto-Detection
-
-GPU architecture is automatically detected using `rocminfo`. Metrix will detect your GPU (e.g., gfx942 for MI300X) and use the appropriate backend automatically.
-
-This design makes it easy to add new metrics and support new GPU architectures.
-
 ## Example
 
 See the [examples directory](examples/) for complete working examples.
@@ -193,22 +171,22 @@ Duration: 7.29 - 7.29 μs (avg=7.29)
 
 MEMORY BANDWIDTH:
   Total HBM Bytes Transferred                   8400896.00 bytes
-  HBM Bandwidth Utilization                           1.34 percent
-  HBM Read Bandwidth                                 35.47 GB/s
-  HBM Write Bandwidth                                35.36 GB/s
+  HBM Bandwidth Utilization                           1.34 Percent
+  HBM Read Bandwidth                                35.47 GB/s
+  HBM Write Bandwidth                               35.36 GB/s
 
 MEMORY_PATTERN:
-  Memory Coalescing Efficiency                      100.00 percent
-  Global Load Efficiency                             50.00 percent
-  Global Store Efficiency                            25.00 percent
+  Memory Coalescing Efficiency                      100.00 Percent
+  Global Load Efficiency                             50.00 Percent
+  Global Store Efficiency                            25.00 Percent
 
 CACHE PERFORMANCE:
-  L1 Cache Hit Rate                                  66.67 percent
-  L2 Cache Bandwidth Utilization                    144.95 percent
-  L2 Cache Hit Rate                                  26.72 percent
+  L1 Cache Hit Rate                                  66.67 Percent
+  L2 Cache Bandwidth Utilization                    144.95 Percent
+  L2 Cache Hit Rate                                  26.72 Percent
 
 LOCAL DATA SHARE (LDS):
-  LDS Bank Conflicts                                  0.00 conflicts/instruction
+  LDS Bank Conflicts                                  0.00 Conflicts per Access
 
 ================================================================================
 Profiled 1 dispatch(es)/kernel(s)

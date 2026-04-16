@@ -1,0 +1,86 @@
+---
+title: Installation
+description: Install IntelliKit tools and agent skills
+---
+
+## Quick install
+
+Install all tools from Git via `pip`:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
+```
+
+Install agent skills (for Cursor, Claude, Codex):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
+```
+
+## Requirements
+
+| Requirement | Notes |
+|-------------|--------|
+| Python | 3.10 or newer |
+| ROCm | 6.0+ for GPU packages (7.0+ for Kerncap and Linex); skip if you only use host-side tools like `uprof_mcp` |
+| GPU | MI300+ for the full GPU experience; some tools vary — see each tool's page |
+| uProf | AMD uProf on x86 for `uprof_mcp` only |
+| cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** (C++ build via KernelDB). See below. |
+
+### System dependencies for accordo and nexus
+
+Accordo and nexus include C++ components (via KernelDB) that are compiled during `pip install`.
+These system packages must be present **before** installing:
+
+```bash
+# Debian / Ubuntu
+sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
+
+# Fedora / RHEL
+sudo dnf install -y cmake libdwarf-devel libzstd-devel
+```
+
+The install script (`install/tools/install.sh`) will warn if these are missing. The
+[IntelliKit Docker image](https://github.com/AMDResearch/intellikit/blob/main/docker/Dockerfile) includes them already.
+
+## Individual packages
+
+Install a single package from Git:
+
+```bash
+pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"
+# Also: accordo, kerncap, linex, nexus, rocm_mcp, uprof_mcp
+```
+
+## Editable install (development)
+
+```bash
+git clone https://github.com/AMDResearch/intellikit.git
+cd intellikit
+pip install -e ./metrix
+pip install -e ./linex
+# ...any subset
+```
+
+## Install script options
+
+### Tools script (`install/tools/install.sh`)
+
+- Default `pip3`; the script checks that pip's Python is 3.10+ before installing.
+- Subset only: `--tools metrix,linex,nexus`
+- Custom pip: `--pip-cmd pip3.12` or `--pip-cmd "python3.12 -m pip"`
+- Branch/tag: `--ref my-branch`
+- Different repo: `--repo-url https://github.com/you/fork.git`
+- Preview: `--dry-run`
+
+Pipe flags after `bash -s --`:
+
+```bash
+curl -sSL .../install/tools/install.sh | bash -s -- --tools metrix,linex
+```
+
+### Skills script (`install/skills/install.sh`)
+
+- `--target cursor` | `claude` | `codex` | `agents` | `github` — where skills are written
+- `--global` — e.g. `~/.cursor/skills/` for Cursor
+- `--dry-run`

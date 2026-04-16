@@ -1,13 +1,14 @@
 """
 GFX942 (MI300X) Backend
 
-Each metric is defined with @metric decorator.
-Counter names appear EXACTLY ONCE - as function parameters.
+Metrics are loaded from counter_defs.yaml.
+This file provides architecture-specific infrastructure only.
+Device specs are queried from hipGetDeviceProperties at runtime.
 """
 
 from .base import CounterBackend, DeviceSpecs, ProfileResult
+from .device_info import query_device_specs
 from ..utils.common import split_counters_into_passes
-from .decorator import metric
 from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
 from typing import List, Optional, Dict
 
@@ -16,28 +17,11 @@ class GFX942Backend(CounterBackend):
     """
     AMD MI300X (gfx942) counter backend
 
-    All metrics are defined with @metric decorator.
-    Hardware counter names appear ONLY as function parameter names.
+    Metric definitions live in counter_defs.yaml.
     """
 
     def _get_device_specs(self) -> DeviceSpecs:
-        """MI300X specifications"""
-        return DeviceSpecs(
-            arch="gfx942",
-            name="AMD Instinct MI300X",
-            num_cu=304,
-            max_waves_per_cu=32,
-            wavefront_size=64,
-            base_clock_mhz=2100.0,
-            hbm_bandwidth_gbs=5300.0,
-            l2_bandwidth_gbs=11000.0,
-            l2_size_mb=256.0,
-            lds_size_per_cu_kb=64.0,
-            fp32_tflops=163.4,
-            fp64_tflops=81.7,
-            int8_tops=1307.4,
-            boost_clock_mhz=2100,
-        )
+        return query_device_specs("gfx942")
 
     def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
         """
@@ -63,33 +47,18 @@ class GFX942Backend(CounterBackend):
 
         These limits define how many performance counters can be simultaneously
         collected from each hardware block in a single profiling pass.
-
-        Hardware blocks on MI300X:
-        - SQ (Shader): Instruction counters (VALU, LDS, VMEM, etc.)
-        - TA (Texture Addresser): Texture address operations
-        - TD (Texture Data): Texture data fetch operations
-        - TCP (Texture Cache per Pipe): L1 vector cache
-        - TCC (Texture Cache Channel): L2 cache and memory controller
-        - CPC (Command Processor - Compute): Compute command processing
-        - CPF (Command Processor - Fetch): Command fetch operations
-        - SPI (Shader Processor Input): Wavefront dispatch and scheduling
-        - GRBM (Graphics Register Bus Manager): Global GPU activity
-        - GDS (Global Data Share): Inter-workgroup communication
-
-        Returns:
-            Dict mapping block_name -> max_counters_per_pass
         """
         return {
-            "SQ": 8,  # Shader - instruction counters
-            "TA": 2,  # Texture Addresser
-            "TD": 2,  # Texture Data
-            "TCP": 4,  # L1 Cache (Texture Cache per Pipe)
-            "TCC": 4,  # L2 Cache / Memory Controller
-            "CPC": 2,  # Command Processor - Compute
-            "CPF": 2,  # Command Processor - Fetch
-            "SPI": 6,  # Shader Processor Input
-            "GRBM": 2,  # Graphics Register Bus Manager
-            "GDS": 4,  # Global Data Share
+            "SQ": 8,  # Shader Sequencer — instruction issue & scheduling
+            "TA": 2,  # Texture Addresser — coalesces memory requests
+            "TD": 2,  # Texture Data — routes cache data back to SIMDs
+            "TCP": 4,  # Texture Cache per Pipe — L1 vector cache
+            "TCC": 4,  # Texture Cache Channel — L2 cache / memory controller
+            "CPC": 2,  # Command Processor Compute — decodes dispatches
+            "CPF": 2,  # Command Processor Fetch — fetches commands from memory
+            "SPI": 6,  # Shader Processor Input — workgroup manager, schedules waves to CUs
+            "GRBM": 2,  # Graphics Register Bus Manager — top-level GPU activity counters
+            "GDS": 4,  # Global Data Share — chip-wide shared memory
         }
 
     def _run_rocprof(

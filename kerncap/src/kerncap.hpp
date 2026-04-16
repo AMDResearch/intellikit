@@ -12,6 +12,7 @@
 #include <hsa/hsa_api_trace.h>
 #include <hsa/hsa_ven_amd_loader.h>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -72,6 +73,11 @@ public:
         uint64_t runtime_version = 0,
         uint64_t failed_tool_count = 0,
         const char* const* failed_tool_names = nullptr);
+
+    // Returns true if this process should perform queue interception.
+    // In multi-process apps (KERNCAP_CAPTURE_CHILD=1), the parent goes
+    // passive after fork and only the child actively intercepts.
+    bool is_active_process();
 
     // Saved (original) API table — public so macros can use it
     HsaApiTable saved_api_;
@@ -174,11 +180,17 @@ private:
     void capture_kernel(const hsa_kernel_dispatch_packet_t* disp,
                         const std::string& kernel_name);
 
+    // Fork safety: clear inherited tracking state in the child process
+    void reset_inherited_state();
+
+    // pthread_atfork parent handler — sets fork_detected_ flag
+    static void atfork_parent_handler();
+
 private:
     // ---- State ----
 
     static CaptureState* singleton_;
-    static std::mutex mutex_;
+    static std::shared_mutex mutex_;
 
     HsaApiTable* api_table_;   // live table (hooked)
 
@@ -212,7 +224,13 @@ private:
     int target_dispatch_ = -1;      // KERNCAP_DISPATCH (-1 = first match)
     std::string output_dir_;        // KERNCAP_OUTPUT
     std::string gpu_arch_;          // e.g. "gfx90a" (queried at init)
-    bool captured_ = false;         // true after a successful capture
+    std::atomic<bool> captured_{false};  // true after a successful capture
+
+    // Fork safety (multi-process support)
+    pid_t initial_pid_ = 0;              // PID when CaptureState was created
+    bool capture_child_mode_ = false;    // KERNCAP_CAPTURE_CHILD env var present
+    std::atomic<bool> fork_detected_{false};    // set by atfork parent handler after fork()
+    std::atomic<bool> child_state_reset_{false}; // true after inherited state cleared in child
 };
 
 }  // namespace kerncap

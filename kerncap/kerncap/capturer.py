@@ -1,7 +1,8 @@
 """Capture orchestrator — runs an application under libkerncap.so.
 
-Sets up the environment, launches the application under HSA interception,
-and returns the capture directory containing the VA-faithful snapshot.
+Sets up the environment, launches the application under LD_PRELOAD
+(rocprofiler-sdk registration), and returns the capture directory
+containing the VA-faithful snapshot.
 """
 
 import logging
@@ -64,9 +65,16 @@ def run_capture(
     os.makedirs(output_dir, exist_ok=True)
 
     env = os.environ.copy()
-    env["HSA_TOOLS_LIB"] = lib_path
+    # Strip legacy HSA tool variables that can conflict with LD_PRELOAD-based capture
+    env.pop("HSA_TOOLS_LIB", None)
+    env.pop("HSA_TOOLS_REPORT_LOAD_FAILURE", None)
+    if "LD_PRELOAD" in env:
+        env["LD_PRELOAD"] = lib_path + ":" + env["LD_PRELOAD"]
+    else:
+        env["LD_PRELOAD"] = lib_path
     env["KERNCAP_KERNEL"] = kernel_name
     env["KERNCAP_OUTPUT"] = output_dir
+    env["KERNCAP_CAPTURE_CHILD"] = "1"
 
     if dispatch >= 0:
         env["KERNCAP_DISPATCH"] = str(dispatch)
@@ -86,8 +94,8 @@ def run_capture(
     meta_file = os.path.join(output_dir, "metadata.json")
 
     if not os.path.exists(dispatch_file) and not os.path.exists(meta_file):
-        stdout_preview = proc.stdout[:500] if proc.stdout else "N/A"
-        stderr_preview = proc.stderr[:500] if proc.stderr else "N/A"
+        stdout_preview = proc.stdout[:2000] if proc.stdout else "N/A"
+        stderr_preview = proc.stderr[:2000] if proc.stderr else "N/A"
         raise RuntimeError(
             f"Capture did not produce output in {output_dir}. "
             f"App stdout: {stdout_preview}\n"

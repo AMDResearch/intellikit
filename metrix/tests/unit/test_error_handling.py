@@ -8,6 +8,7 @@ import pytest
 import subprocess
 from pathlib import Path
 from metrix.profiler.rocprof_wrapper import ROCProfV3Wrapper
+from .conftest import requires_arch
 
 
 class TestMissingExecutable:
@@ -110,6 +111,7 @@ class TestBackendValidation:
 class TestUnsupportedMetrics:
     """Test handling of unsupported metrics on different architectures"""
 
+    @requires_arch("gfx90a")
     def test_gfx90a_has_unsupported_atomic_latency(self):
         """MI200 (gfx90a) should mark atomic_latency as unsupported"""
         from metrix.backends import get_backend
@@ -120,6 +122,7 @@ class TestUnsupportedMetrics:
         assert "TCC_EA_ATOMIC_LEVEL_sum" in backend._unsupported_metrics["memory.atomic_latency"]
         assert "broken" in backend._unsupported_metrics["memory.atomic_latency"].lower()
 
+    @requires_arch("gfx942")
     def test_gfx942_supports_atomic_latency(self):
         """MI300X (gfx942) should support atomic_latency"""
         from metrix.backends import get_backend
@@ -129,6 +132,7 @@ class TestUnsupportedMetrics:
         # Should not be in unsupported - metric is supported on gfx942
         assert "memory.atomic_latency" not in backend._unsupported_metrics
 
+    @requires_arch("gfx90a")
     def test_filter_supported_metrics_gfx90a(self):
         """Filtering should remove unsupported metrics on gfx90a"""
         from metrix.backends import get_backend
@@ -146,6 +150,7 @@ class TestUnsupportedMetrics:
         assert "memory.hbm_bandwidth_utilization" in filtered
         assert "memory.atomic_latency" not in filtered
 
+    @requires_arch("gfx90a")
     def test_check_multiple_metrics(self):
         """Check multiple metrics at once"""
         from metrix.backends import get_backend
@@ -174,7 +179,7 @@ class TestMetricComputation:
         backend._raw_data = {"TCC_HIT_sum": 0, "TCC_MISS_sum": 0}
 
         # Should return 0.0, not raise ZeroDivisionError
-        result = backend._l2_hit_rate()
+        result = backend._metrics["memory.l2_hit_rate"]["compute"]()
         assert result == 0.0
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
@@ -189,5 +194,5 @@ class TestMetricComputation:
         }
 
         # Should not crash
-        result = backend._l2_hit_rate()
+        result = backend._metrics["memory.l2_hit_rate"]["compute"]()
         assert isinstance(result, (int, float))

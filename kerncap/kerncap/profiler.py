@@ -35,6 +35,7 @@ def run_profile(
     cmd: List[str],
     output_path: Optional[str] = None,
     rocprof_bin: Optional[str] = None,
+    timeout: Optional[int] = None,
 ) -> List[KernelStat]:
     """Profile an application with rocprofv3 --kernel-trace --stats.
 
@@ -47,6 +48,8 @@ def run_profile(
         returned in-memory.
     rocprof_bin : str, optional
         Path to rocprofv3 binary.  Auto-detected if None.
+    timeout : int, optional
+        Maximum seconds to wait for the application.  None means no limit.
 
     Returns
     -------
@@ -72,11 +75,15 @@ def run_profile(
             "--",
         ] + cmd
 
-        proc = subprocess.run(
-            full_cmd,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            proc = subprocess.run(
+                full_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(f"Application did not complete within {timeout}s")
 
         stats_csv = _find_stats_csv(tmpdir)
 
@@ -102,7 +109,7 @@ def run_profile(
         kernels = parse_kernel_trace_stats(stats_csv)
 
     if output_path:
-        _write_profile_json(kernels, output_path)
+        _write_profile_json(kernels, output_path, cmd)
 
     return kernels
 
@@ -188,11 +195,15 @@ def parse_kernel_trace_stats(csv_path: str) -> List[KernelStat]:
     return kernels
 
 
-def _write_profile_json(kernels: List[KernelStat], path: str) -> None:
+def _write_profile_json(kernels: List[KernelStat], path: str, cmd: List[str]) -> None:
     """Write profiling results as JSON."""
     import json
+    import shlex
+    from datetime import datetime, timezone
 
     data = {
+        "cmd": shlex.join(cmd),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "kernels": [
             {
                 "name": k.name,
@@ -205,7 +216,7 @@ def _write_profile_json(kernels: List[KernelStat], path: str) -> None:
                 "stddev_ns": k.stddev_ns,
             }
             for k in kernels
-        ]
+        ],
     }
     with open(path, "w") as f:
         json.dump(data, f, indent=2)

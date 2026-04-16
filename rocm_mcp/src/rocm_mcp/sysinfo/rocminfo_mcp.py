@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 
+import argparse
 from typing import Annotated
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.utilities.logging import get_logger
+from fastmcp import Context, FastMCP
+from fastmcp.utilities.logging import get_logger
 from pydantic import Field
 
 from rocm_mcp.sysinfo import DeviceType, Rocminfo
@@ -89,7 +90,35 @@ async def get_all_agents(ctx: Annotated[Context, Field(description="MCP context.
 
 def main() -> None:
     """Main function to run the rocminfo MCP server."""
-    mcp.run(transport="stdio")
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http"],
+        default="stdio",
+        help="Transport to use",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--path",
+        default="/rocm_mcp/rocminfo",
+        help="Path to serve the HTTP server on (only used if transport is http)",
+    )
+    args = parser.parse_args()
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+    elif args.transport == "http":
+        mcp.run(transport="streamable-http", host=args.host, port=args.port, path=args.path)
 
 
 if __name__ == "__main__":

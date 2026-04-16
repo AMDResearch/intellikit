@@ -194,9 +194,11 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
     for metric in metrics:
         if metric in METRIC_CATALOG:
             cat = METRIC_CATALOG[metric].get("category", "other")
-            if cat not in categories:
-                categories[cat] = []
-            categories[cat].append(metric)
+        else:
+            cat = metric.split(".")[0] if "." in metric else "other"
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(metric)
 
     # Category display names
     cat_names = {
@@ -205,6 +207,8 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
         "memory_coalescing": "MEMORY COALESCING",
         "memory_lds": "LOCAL DATA SHARE (LDS)",
         "memory_atomic": "ATOMIC OPERATIONS",
+        "compute": "COMPUTE",
+        "memory": "MEMORY",
     }
 
     for dispatch_key, data in results.items():
@@ -233,9 +237,11 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
             for metric in cat_metrics:
                 if metric in data["metrics"]:
                     stats = data["metrics"][metric]
-                    metric_def = METRIC_CATALOG[metric]
-                    name = metric_def["name"]
-                    unit = metric_def.get("unit", "")
+
+                    name = metric.split(".", 1)[-1].replace("_", " ").title()
+                    if metric in METRIC_CATALOG:
+                        name = METRIC_CATALOG[metric].get("name", name)
+                    unit = stats.unit
 
                     # Log detailed stats at DEBUG level
                     logger.debug(
@@ -268,6 +274,7 @@ def _write_json_output(output_path: Path, results: Dict, metrics: List[str]):
                 "max": stats.max,
                 "avg": stats.avg,
                 "count": stats.count,
+                "unit": getattr(stats, "unit", ""),
             }
 
     with open(output_path, "w") as f:

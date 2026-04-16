@@ -18,7 +18,7 @@ MEMORY_BANDWIDTH_METRICS = {
     "memory.hbm_bandwidth_utilization": {
         "name": "HBM Bandwidth Utilization",
         "description": "Percentage of peak HBM (High Bandwidth Memory) bandwidth utilized",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_BANDWIDTH,
         # NOTE: These are conceptual counter names. Actual names vary by architecture:
         # - MI300 (gfx942): TCC_EA0_RDREQ_sum, TCC_EA0_WRREQ_sum
@@ -83,7 +83,7 @@ MEMORY_BANDWIDTH_METRICS = {
     "memory.bytes_transferred_hbm": {
         "name": "Total HBM Bytes Transferred",
         "description": "Total bytes transferred through HBM (read + write)",
-        "unit": "bytes",
+        "unit": "Bytes",
         "category": MetricCategory.MEMORY_BANDWIDTH,
         "derived_from": ["TCC_EA_RDREQ_sum", "TCC_EA_WRREQ_sum"],
         "formula": """
@@ -93,7 +93,7 @@ MEMORY_BANDWIDTH_METRICS = {
     "memory.bytes_transferred_l2": {
         "name": "Total L2 Bytes Transferred",
         "description": "Total bytes accessed through L2 cache",
-        "unit": "bytes",
+        "unit": "Bytes",
         "category": MetricCategory.MEMORY_BANDWIDTH,
         "derived_from": ["TCC_REQ_sum"],
         "formula": """
@@ -104,7 +104,7 @@ MEMORY_BANDWIDTH_METRICS = {
     "memory.bytes_transferred_l1": {
         "name": "Total L1 Bytes Transferred",
         "description": "Total bytes accessed through L1 cache",
-        "unit": "bytes",
+        "unit": "Bytes",
         "category": MetricCategory.MEMORY_BANDWIDTH,
         "derived_from": ["TCP_TOTAL_CACHE_ACCESSES_sum"],
         "formula": """
@@ -122,7 +122,7 @@ CACHE_METRICS = {
     "memory.l2_hit_rate": {
         "name": "L2 Cache Hit Rate",
         "description": "Percentage of L2 cache accesses that hit",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_CACHE,
         "derived_from": ["TCC_HIT_sum", "TCC_MISS_sum"],
         "formula": """
@@ -141,7 +141,7 @@ CACHE_METRICS = {
     "memory.l1_hit_rate": {
         "name": "L1 Cache Hit Rate",
         "description": "Percentage of L1 (TCP) cache accesses that hit",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_CACHE,
         "derived_from": ["TCP_TCC_READ_REQ_sum", "TCC_EA_RDREQ_sum"],
         "formula": """
@@ -165,7 +165,7 @@ CACHE_METRICS = {
     "memory.l2_bandwidth": {
         "name": "L2 Cache Bandwidth Utilization",
         "description": "Percentage of peak L2 bandwidth utilized",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_CACHE,
         "derived_from": ["TCC_EA_RDREQ_sum", "TCC_EA_WRREQ_sum", "GRBM_GUI_ACTIVE"],
         "formula": """
@@ -187,7 +187,7 @@ MEMORY_PATTERN_METRICS = {
     "memory.coalescing_efficiency": {
         "name": "Memory Coalescing Efficiency",
         "description": "How well memory accesses from threads in a wavefront coalesce into fewer transactions",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_PATTERN,
         "derived_from": ["TCP_TOTAL_CACHE_ACCESSES_sum", "TCP_TOTAL_ACCESSES_sum"],
         "formula": """
@@ -221,7 +221,7 @@ MEMORY_PATTERN_METRICS = {
     "memory.global_load_efficiency": {
         "name": "Global Load Efficiency",
         "description": "Ratio of requested global load bytes to actual bytes transferred",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_PATTERN,
         "derived_from": ["TCP_TOTAL_CACHE_ACCESSES_sum", "TCC_EA_RDREQ_sum"],
         "formula": """
@@ -239,7 +239,7 @@ MEMORY_PATTERN_METRICS = {
     "memory.global_store_efficiency": {
         "name": "Global Store Efficiency",
         "description": "Ratio of requested global store bytes to actual bytes transferred",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_PATTERN,
         "derived_from": ["TCP_TOTAL_WRITE_sum", "TCC_EA_WRREQ_sum"],
         "formula": """
@@ -263,7 +263,7 @@ LDS_METRICS = {
     "memory.lds_utilization": {
         "name": "LDS Utilization",
         "description": "Percentage of available LDS (shared memory) used",
-        "unit": "percent",
+        "unit": "Percent",
         "category": MetricCategory.MEMORY_LDS,
         "derived_from": ["KERNEL_LDS_SIZE"],  # From kernel metadata
         "formula": """
@@ -277,7 +277,7 @@ LDS_METRICS = {
     "memory.lds_bank_conflicts": {
         "name": "LDS Bank Conflicts",
         "description": "Number of LDS bank conflicts per instruction",
-        "unit": "conflicts/instruction",
+        "unit": "Conflicts per Access",
         "category": MetricCategory.MEMORY_LDS,
         "derived_from": ["SQ_LDS_BANK_CONFLICT", "SQ_INSTS_LDS"],
         "formula": """
@@ -302,7 +302,7 @@ ATOMIC_METRICS = {
     "memory.atomic_latency": {
         "name": "Atomic Operation Latency",
         "description": "Average latency of atomic operations at L2 cache (cycles per atomic operation). NOTE: Not available on MI200 (gfx90a) due to broken counters.",
-        "unit": "cycles",
+        "unit": "Cycles",
         "category": MetricCategory.MEMORY_PATTERN,
         "derived_from": ["TCC_EA_ATOMIC_LEVEL_sum", "TCC_EA_ATOMIC_sum"],
         "formula": """
