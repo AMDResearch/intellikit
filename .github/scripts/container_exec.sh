@@ -4,8 +4,17 @@
 #
 # Simple Apptainer container exec script
 # Usage: container_exec.sh <command>
+#
+# Image: defaults to <repo>/apptainer/images/intellikit.sif (same as apptainer/build.sh).
+#        Override with INTELLIKIT_SIF=/path/to/image.sif
+#
+# Overlay: ephemeral .img files under <repo>/apptainer/overlays/ (created per run, removed after).
+#          Override directory with INTELLIKIT_OVERLAY_DIR=/path/to/dir
 
 set -e
+
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPO_ROOT="$(cd "${_SCRIPT_DIR}/../.." && pwd)"
 
 # Command is all arguments
 COMMAND="$@"
@@ -21,15 +30,17 @@ if ! command -v apptainer &> /dev/null; then
     exit 1
 fi
 
-# Use fixed image path
-IMAGE=~/apptainer/intellikit-dev.sif
+IMAGE="${INTELLIKIT_SIF:-${_REPO_ROOT}/apptainer/images/intellikit.sif}"
 if [ ! -f "$IMAGE" ]; then
     echo "[ERROR] Apptainer image not found at $IMAGE" >&2
+    echo "[ERROR] Build with: bash apptainer/build.sh  (from repo root) or set INTELLIKIT_SIF" >&2
     exit 1
 fi
 
-# Create temporary overlay in workspace (auto-cleaned when runner is removed)
-OVERLAY="./intellikit_overlay_$$_$(date +%s%N).img"
+# Writable overlay image (under repo apptainer/overlays/ by default)
+OVERLAY_DIR="${INTELLIKIT_OVERLAY_DIR:-${_REPO_ROOT}/apptainer/overlays}"
+mkdir -p "${OVERLAY_DIR}"
+OVERLAY="${OVERLAY_DIR}/intellikit_overlay_$$_$(date +%s%N).img"
 if ! apptainer overlay create --size 16384 --create-dir /var/cache/intellikit "${OVERLAY}" > /dev/null 2>&1; then
     echo "[ERROR] Failed to create Apptainer overlay"
     exit 1
