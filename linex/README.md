@@ -119,7 +119,7 @@ for line in profiler.source_lines[:1]:
         print(f"{inst.isa}: {inst.latency_cycles} cycles")
 ```
 
-See `examples/01_simple_sqtt/example.py` for a complete working example.
+See the [examples directory](examples/README.md): HIP walkthrough in `01_simple_sqtt/example.py`, and **PyTorch** examples under `02_pytorch_tensor_add/` and `03_pytorch_matmul/`.
 
 ## License
 

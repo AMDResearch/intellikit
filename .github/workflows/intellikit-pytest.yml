@@ -111,5 +111,6 @@ jobs:
             else
               pip install ./${{ matrix.package }}
             fi
-            python3 -m pytest ${{ matrix.package }}/tests -v --tb=short
+            cd ${{ matrix.package }}
+            python3 -m pytest tests -v --tb=short
           "

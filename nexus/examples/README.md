@@ -1,87 +1,34 @@
-# Nexus Examples
+# Nexus examples
 
-Simple examples demonstrating how to use Nexus to trace GPU kernels.
+Examples live under `nexus/examples/`. Run scripts from the **`nexus/` package root** (or `cd` into each example folder and adjust paths).
 
-## Examples
+| Directory | Script | What it does |
+|-----------|--------|----------------|
+| [01_trace_kernel](01_trace_kernel/) | `trace.py` | Writes a HIP vector-add kernel, compiles with `hipcc -g`, traces the binary with Nexus. |
+| [02_simple_hip](02_simple_hip/) | `simple_hip.py` | Single HIP kernel trace (basic). |
+| [03_multiple_hip](03_multiple_hip/) | `multiple_hip.py` | Two HIP kernels in one run. |
+| [04_simple_triton](04_simple_triton/) | `simple_triton.py` | Single Triton kernel. |
+| [05_multiple_triton](05_multiple_triton/) | `multiple_triton.py` | Two Triton kernels in one run. |
+| [06_pytorch_tensor_add](06_pytorch_tensor_add/) | `tensor_add.py`, `trace_pytorch.py` | PyTorch GPU element-wise add; `trace_pytorch.py` runs `Nexus().run([python, tensor_add.py])` and prints kernels + assembly sample. |
+| [07_pytorch_matmul](07_pytorch_matmul/) | `tensor_matmul.py`, `trace_pytorch.py` | PyTorch GPU `A @ B`; same trace helper pattern as tensor add. |
 
-### `simple_hip.py`
-
-Traces a simple HIP vector addition kernel.
-
-**Run:**
-```bash
-python3 examples/simple_hip.py
-```
-
-**What it does:**
-- Creates a simple HIP add kernel in a temp file
-- Compiles and runs it with Nexus tracing
-- Shows captured assembly and HIP source
-
-### `simple_triton.py`
-
-Traces a Triton kernel.
-
-**Run:**
-```bash
-python3 examples/simple_triton.py
-```
-
-**What it does:**
-- Creates a Triton add kernel in a temp file
-- Runs it with Nexus tracing
-- Shows captured assembly and source
-
-### `multiple_hip.py`
-
-Traces multiple HIP kernels in a single execution.
-
-**Run:**
-```bash
-python3 examples/multiple_hip.py
-```
-
-**What it does:**
-- Creates two HIP kernels (add and multiply)
-- Compiles and runs them with Nexus tracing
-- Shows assembly and source for both kernels
-
-### `multiple_triton.py`
-
-Traces multiple Triton kernels in a single execution.
-
-**Run:**
-```bash
-python3 examples/multiple_triton.py
-```
-
-**What it does:**
-- Creates two Triton kernels (add and multiply)
-- Runs both with Nexus tracing
-- Shows assembly and source for both kernels
-
-## Usage Pattern
-
-Both examples follow the same simple pattern:
+## Usage pattern
 
 ```python
 from nexus import Nexus
 
-# Create tracer
 nexus = Nexus(log_level=1)
+trace = nexus.run(["python3", "path/to/script.py"])
 
-# Run and get trace
-trace = nexus.run(["python", "my_script.py"])
-
-# Analyze kernels
 for kernel in trace:
-    print(f"{kernel.name}: {len(kernel.assembly)} instructions")
-    print(kernel.hip)
+    print(kernel.name, len(kernel.assembly))
 ```
 
-## Prerequisites
+## Prerequisites (shared)
 
-- ROCm installed
-- For HIP example: `hipcc` in PATH
-- For Triton example: `triton` installed (`pip install triton`)
-- Nexus installed: `pip install git+https://github.com/AMDResearch/nexus.git`
+- ROCm and Nexus installed (`pip install -e ./nexus` from the IntelliKit clone, or the Git URL in each example README)
+- HIP examples: `hipcc` in `PATH`
+- Triton examples: `triton` installed
+- **PyTorch examples** (06–07): PyTorch with GPU (ROCm on AMD)
+
+See the [Nexus README](../README.md) for installation, API, and limitations.
