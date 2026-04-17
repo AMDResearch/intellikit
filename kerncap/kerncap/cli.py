@@ -61,7 +61,13 @@ def main(verbose):
 @main.command()
 @click.argument("cmd", nargs=-1, required=True)
 @click.option("--output", "-o", default=None, help="Write profile results to JSON file.")
-def profile(cmd, output):
+@click.option(
+    "--timeout",
+    default=None,
+    type=int,
+    help="Maximum seconds to wait for the application (default: no limit).",
+)
+def profile(cmd, output, timeout):
     """Profile an application and rank kernels by execution time.
 
     CMD is the application command to profile (e.g., ./my_app --flag).
@@ -72,7 +78,7 @@ def profile(cmd, output):
     click.echo(f"Profiling: {' '.join(cmd_list)}")
 
     try:
-        kernels = run_profile(cmd_list, output_path=output)
+        kernels = run_profile(cmd_list, output_path=output, timeout=timeout)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -118,7 +124,13 @@ def profile(cmd, output):
     help="Extra preprocessor defines for reproducer (e.g. -D GGML_USE_HIP). "
     "May be specified multiple times.",
 )
-def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines):
+@click.option(
+    "--timeout",
+    default=300,
+    type=int,
+    help="Maximum seconds to wait for the application (default: 300).",
+)
+def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines, timeout):
     """Extract a kernel into a standalone reproducer.
 
     KERNEL_NAME is the kernel name (or substring) to capture.
@@ -134,6 +146,7 @@ def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines):
             language=language,
             dispatch=dispatch,
             defines=list(defines) if defines else None,
+            timeout=timeout,
         )
     except Exception as e:
         click.echo(f"Extract failed: {e}", err=True)

@@ -4,6 +4,7 @@
 
 """MCP Server for Accordo - Automated Kernel Validation."""
 
+import argparse
 from typing import Optional
 
 from fastmcp import FastMCP
@@ -95,7 +96,35 @@ def validate_kernel_correctness(
 
 def main() -> None:
     """Run the MCP server."""
-    mcp.run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http"],
+        default="stdio",
+        help="Transport to use",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--path",
+        default="/accordo",
+        help="Path to serve the HTTP server on (only used if transport is http)",
+    )
+    args = parser.parse_args()
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+    elif args.transport == "http":
+        mcp.run(transport="streamable-http", host=args.host, port=args.port, path=args.path)
 
 
 if __name__ == "__main__":

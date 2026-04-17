@@ -35,14 +35,14 @@ Nexus is a custom tool that intercepts Heterogeneous System Architecture (HSA) p
 ### System prerequisites
 
 Nexus compiles a native C++ library during installation.
-You need `cmake` and `libdwarf-dev` installed first:
+You need `cmake`, `libdwarf-dev`, and `libzstd-dev` installed first:
 
 ```bash
 # Debian / Ubuntu
-sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev
+sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
 
 # Fedora / RHEL
-sudo dnf install -y cmake libdwarf-devel
+sudo dnf install -y cmake libdwarf-devel libzstd-devel
 ```
 
 ### From Git Repository (Recommended)

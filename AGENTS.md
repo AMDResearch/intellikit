@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** Python >= 3.10, ROCm >= 6.0 (7.0+ for linex), MI300+ GPUs for full GPU profiling. RDNA support (gfx1151/gfx1201) available for metrix. Note: Individual tools may support older Python versions (check each tool's `pyproject.toml`).
+**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; kerncap and linex target ROCm 7.0+ workflows. MI300+ GPUs are needed for the full profiling stack, while RDNA support (gfx1151/gfx1201) is available in metrix.
 
 ## Tool Descriptions
 
@@ -48,7 +48,7 @@ pip install -e kerncap/
 
 ## Testing
 
-All main tools now have `tests/` directories with pytest-based test suites:
+Most tools have pytest-based test suites under `tests/`:
 
 - **accordo**: `tests/` directory
 - **kerncap**: `tests/unit/` and `tests/integration/` with pytest markers (`docker`, `gpu`)
@@ -56,7 +56,7 @@ All main tools now have `tests/` directories with pytest-based test suites:
 - **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (`unit`, `integration`, `e2e`, `slow`)
 - **nexus**: `tests/` directory
 - **rocm_mcp**: `tests/` directory
-- **uprof_mcp**: `tests/` directory
+- **uprof_mcp**: no `tests/` directory yet; rely on examples/manual validation
 
 All tools also have `examples/` directories for usage demonstrations.
 
@@ -69,6 +69,8 @@ cd linex && pytest
 
 # Run specific test file
 pytest metrix/tests/unit/test_api.py
+pytest accordo/tests/test_mcp_server.py
+pytest kerncap/tests/unit/test_mcp_server.py
 
 # Run metrix tests by marker (defined in metrix/pytest.ini)
 pytest -m unit      # Fast unit tests
@@ -79,11 +81,14 @@ pytest -m slow     # Slow tests (> 5s)
 # Run kerncap unit tests (no GPU required)
 cd kerncap && pytest tests/unit/
 
+# Run MCP entrypoint tests (no GPU required; CLI transport parsing only)
+pytest accordo/tests/test_mcp_server.py
+pytest kerncap/tests/unit/test_mcp_server.py
+
 # Run rocm_mcp tests
 cd rocm_mcp && pytest tests/
 
-# Run uprof_mcp tests
-cd uprof_mcp && pytest tests/
+# uprof_mcp currently has examples but no pytest suite
 ```
 
 ## Linting
@@ -137,13 +142,11 @@ def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
 
 ### MCP Server Pattern
 
-All MCP servers have been migrated to FastMCP (version 2.0.0+) for streamable HTTP transport support:
-
-- **FastMCP migration**: All tools now use `fastmcp>=2.0.0` (uprof_mcp, rocm_mcp, metrix, linex, nexus, kerncap, accordo)
-- **Legacy MCP SDK**: Only accordo and kerncap still use `mcp[cli]` for compatibility
+All current MCP server implementations use `FastMCP`, and all tool packages now declare `fastmcp>=2.0.0` directly.
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
 - MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- `accordo` and `kerncap` both include lightweight pytest MCP entrypoint tests that stub `FastMCP` and verify CLI transport mapping (`stdio` vs `streamable-http`) without needing GPU or ROCm runtime access
 
 ### Nexus C++ Integration
 
@@ -156,7 +159,7 @@ All MCP servers have been migrated to FastMCP (version 2.0.0+) for streamable HT
 
 - C++ source in `kerncap/src/` (`.hip`, `.cpp` files)
 - Headers in `kerncap/src/` (`.hpp` files: `kerncap.hpp`, `kerncap_log.hpp`)
-- `libkerncap.so`: HSA tool library loaded via `HSA_TOOLS_LIB` for kernel capture
+- `libkerncap.so`: HSA tool library loaded via `LD_PRELOAD` (rocprofiler-sdk registration) for kernel capture
 - Built with scikit-build-core (CMake + HIP language support)
 - CLI commands: `kerncap profile`, `kerncap extract`, `kerncap replay`, `kerncap validate`
 - Supports both HIP and Triton kernel extraction
@@ -181,7 +184,7 @@ Not all tools follow the same directory structure:
 | **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skill/` | Yes |
 | **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skill/` | No |
 | **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A | No |
-| **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | `uprof_mcp/tests/` | N/A | No |
+| **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | none yet | N/A | No |
 | **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` | Yes |
 | **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skill/` | Yes |
 | **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` | No |
@@ -208,7 +211,7 @@ This affects import paths and where to find source code. Tools with CLI support 
   - Editable install: `pip install -e <tool>/`
   - Non-editable install: `pip install ./<tool>/`
   - GitHub install: `pip install 'git+https://github.com/AMDResearch/intellikit.git@<sha>#subdirectory=<tool>'`
-- **Pytest testing** (`intellikit-pytest.yml`): Runs `pytest` for accordo, kerncap, metrix, nexus, linex, and uprof_mcp
+- **Pytest testing** (`intellikit-pytest.yml`): Currently runs `pytest` for `accordo`, `kerncap`, `linex`, `metrix`, and `nexus`
 - **Lint** (`lint.yml`): Runs `ruff check` and `ruff format` on changed files
 
 ### Linting Enforcement
@@ -250,7 +253,7 @@ uprof-profiler-mcp = "uprof_mcp.uprof_profiler_mcp:main"
 
 ### MCP Transport Options
 
-All MCP servers support two transport modes via CLI arguments:
+All MCP servers expose transport selection via repo-local CLI arguments:
 
 | Argument | Default | Description |
 |----------|---------|-------------|
@@ -259,7 +262,7 @@ All MCP servers support two transport modes via CLI arguments:
 | `--port` | `8000` | HTTP server port (only for http transport) |
 | `--path` | (varies) | HTTP endpoint path (only for http transport) |
 
-Default HTTP paths per server:
+Repo-local default HTTP paths:
 
 | Server | Default Path |
 |--------|--------------|
@@ -285,9 +288,12 @@ metrix-mcp
 # Run MCP server with http transport (streamable)
 metrix-mcp --transport http --port 8001
 
-# Test other MCP servers
-kerncap-mcp --transport http --port 8002
-uprof-profiler-mcp --transport http --port 8003
+# Other servers with repo-local transport wrappers
+accordo-mcp --transport http --port 8002
+kerncap-mcp --transport http --port 8003
+linex-mcp --transport http --port 8004
+hip-compiler-mcp --transport http --port 8005
+uprof-profiler-mcp --transport http --port 8006
 
 # Or from the package directory with uv
 cd metrix && uv run metrix-mcp
@@ -323,17 +329,13 @@ Add to your Claude Desktop or other MCP client config:
 
 ### MCP Server Implementation Pattern
 
-All servers now use FastMCP for streamable HTTP transport:
+Current implementation pattern:
 
-- **Current**: Most tools use `fastmcp>=2.0.0` package
-  - Import: `from fastmcp import FastMCP`
-  - Supports both `stdio` and `http` transport modes
-  - Use `@mcp.tool()` decorator for tool definitions
-- **Legacy**: accordo and kerncap still use `mcp[cli]` (will migrate)
-  - Import: `from fastmcp import FastMCP` (same pattern)
+- Import `FastMCP` via `from fastmcp import FastMCP`
+- Use `@mcp.tool()` decorators for tool definitions
+- `main()` parses `--transport`, `--host`, `--port`, and `--path` and maps HTTP mode to `streamable-http`
 - Server code in `<tool>/mcp/server.py` or `<tool>/<tool>_mcp.py`
 - Follow async patterns for I/O operations
-- All servers support `--transport`, `--host`, `--port`, `--path` CLI arguments
 
 ## Common Development Workflows
 

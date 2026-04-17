@@ -239,6 +239,17 @@ def _find_hip_kernel(
     mangled_name: str = "",
 ) -> Optional[KernelSource]:
     """Locate a __global__ HIP kernel in a C++/HIP source tree."""
+    if mangled_name:
+        cc_path = _find_compile_commands_from_source_dir(source_dir)
+        if cc_path:
+            result = _find_hip_kernel_via_dwarf(
+                kernel_name, mangled_name, source_dir, cc_path, extra_defines
+            )
+            if result:
+                _logger.info("Source discovery via DWARF debug info succeeded")
+                return result
+            _logger.debug("DWARF discovery failed, falling back to source grep")
+
     search_files: List[str] = []
     for root, _, files in os.walk(source_dir):
         for fname in files:
@@ -706,6 +717,22 @@ def _find_translation_unit(
     return candidates[0]
 
 
+def _nm_has_symbol(nm_output: str, symbol: str) -> bool:
+    """Check whether *symbol* appears as an exact symbol in ``nm`` output.
+
+    Each ``nm`` output line has the form ``[address] type symbol``.  We compare
+    the symbol column for exact equality to avoid false positives when the
+    target is a prefix/substring of another symbol.
+    """
+    for line in nm_output.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[2] == symbol:
+            return True
+        if len(parts) == 2 and parts[1] == symbol:
+            return True
+    return False
+
+
 def _match_tu_via_object_symbols(
     mangled_name: str,
     candidates: List[Tuple[str, str, str]],
@@ -765,7 +792,7 @@ def _match_tu_via_object_symbols(
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             continue
 
-        if mangled_name in proc.stdout:
+        if _nm_has_symbol(proc.stdout, mangled_name):
             _logger.debug(
                 "Matched translation unit %s via nm on %s",
                 tu_path,
@@ -791,6 +818,300 @@ def _extract_output_path(tokens: List[str], working_dir: str) -> Optional[str]:
                 path = os.path.join(working_dir, path)
             return os.path.normpath(path)
     return None
+
+
+# ---------------------------------------------------------------------------
+# DWARF-based source discovery
+# ---------------------------------------------------------------------------
+
+
+def _find_tu_by_symbol(
+    mangled_name: str,
+    compile_commands_path: str,
+) -> Optional[Tuple[str, str, str, str]]:
+    """Find the translation unit that compiled a mangled symbol.
+
+    Scans all entries in ``compile_commands.json``, extracts object file
+    paths via ``-o``, and runs ``nm`` on each to find which one contains
+    *mangled_name*.
+
+    Returns ``(tu_path, compile_command, compile_dir, object_file_path)``
+    or ``None``.
+    """
+    import json as _json
+    import shlex
+
+    try:
+        with open(compile_commands_path, "r") as f:
+            entries = _json.load(f)
+    except (OSError, ValueError):
+        return None
+
+    for entry in entries:
+        entry_file = entry.get("file", "")
+        if not os.path.isabs(entry_file):
+            entry_file = os.path.join(entry.get("directory", ""), entry_file)
+        entry_abs = os.path.abspath(entry_file)
+
+        cmd_str = entry.get("command", "")
+        args = entry.get("arguments", [])
+        tokens = args if args else shlex.split(cmd_str) if cmd_str else []
+
+        obj_path = _extract_output_path(tokens, entry.get("directory", ""))
+        if not obj_path or not os.path.isfile(obj_path):
+            continue
+
+        try:
+            proc = subprocess.run(
+                ["nm", obj_path],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if proc.returncode != 0:
+                continue
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+
+        if _nm_has_symbol(proc.stdout, mangled_name):
+            cmd = cmd_str
+            if not cmd:
+                cmd = " ".join(shlex.quote(a) for a in args) if args else ""
+            directory = entry.get("directory", "")
+            _logger.debug(
+                "Found TU %s for symbol %s via nm on %s",
+                entry_abs,
+                mangled_name,
+                obj_path,
+            )
+            return entry_abs, cmd, directory, obj_path
+
+    return None
+
+
+def _extract_dwarf_source_files(obj_path: str) -> Optional[List[str]]:
+    """Extract source file paths from DWARF debug info in an object file.
+
+    Tries ``llvm-dwarfdump`` first (ships with ROCm at
+    ``/opt/rocm/llvm/bin/``), falls back to ``readelf``.
+    Returns a list of source file paths, or ``None`` if no debug info
+    is available.
+    """
+    rocm = os.environ.get("ROCM_PATH", "/opt/rocm")
+    for dwarfdump in [
+        os.path.join(rocm, "llvm", "bin", "llvm-dwarfdump"),
+        "/opt/rocm/llvm/bin/llvm-dwarfdump",
+        "llvm-dwarfdump",
+    ]:
+        try:
+            proc = subprocess.run(
+                [dwarfdump, "--debug-line", obj_path],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                files = _parse_llvm_dwarfdump_output(proc.stdout)
+                if files:
+                    return files
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+
+    try:
+        proc = subprocess.run(
+            ["readelf", "--debug-dump=decodedline", obj_path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            files = _parse_readelf_output(proc.stdout)
+            if files:
+                return files
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+
+    return None
+
+
+def _parse_llvm_dwarfdump_output(output: str) -> List[str]:
+    """Parse ``llvm-dwarfdump --debug-line`` output to extract source paths.
+
+    Extracts ``include_directories`` and ``file_names`` from the line table
+    prologue, then joins directory + filename to reconstruct full paths.
+    """
+    directories: Dict[int, str] = {}
+    files: List[str] = []
+
+    dir_re = re.compile(r'include_directories\[\s*(\d+)\]\s*=\s*"([^"]+)"')
+    for m in dir_re.finditer(output):
+        directories[int(m.group(1))] = m.group(2)
+
+    file_re = re.compile(
+        r"file_names\[\s*\d+\]:\s*\n"
+        r'\s+name:\s*"([^"]+)"\s*\n'
+        r"\s+dir_index:\s*(\d+)",
+    )
+    for m in file_re.finditer(output):
+        name = m.group(1)
+        dir_idx = int(m.group(2))
+        if os.path.isabs(name):
+            files.append(name)
+        elif dir_idx in directories:
+            files.append(os.path.join(directories[dir_idx], name))
+        else:
+            files.append(name)
+
+    seen: Set[str] = set()
+    unique: List[str] = []
+    for f in files:
+        norm = os.path.normpath(f)
+        if norm not in seen:
+            seen.add(norm)
+            unique.append(norm)
+
+    return unique
+
+
+def _parse_readelf_output(output: str) -> List[str]:
+    """Parse ``readelf --debug-dump=decodedline`` output for source paths.
+
+    Extracts file paths from ``CU:`` headers and decoded line-table data
+    rows.
+    """
+    files: Set[str] = set()
+
+    cu_re = re.compile(r"^CU:\s+(.+?):\s*$", re.MULTILINE)
+    for m in cu_re.finditer(output):
+        path = m.group(1).strip()
+        if path:
+            files.add(os.path.normpath(path))
+
+    line_re = re.compile(r"^(\S+)\s+\d+\s+0x", re.MULTILINE)
+    for m in line_re.finditer(output):
+        path = m.group(1).strip()
+        if path and "/" in path:
+            files.add(os.path.normpath(path))
+
+    return sorted(files)
+
+
+def _pick_main_file(user_files: List[str], base_name: str) -> str:
+    """Pick the best main_file from DWARF-discovered user source files.
+
+    Preference order:
+    1. Compilable source (.cu/.hip/.cpp) whose basename contains *base_name*
+    2. Any compilable source file
+    3. Header whose basename contains *base_name*
+    4. First file in the list
+    """
+    source_exts = (".cu", ".hip", ".cpp", ".cxx", ".cc")
+
+    for f in user_files:
+        if f.endswith(source_exts) and base_name in os.path.basename(f):
+            return f
+
+    for f in user_files:
+        if f.endswith(source_exts):
+            return f
+
+    for f in user_files:
+        if base_name in os.path.basename(f):
+            return f
+
+    return user_files[0]
+
+
+def _find_hip_kernel_via_dwarf(
+    kernel_name: str,
+    mangled_name: str,
+    source_dir: str,
+    compile_commands_path: str,
+    extra_defines: Optional[List[str]] = None,
+) -> Optional[KernelSource]:
+    """Find a HIP kernel source via DWARF debug info in object files.
+
+    Works backward from the compiled object: use the mangled symbol to
+    find the object file, read its DWARF line tables to discover which
+    source files contributed, then filter by *source_dir* to separate
+    user code from framework/system headers.
+    """
+    tu_match = _find_tu_by_symbol(mangled_name, compile_commands_path)
+    if not tu_match:
+        _logger.debug("DWARF: no TU found for symbol %s", mangled_name)
+        return None
+
+    tu_path, compile_cmd, compile_dir, obj_path = tu_match
+
+    dwarf_files = _extract_dwarf_source_files(obj_path)
+    if not dwarf_files:
+        _logger.debug("DWARF: no debug info in %s", obj_path)
+        return None
+
+    if compile_dir:
+        dwarf_files = [
+            os.path.join(compile_dir, f) if not os.path.isabs(f) else f for f in dwarf_files
+        ]
+
+    abs_source_dir = os.path.abspath(source_dir)
+    user_files = [
+        f
+        for f in dwarf_files
+        if os.path.abspath(f).startswith(abs_source_dir + os.sep) and os.path.isfile(f)
+    ]
+
+    if not user_files:
+        _logger.debug(
+            "DWARF: none of %d source files are under %s",
+            len(dwarf_files),
+            source_dir,
+        )
+        return None
+
+    base_name = _extract_base_name(kernel_name)
+    main_file = _pick_main_file(user_files, base_name)
+
+    compile_defines = list(extra_defines or [])
+    include_paths: List[str] = []
+
+    if compile_cmd:
+        cc_defines = _extract_defines_from_command(compile_cmd, [])
+        cc_includes = _extract_includes_from_command(
+            compile_cmd,
+            [],
+            working_dir=compile_dir,
+        )
+        if cc_defines:
+            merged_defs: Dict[str, Optional[str]] = {}
+            for d in cc_defines:
+                k, _, v = d.partition("=")
+                merged_defs[k] = v or None
+            for d in extra_defines or []:
+                k, _, v = d.partition("=")
+                merged_defs[k] = v or None
+            compile_defines = [f"{k}={v}" if v else k for k, v in merged_defs.items()]
+        if cc_includes:
+            include_paths = cc_includes
+
+    _logger.info(
+        "DWARF discovery: %d user files, main_file=%s, TU=%s",
+        len(user_files),
+        main_file,
+        tu_path,
+    )
+
+    return KernelSource(
+        language="hip",
+        kernel_name=kernel_name,
+        main_file=main_file,
+        source_files=user_files,
+        include_paths=include_paths or _detect_include_paths(source_dir),
+        compile_defines=compile_defines,
+        kernel_function=base_name,
+        translation_unit=tu_path,
+        compile_command=compile_cmd,
+        compile_dir=compile_dir,
+    )
 
 
 # ---------------------------------------------------------------------------

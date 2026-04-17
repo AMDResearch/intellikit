@@ -54,7 +54,12 @@ from .snapshot import Snapshot
 from .validator import Accordo
 
 # Version
-__version__ = "0.4.0"
+from importlib.metadata import PackageNotFoundError, version as _get_version
+
+try:
+    __version__ = _get_version("accordo")
+except PackageNotFoundError:
+    __version__ = "0.4.0"
 
 # Public API
 __all__ = [

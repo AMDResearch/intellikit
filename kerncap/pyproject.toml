@@ -10,14 +10,14 @@ name = "kerncap"
 dynamic = ["version"]
 description = "Kernel extraction and isolation tool for HIP and Triton applications on AMD GPUs"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.20",
     "jinja2>=3.0",
     "click>=8.0",
     "libclang>=18.1",
-    "mcp[cli]",
+    "fastmcp>=2.0.0",
 ]
 
 [project.urls]
@@ -40,6 +40,7 @@ kerncap-mcp = "kerncap.mcp.server:main"
 cmake.build-type = "Release"
 wheel.packages = ["kerncap"]
 wheel.install-dir = "kerncap"
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 
 [tool.scikit-build.cmake.define]
 CMAKE_INSTALL_LIBDIR = "lib"

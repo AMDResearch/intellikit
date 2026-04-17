@@ -150,8 +150,9 @@ done
 require_python_ge_310
 
 # --- System dependency check for tools with C++ builds ---
-# accordo and nexus depend on KernelDB which requires cmake and libdwarf-dev
-# to compile. Without these, pip install will fail during the C++ build step.
+# accordo and nexus depend on KernelDB which requires cmake, libdwarf-dev,
+# and libzstd-dev to compile. Without these, pip install will fail during
+# the C++ build step.
 needs_native_deps() {
   local t
   for t in "$@"; do
@@ -165,14 +166,20 @@ check_system_deps() {
   if ! command -v cmake >/dev/null 2>&1; then
     missing+=(cmake)
   fi
-  # Check for libdwarf header (dpkg on Debian/Ubuntu, rpm on Fedora/RHEL)
+  # Check for libdwarf and libzstd headers (dpkg on Debian/Ubuntu, rpm on Fedora/RHEL)
   if command -v dpkg >/dev/null 2>&1; then
     if ! dpkg -s libdwarf-dev >/dev/null 2>&1; then
       missing+=(libdwarf-dev)
     fi
+    if ! dpkg -s libzstd-dev >/dev/null 2>&1; then
+      missing+=(libzstd-dev)
+    fi
   elif command -v rpm >/dev/null 2>&1; then
     if ! rpm -q libdwarf-devel >/dev/null 2>&1; then
       missing+=(libdwarf-devel)
+    fi
+    if ! rpm -q libzstd-devel >/dev/null 2>&1; then
+      missing+=(libzstd-devel)
     fi
   fi
   if [[ ${#missing[@]} -gt 0 ]]; then
