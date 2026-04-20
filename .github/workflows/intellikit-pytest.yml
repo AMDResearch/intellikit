@@ -4,6 +4,8 @@
 # Run pytest for IntelliKit packages (accordo, metrix, nexus, linex).
 # Matrix: package × install_method (editable / non-editable).
 # Non-editable exercises installed .so in package dir and would catch install bugs.
+#
+# SIF under $HOME/apptainer/ (INTELLIKIT_SIF_HOME) survives checkout clean for follow-on jobs.
 
 name: Intellikit Pytest
 
@@ -17,6 +19,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  INTELLIKIT_SIF_HOME: "1"
 
 jobs:
   detect-changes:
@@ -111,6 +116,5 @@ jobs:
             else
               pip install ./${{ matrix.package }}
             fi
-            cd ${{ matrix.package }}
-            python3 -m pytest tests -v --tb=short
+            python3 -m pytest ${{ matrix.package }}/tests -v --tb=short
           "

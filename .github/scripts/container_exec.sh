@@ -5,8 +5,8 @@
 # Simple Apptainer container exec script
 # Usage: container_exec.sh <command>
 #
-# Image: defaults to <repo>/apptainer/images/intellikit.sif (same as apptainer/build.sh).
-#        Override with INTELLIKIT_SIF=/path/to/image.sif
+# Image: INTELLIKIT_SIF if set; else if INTELLIKIT_SIF_HOME=1 use $HOME/apptainer/intellikit.sif
+#       (matches container_build.sh for CI); else <repo>/apptainer/images/intellikit.sif.
 #
 # Overlay: ephemeral .img files under <repo>/apptainer/overlays/ (created per run, removed after).
 #          Override directory with INTELLIKIT_OVERLAY_DIR=/path/to/dir
@@ -30,7 +30,13 @@ if ! command -v apptainer &> /dev/null; then
     exit 1
 fi
 
-IMAGE="${INTELLIKIT_SIF:-${_REPO_ROOT}/apptainer/images/intellikit.sif}"
+if [ -n "${INTELLIKIT_SIF:-}" ]; then
+    IMAGE="${INTELLIKIT_SIF}"
+elif [ "${INTELLIKIT_SIF_HOME:-}" = "1" ]; then
+    IMAGE="${HOME}/apptainer/intellikit.sif"
+else
+    IMAGE="${_REPO_ROOT}/apptainer/images/intellikit.sif"
+fi
 if [ ! -f "$IMAGE" ]; then
     echo "[ERROR] Apptainer image not found at $IMAGE" >&2
     echo "[ERROR] Build with: bash apptainer/build.sh  (from repo root) or set INTELLIKIT_SIF" >&2
