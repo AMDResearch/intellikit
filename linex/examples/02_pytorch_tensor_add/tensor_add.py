@@ -24,6 +24,14 @@ def main(argv: list[str] | None = None) -> int:
         metavar="N",
         help="Square matrix side length (default: 4096).",
     )
+    parser.add_argument(
+        "--iters",
+        type=int,
+        default=100,
+        metavar="I",
+        help="Number of times to repeat the tensor add (default: 100). "
+             "Higher values give SQTT more time to capture waves on the target CU.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -42,12 +50,13 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 60)
     print("Example: PyTorch tensor add (element-wise)")
     print("=" * 60)
-    print(f"Matrix size: {n} x {n}")
+    print(f"Matrix size: {n} x {n}, iters: {args.iters}")
     print("Step 1: Allocating random tensors on GPU...")
     a = torch.randn(n, n, device=device)
     b = torch.randn(n, n, device=device)
     print("Step 2: Running c = a + b ...")
-    c = a + b
+    for _ in range(args.iters):
+        c = a + b
     print("Step 3: Synchronizing and printing checksum...")
     torch.cuda.synchronize()
     print(f"sum(a+b) = {float(c.sum().cpu()):.6f}")
