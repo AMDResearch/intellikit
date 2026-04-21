@@ -4,7 +4,8 @@
 // Mini pipeline: five GPU kernels exercising common patterns
 // (elementwise, scaling, fused bias+ReLU, shift, atomic histogram).
 //
-// Compile:  hipcc -O2 -o mini_pipeline mini_pipeline.hip
+// Compile:  hipcc -O2 -o mini_pipeline mini_pipeline.hip   (from this directory)
+// Or from kerncap root:  hipcc -O2 -o mini_pipeline examples/01_extract_and_replay/mini_pipeline.hip
 // Run:      ./mini_pipeline
 
 #include <algorithm>
