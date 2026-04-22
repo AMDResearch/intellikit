@@ -117,7 +117,7 @@ trace.save("my_trace.json")
 old_trace = Nexus.load("my_trace.json")
 ```
 
-For more details, see the [examples directory](examples/).
+For more details, see the [examples directory](examples/README.md) (HIP, Triton, and **PyTorch** in `06_pytorch_tensor_add` / `07_pytorch_matmul`).
 
 ### Command Line Usage
 

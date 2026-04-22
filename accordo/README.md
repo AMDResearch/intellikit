@@ -133,6 +133,8 @@ The CLI passes each flag as a **single executable path** (no embedded spaces or 
 See `examples/` directory for complete examples:
 - `01_reduction/` - Basic reduction kernel validation
 - `02_template_kernel/` - Template kernel validation
+- `03_pytorch_tensor_add/` - Element-wise add: HIP ref/opt for Accordo + optional PyTorch `tensor_add.py`
+- `04_pytorch_matmul/` - Small square matmul: HIP ref/opt + optional PyTorch `tensor_matmul.py`
 
 ## License
 

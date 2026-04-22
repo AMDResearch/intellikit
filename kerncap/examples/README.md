@@ -1,57 +1,23 @@
-# Kerncap Examples
+# Kerncap examples
 
-Examples demonstrating how to use kerncap to extract, replay, and validate GPU kernels.
+Small workloads and drivers you can run locally. Layout matches other IntelliKit tools: **numbered directories** under `kerncap/examples/` (see [Metrix](../../metrix/examples/README.md), [Linex](../../linex/examples/README.md), [Nexus](../../nexus/examples/README.md)).
 
-## Examples
+Run scripts from the **`kerncap/` package root** (so imports resolve), or `cd` into an example folder and run the paths shown in each README.
 
-### `extract_and_replay.py`
+| Directory | What it is |
+|-----------|------------|
+| [**01_extract_and_replay**](01_extract_and_replay/) | HIP app with five kernels (`mini_pipeline.hip`); `extract_and_replay.py` runs profile → extract → replay → validate. |
+| [**02_pytorch_tensor_add**](02_pytorch_tensor_add/) | PyTorch element-wise add (`tensor_add.py`); `profile_with_kerncap.py` profiles via `Kerncap` and optionally extracts by `--kernel` substring. |
+| [**03_pytorch_matmul**](03_pytorch_matmul/) | PyTorch matrix multiply (`tensor_matmul.py`); same driver pattern as 02. |
 
-Full kerncap pipeline on a multi-kernel HIP application.
+## Requirements (shared)
 
-**Run:**
-```bash
-python examples/extract_and_replay.py
-```
+- **kerncap**: `pip install -e .` from the `kerncap/` package root (see [Kerncap README](../README.md))
+- **HIP / full pipeline (01)**: ROCm with `hipcc`, `rocprofv3`, visible AMD GPU
+- **PyTorch examples (02–03)**: ROCm (or CUDA) PyTorch with a visible GPU, plus ROCm tooling for profiling
 
-**What it does:**
-- Compiles `mini_pipeline.hip` (five GPU kernels in a single file)
-- Profiles the application to rank kernels by GPU time
-- Extracts the target kernel into a standalone reproducer
-- Replays the captured kernel in isolation and reports timing
-- Validates the reproducer for correctness
+## Slurm (cluster GPU node)
 
-**Options:**
-```bash
-# Extract a different kernel (default: vector_scale)
-python examples/extract_and_replay.py --kernel histogram_atomic
+From the IntelliKit repo root, submit [`kerncap/slurm/test_pytorch_examples_mi300_1x.sbatch`](../slurm/test_pytorch_examples_mi300_1x.sbatch) (tune `#SBATCH` for your site). The job runs the PyTorch example scripts, both `profile_with_kerncap.py` drivers (profile-only), and `pytest tests/integration/test_pytorch_tensor_add_example.py`.
 
-# Benchmark with more iterations
-python examples/extract_and_replay.py --iterations 50
-
-# Save the reproducer to a specific directory
-python examples/extract_and_replay.py --output ./my_reproducer
-```
-
-### `mini_pipeline.hip`
-
-A standalone HIP application with five kernels exercising common GPU patterns:
-
-| Kernel | Pattern |
-|--------|---------|
-| `vector_add` | Elementwise addition |
-| `vector_scale` | Scalar multiplication |
-| `vector_bias_relu` | Fused bias + ReLU activation |
-| `vector_shift` | Elementwise shift |
-| `histogram_atomic` | Atomic histogram (different grid size) |
-
-**Compile and run directly:**
-```bash
-hipcc -O2 -o mini_pipeline examples/mini_pipeline.hip
-./mini_pipeline
-```
-
-## Prerequisites
-
-- ROCm installed (`hipcc`, `rocprofv3` on PATH)
-- AMD GPU (MI300+ recommended)
-- kerncap installed: `pip install -e kerncap/`
+Optional: set `KERNCAP_SLURM_PYTORCH_KERNEL` to a kernel name substring (from a prior profile) to also run extract → replay → validate on the tensor-add example.

@@ -7,7 +7,9 @@ set -e
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 parent_dir="$(dirname "$script_dir")"
 
-cd $parent_dir
+cd "$parent_dir"
+
+mkdir -p "${parent_dir}/apptainer/overlays"
 
 size=1024
 while getopts "s:" opt; do
@@ -22,12 +24,12 @@ while getopts "s:" opt; do
     esac
 done
 
-# Create a new filesystem image overlay for this run
+# Writable overlay under apptainer/overlays/ (same convention as .github/scripts/container_exec.sh)
 timestamp=$(date +%s)
-overlay="/tmp/intellikit_overlay_$(whoami)_${timestamp}.img"
-echo "[Log] Overlay image ${overlay} does not exist. Creating overlay of ${size} MiB..."
-apptainer overlay create --size ${size} --create-dir /var/cache/intellikit ${overlay}
-echo "[Log] Utilize the directory /var/cache/intellikit as a sandbox to store data you'd like to persist between container runs."
+overlay="${parent_dir}/apptainer/overlays/intellikit_overlay_$(whoami)_${timestamp}.img"
+echo "[Log] Creating overlay (${size} MiB): ${overlay}"
+apptainer overlay create --size "${size}" --create-dir /var/cache/intellikit "${overlay}"
+echo "[Log] Overlay persists until you remove the .img; /var/cache/intellikit inside the overlay can hold writable state."
 
 # Run the container
 image="apptainer/images/intellikit.sif"
