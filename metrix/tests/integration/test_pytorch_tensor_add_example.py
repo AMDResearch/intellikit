@@ -13,10 +13,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "examples"
-    / "02_pytorch_tensor_add"
-    / "tensor_add.py"
+    Path(__file__).resolve().parents[2] / "examples" / "02_pytorch_tensor_add" / "tensor_add.py"
 )
 
 

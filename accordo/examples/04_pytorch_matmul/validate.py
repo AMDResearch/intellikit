@@ -157,9 +157,7 @@ def main() -> int:
                 kernel_name="matmul_nn",
                 working_directory=str(tmp_path),
             )
-            print(
-                f"  Kernel arguments: {[f'{n}:{t}' for n, t in validator.kernel_args]}"
-            )
+            print(f"  Kernel arguments: {[f'{n}:{t}' for n, t in validator.kernel_args]}")
             print("  Validator ready\n")
         except Exception as e:
             print(f"Failed: {e}")
@@ -167,9 +165,7 @@ def main() -> int:
 
         print("Step 3: Capturing baseline snapshot...")
         try:
-            baseline_snap = validator.capture_snapshot(
-                binary=str(baseline_bin), timeout_seconds=60
-            )
+            baseline_snap = validator.capture_snapshot(binary=str(baseline_bin), timeout_seconds=60)
             print(
                 f"  Captured: {len(baseline_snap.arrays)} arrays in "
                 f"{baseline_snap.execution_time_ms:.2f}ms\n"
@@ -192,9 +188,7 @@ def main() -> int:
             return 1
 
         print("Step 5: Comparing snapshots...")
-        result = validator.compare_snapshots(
-            baseline_snap, optimized_snap, atol=1e-3, rtol=1e-4
-        )
+        result = validator.compare_snapshots(baseline_snap, optimized_snap, atol=1e-3, rtol=1e-4)
 
         print("=" * 80)
         if result.is_valid:

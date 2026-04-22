@@ -31,6 +31,24 @@ vector_add_template
 
 # Apptainer images
 *.sif
+*.err
+*.out
+*.img
+# Tracked pip list for vLLM layer (negate root *.txt ignore)
+!apptainer/requirements-vllm.txt
+
+# Apptainer build temp (large; default for container_build.sh)
+apptainer/.apptainer-tmp/
+apptainer/.apptainer-cache/
+apptainer/.apptainer-*
+# Local Apptainer build cache (e.g. layer blobs during SIF builds)
+.apptainer-build-cache/
+
+# Container runner temp (TMPDIR under bind mount; apptainer/run_tests_and_examples.sh)
+.container_tmp/
+
+# Apptainer overlay disk images (runtime; keep apptainer/overlays/ in repo via .gitkeep)
+apptainer/overlays/*.img
 
 
 # Resources

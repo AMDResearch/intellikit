@@ -74,7 +74,9 @@ def main() -> int:
         print(f"    ... ({len(profile) - 20} more)")
 
     if not args.kernel:
-        print("\n  Profile only. Re-run with --kernel <substring> to extract a kernel from the list.")
+        print(
+            "\n  Profile only. Re-run with --kernel <substring> to extract a kernel from the list."
+        )
         return 0
 
     matching = [k for k in profile if args.kernel in k.name]

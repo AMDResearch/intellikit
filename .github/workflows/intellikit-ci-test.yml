@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 #
-# SIF is built under $HOME/apptainer/ (INTELLIKIT_SIF_HOME) so it survives checkout git clean
+# SIF is built as $HOME/apptainer/intellikit-dev.sif (INTELLIKIT_SIF_HOME) so it survives checkout git clean
 # and is visible to later jobs on the same runner, like the original CI layout.
 
 name: Intellikit CI Test

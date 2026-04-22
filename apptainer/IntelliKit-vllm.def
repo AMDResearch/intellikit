@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 #
-# Base IntelliKit ROCm image (PyTorch + Triton). For vLLM from source, use IntelliKit-vllm.def.
+# IntelliKit ROCm image + vLLM built from source against the base image PyTorch
+# (use_existing_torch.py). For the smaller image without vLLM, use intellikit.def.
 
 Bootstrap: docker
 From: rocm/pytorch:rocm7.1_ubuntu24.04_py3.13_pytorch_release_2.9.1
+
+%files
+    apptainer/requirements-vllm.txt /tmp/requirements-vllm-intellikit.txt
 
 %post
     /bin/bash -c "
@@ -35,6 +39,22 @@ From: rocm/pytorch:rocm7.1_ubuntu24.04_py3.13_pytorch_release_2.9.1
     cd \$TRITON_PATH
     git checkout 715f6b1d442601436bf8d462db6ff8e17aec8cfb
     pip3 install -e .
+
+    # ----- vLLM from source (existing torch / triton in image) -----
+    mkdir -p /app
+    git clone --depth 1 --branch v0.16.0 https://github.com/vllm-project/vllm.git /app/vllm
+    cd /app/vllm
+    python3 use_existing_torch.py
+    sed -i '/^torch[=><!]/d' requirements/build.txt
+    pip3 install -r /tmp/requirements-vllm-intellikit.txt
+    export PYTORCH_ROCM_ARCH=\"gfx942\"
+    export MAX_JOBS=\"\${MAX_JOBS:-8}\"
+    pip3 install -r requirements/build.txt
+    # Use pip (not setup.py install): setuptools/easy_install re-resolves deps and
+    # can pick aiohttp 4.0.0a1 for aiohttp>=3.13.3, which fails on Python 3.13 (longintrepr.h).
+    printf '%s\n' 'aiohttp>=3.13.3,<4' > /tmp/vllm-pip-constraints.txt
+    PIP_CONSTRAINT=/tmp/vllm-pip-constraints.txt pip3 install --no-build-isolation . 2>&1 | tee /tmp/vllm-build.log
+    rm -f /tmp/requirements-vllm-intellikit.txt
     "
 
 %environment
@@ -46,5 +66,5 @@ From: rocm/pytorch:rocm7.1_ubuntu24.04_py3.13_pytorch_release_2.9.1
     export PATH="$ROCM_PATH/bin:$PATH"
 
 %runscript
-    echo "Welcome to the Intellikit ROCm-aware Apptainer image!"
+    echo "Welcome to the IntelliKit + vLLM ROCm Apptainer image!"
     exec "$@"

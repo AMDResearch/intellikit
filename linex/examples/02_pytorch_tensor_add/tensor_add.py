@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
         default=100,
         metavar="I",
         help="Number of times to repeat the tensor add (default: 100). "
-             "Higher values give SQTT more time to capture waves on the target CU.",
+        "Higher values give SQTT more time to capture waves on the target CU.",
     )
     args = parser.parse_args(argv)
 

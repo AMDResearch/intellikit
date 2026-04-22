@@ -57,6 +57,7 @@ ENV/
 env.bak/
 venv.bak/
 .venv/
+.slurm_venv/
 
 # IDEs
 .vscode/

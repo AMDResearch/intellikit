@@ -38,8 +38,8 @@ def test_linex_profile_pytorch_tensor_add(require_example_torch_cuda_rocprof):
     """README-style: Linex().profile on tensor_add.py with a temp SQTT output dir."""
     with tempfile.TemporaryDirectory(prefix="linex_pytorch_test_") as tmp_dir:
         tmp_path = Path(tmp_dir)
-        # Larger than 256 helps rocprof/SQTT see waves on the forced CU (Linex sets HSA_CU_MASK).
-        cmd = f"{sys.executable} {SCRIPT} --size 2048"
+        # --size 2048 and --iters 500 ensure SQTT captures waves on the forced CU (Linex sets HSA_CU_MASK).
+        cmd = f"{sys.executable} {SCRIPT} --size 2048 --iters 500"
         profiler = Linex()
         profiler.profile(command=cmd, output_dir=str(tmp_path / "sqtt_out"))
     assert len(profiler.instructions) >= 1

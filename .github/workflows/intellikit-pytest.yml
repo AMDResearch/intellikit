@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 #
-# Run pytest for IntelliKit packages (accordo, metrix, nexus, linex).
+# Run pytest for IntelliKit packages (accordo, kerncap, linex, metrix, nexus).
 # Matrix: package × install_method (editable / non-editable).
 # Non-editable exercises installed .so in package dir and would catch install bugs.
 #
-# SIF under $HOME/apptainer/ (INTELLIKIT_SIF_HOME) survives checkout clean for follow-on jobs.
+# SIF as $HOME/apptainer/intellikit-dev.sif (INTELLIKIT_SIF_HOME) survives checkout clean for follow-on jobs.
 
 name: Intellikit Pytest
 
