@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
-#
-# Base IntelliKit ROCm image (PyTorch + Triton). For vLLM from source, use IntelliKit-vllm.def.
 
 Bootstrap: docker
 From: rocm/pytorch:rocm7.1_ubuntu24.04_py3.13_pytorch_release_2.9.1
