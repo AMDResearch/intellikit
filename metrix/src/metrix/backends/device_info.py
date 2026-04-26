@@ -168,11 +168,11 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
             f"memory_clock_rate_khz={mem_clock}, memory_bus_width_bits={bus_width}"
         )
     if arch.startswith(("gfx94", "gfx95")):
-        mem_multiplier = 4.0   # HBM3/HBM3e: CK → 4x
+        mem_multiplier = 4.0  # HBM3/HBM3e: CK → 4x
     elif arch.startswith("gfx1"):
         mem_multiplier = 16.0  # GDDR6: base CK → 16x (16n prefetch)
     else:
-        mem_multiplier = 2.0   # HBM2/HBM2e: data strobe → 2x (DDR)
+        mem_multiplier = 2.0  # HBM2/HBM2e: data strobe → 2x (DDR)
     hbm_bw_gbs = mem_multiplier * mem_clock * 1e3 * bus_width / 8.0 / 1e9
 
     return DeviceSpecs(
