@@ -235,8 +235,8 @@ class CounterBackend(ABC):
         for match in re.finditer(r"reduce\(([A-Z_0-9]+),\s*(?:sum|max|min)\)", expression):
             counters.add(match.group(1))
 
-        # Extract standalone counter names (uppercase identifiers)
-        for match in re.finditer(r"\b([A-Z][A-Z_0-9]*(?:_sum)?)\b", expression):
+        # Extract standalone counter names (ALL_CAPS raw counters and PascalCase SDK derived counters)
+        for match in re.finditer(r"\b([A-Z][A-Za-z_0-9]*(?:_sum)?)\b", expression):
             counter_name = match.group(1)
             if counter_name not in self._builtin_expression_vars:
                 counters.add(counter_name)

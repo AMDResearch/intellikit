@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# gpu_query binary: locate source, compile on first use, cache
+# gpu_query binary: locate source, compile on first use
 # ---------------------------------------------------------------------------
 _GPU_QUERY_SOURCE = "gpu_query.hip"
 
@@ -55,29 +54,23 @@ def _find_hip_source() -> Optional[Path]:
     return None
 
 
-def _get_cache_dir() -> Path:
-    """Return a user-writable cache directory for compiled binaries."""
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    base = Path(xdg) if xdg else Path.home() / ".cache"
-    cache = base / "metrix"
-    cache.mkdir(parents=True, exist_ok=True)
-    return cache
+_compiled_binary: Optional[Path] = None
 
 
 def _compile_gpu_query(source: Path) -> Path:
-    """Compile gpu_query.hip with hipcc if not already cached."""
-    cache = _get_cache_dir()
-    binary = cache / "gpu_query"
-
-    # Recompile if binary missing or source is newer
-    if binary.is_file() and binary.stat().st_mtime >= source.stat().st_mtime:
-        return binary
+    """Compile gpu_query.hip with hipcc into a temporary file (once per process)."""
+    global _compiled_binary
+    if _compiled_binary is not None and _compiled_binary.is_file():
+        return _compiled_binary
 
     hipcc = shutil.which("hipcc")
     if hipcc is None:
         raise RuntimeError("hipcc not found on PATH. Install ROCm or add hipcc to PATH.")
 
-    logger.info("Compiling gpu_query.hip (first run only)...")
+    import tempfile
+
+    binary = Path(tempfile.mktemp(prefix="metrix_gpu_query_"))
+
     try:
         proc = subprocess.run(
             [hipcc, str(source), "-o", str(binary), "-O2"],
@@ -91,6 +84,7 @@ def _compile_gpu_query(source: Path) -> Path:
     if proc.returncode != 0:
         raise RuntimeError(f"hipcc failed (rc={proc.returncode}):\n{proc.stderr}")
 
+    _compiled_binary = binary
     return binary
 
 
@@ -147,11 +141,9 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     results = _run_gpu_query(device_id)
     gpu = results[0]
     hw_arch = gpu["gcn_arch_name"].split(":")[0]
-
-    if hw_arch != arch:
-        raise RuntimeError(
-            f"Architecture mismatch: requested {arch} but device {device_id} is {hw_arch}"
-        )
+    # Use the actual hardware arch, not the requested one — get_backend()
+    # already maps aliases (gfx1103 -> GFX1100Backend, gfx950 -> GFX942Backend)
+    arch = hw_arch
 
     # Convert raw HIP values to DeviceSpecs units
     wavefront_size = gpu["wavefront_size"]
@@ -167,8 +159,7 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     #   HBM2/HBM2e (gfx90a): MCLK = data strobe clock, DDR → 2x multiplier
     #   HBM3 (gfx94x):       MCLK = CK (command clock) = half the data strobe → 4x
     #   HBM3e (gfx95x):      same as HBM3 → 4x
-    #   GDDR6 (RDNA):        MCLK = data clock, DDR → 2x
-    # Ref: ROCm/rocm-systems projects/clr/rocclr/device/rocm/rocdevice.cpp
+    #   GDDR6 (RDNA):        MCLK = base CK; 16n prefetch → 16x multiplier
     mem_clock = gpu["memory_clock_rate_khz"]
     bus_width = gpu["memory_bus_width_bits"]
     if mem_clock <= 0 or bus_width <= 0:
@@ -176,7 +167,12 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
             f"Device {device_id} ({arch}) reported invalid memory specs: "
             f"memory_clock_rate_khz={mem_clock}, memory_bus_width_bits={bus_width}"
         )
-    mem_multiplier = 4.0 if arch.startswith(("gfx94", "gfx95")) else 2.0
+    if arch.startswith(("gfx94", "gfx95")):
+        mem_multiplier = 4.0  # HBM3/HBM3e: CK → 4x
+    elif arch.startswith("gfx1"):
+        mem_multiplier = 16.0  # GDDR6: base CK → 16x (16n prefetch)
+    else:
+        mem_multiplier = 2.0  # HBM2/HBM2e: data strobe → 2x (DDR)
     hbm_bw_gbs = mem_multiplier * mem_clock * 1e3 * bus_width / 8.0 / 1e9
 
     return DeviceSpecs(

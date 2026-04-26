@@ -19,6 +19,22 @@ def _hw_arch():
 HW_ARCH = _hw_arch()
 
 
+def _hw_metrics():
+    """Get the set of available metrics on the detected hardware."""
+    if HW_ARCH is None:
+        return set()
+    try:
+        from metrix.backends import get_backend
+
+        backend = get_backend(HW_ARCH)
+        return set(backend.get_available_metrics())
+    except (ValueError, RuntimeError):
+        return set()
+
+
+HW_METRICS = _hw_metrics()
+
+
 @pytest.fixture(autouse=True)
 def skip_arch_mismatch(request):
     """Skip tests parameterized with an arch that doesn't match this GPU."""
@@ -35,4 +51,31 @@ def requires_arch(arch: str):
     return pytest.mark.skipif(
         HW_ARCH != arch,
         reason=f"requires {arch} but this machine has {HW_ARCH}",
+    )
+
+
+def requires_cdna():
+    """Decorator: skip a test unless the machine has a CDNA GPU (gfx9xx)."""
+    return pytest.mark.skipif(
+        HW_ARCH is None or not HW_ARCH.startswith("gfx9"),
+        reason=f"requires CDNA (gfx9xx) but this machine has {HW_ARCH}",
+    )
+
+
+def requires_metric(*metric_names: str):
+    """Decorator: skip a test unless the detected GPU supports the given metric(s).
+
+    Usage:
+        @requires_metric("memory.coalescing_efficiency")
+        def test_coalescing(self): ...
+
+        @requires_metric("compute.total_flops", "compute.hbm_gflops")
+        def test_flops(self): ...
+    """
+    missing = [m for m in metric_names if m not in HW_METRICS]
+    return pytest.mark.skipif(
+        HW_ARCH is None or len(missing) > 0,
+        reason=(f"requires metric(s) {', '.join(missing)} but {HW_ARCH} does not support them")
+        if missing
+        else "no GPU detected",
     )
