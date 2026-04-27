@@ -82,6 +82,11 @@ CaptureState::CaptureState(
 
     const char* disp_env = std::getenv("KERNCAP_DISPATCH");
     target_dispatch_ = disp_env ? std::atoi(disp_env) : -1;
+    const char* trace_env = std::getenv("KERNCAP_TRACE_DISPATCHES");
+    trace_dispatch_limit_ = trace_env ? std::strtoull(trace_env, nullptr, 10) : 0;
+    const char* trace_per_queue_env = std::getenv("KERNCAP_TRACE_DISPATCHES_PER_QUEUE");
+    trace_dispatch_per_queue_limit_ =
+        trace_per_queue_env ? std::strtoull(trace_per_queue_env, nullptr, 10) : 0;
 
     // Fork safety: record PID and check for multi-process mode
     initial_pid_ = getpid();
@@ -104,6 +109,15 @@ CaptureState::CaptureState(
                      target_kernel_.c_str(),
                      target_dispatch_ < 0 ? "first match" : std::to_string(target_dispatch_).c_str(),
                      output_dir_.c_str());
+    }
+    if (trace_dispatch_limit_ > 0) {
+        KERNCAP_INFO("Dispatch tracing enabled for first %" PRIu64 " dispatches",
+                     trace_dispatch_limit_);
+    }
+    if (trace_dispatch_per_queue_limit_ > 0) {
+        KERNCAP_INFO("Per-queue dispatch tracing enabled for first %" PRIu64
+                     " dispatches on each queue",
+                     trace_dispatch_per_queue_limit_);
     }
 
     // Create output directory
@@ -149,7 +163,9 @@ void CaptureState::reset_inherited_state() {
     executable_blobs_.clear();
     kernel_hsaco_.clear();
     queue_agents_.clear();
+queue_dispatch_seen_.clear();
     target_dispatch_count_ = 0;
+dispatch_seen_count_.store(0, std::memory_order_relaxed);
     captured_.store(false, std::memory_order_relaxed);
     gpu_arch_.clear();
 }
@@ -517,6 +533,23 @@ std::string CaptureState::get_kernel_symbol(uint64_t kernel_object) {
     return sym;
 }
 
+bool CaptureState::should_trace_dispatch(
+        uint64_t queue_id,
+        uint64_t dispatch_seq,
+        uint64_t queue_dispatch_seq,
+        bool is_target) const {
+    if (is_target) return true;
+    if (trace_dispatch_limit_ > 0 && dispatch_seq < trace_dispatch_limit_) {
+        return true;
+    }
+    if (trace_dispatch_per_queue_limit_ > 0 &&
+        queue_id != 0 &&
+        queue_dispatch_seq < trace_dispatch_per_queue_limit_) {
+        return true;
+    }
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // Capture kernel dispatch data
 // ---------------------------------------------------------------------------
@@ -803,17 +836,52 @@ void CaptureState::on_submit_packet(
 }
 
 void CaptureState::handle_packets(
-        hsa_queue_t* /*queue*/,
+        hsa_queue_t* queue,
         const hsa_kernel_dispatch_packet_t* disp,
         uint64_t count,
         hsa_amd_queue_intercept_packet_writer writer) {
     try {
+        uint64_t dispatch_seq =
+            dispatch_seen_count_.fetch_add(1, std::memory_order_relaxed);
+        uint64_t queue_id = queue ? queue->id : 0;
+        uint64_t queue_dispatch_seq = 0;
+        {
+            std::lock_guard g(mutex_);
+            queue_dispatch_seq = queue_dispatch_seen_[queue_id]++;
+        }
+
         // Resolve kernel name
         std::string kernel_name = get_kernel_name(disp->kernel_object);
 
         // Check if this is our target kernel
         bool is_target = !target_kernel_.empty() &&
                          kernel_name.find(target_kernel_) != std::string::npos;
+        bool trace_dispatch = should_trace_dispatch(
+            queue_id, dispatch_seq, queue_dispatch_seq, is_target);
+        if (trace_dispatch) {
+            KERNCAP_INFO(
+                "Dispatch[%" PRIu64 "] queue=0x%" PRIx64
+                " kernel='%s' object=0x%" PRIx64
+                " queue_dispatch=%" PRIu64
+                " target_match=%s target_seen=%u"
+                " grid=(%u,%u,%u) block=(%u,%u,%u)"
+                " completion_signal=0x%" PRIx64 " count=%" PRIu64,
+                dispatch_seq,
+                queue_id,
+                kernel_name.c_str(),
+                static_cast<uint64_t>(disp->kernel_object),
+                queue_dispatch_seq,
+                is_target ? "true" : "false",
+                target_dispatch_count_,
+                disp->grid_size_x,
+                disp->grid_size_y,
+                disp->grid_size_z,
+                disp->workgroup_size_x,
+                disp->workgroup_size_y,
+                disp->workgroup_size_z,
+                static_cast<uint64_t>(disp->completion_signal.handle),
+                count);
+        }
 
         if (is_target && !captured_.load(std::memory_order_relaxed)) {
             // Check dispatch index filter
@@ -867,6 +935,9 @@ void CaptureState::handle_packets(
         }
 
         // Not our target — pass through normally
+        if (trace_dispatch && !is_target) {
+            KERNCAP_INFO("Dispatch[%" PRIu64 "] pass-through", dispatch_seq);
+        }
         writer(disp, count);
 
     } catch (const std::exception& e) {

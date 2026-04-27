@@ -180,6 +180,12 @@ private:
     void capture_kernel(const hsa_kernel_dispatch_packet_t* disp,
                         const std::string& kernel_name);
 
+    bool should_trace_dispatch(
+        uint64_t queue_id,
+        uint64_t dispatch_seq,
+        uint64_t queue_dispatch_seq,
+        bool is_target) const;
+
     // Fork safety: clear inherited tracking state in the child process
     void reset_inherited_state();
 
@@ -222,9 +228,11 @@ private:
 
     // Queue tracking
     std::map<hsa_queue_t*, hsa_agent_t> queue_agents_;
+    std::unordered_map<uint64_t, uint64_t> queue_dispatch_seen_;
 
     // Dispatch counter for the target kernel (for --dispatch filtering)
     uint32_t target_dispatch_count_ = 0;
+    std::atomic<uint64_t> dispatch_seen_count_{0};
 
     // Configuration (read from env vars once)
     std::string target_kernel_;     // KERNCAP_KERNEL
@@ -232,6 +240,8 @@ private:
     std::string output_dir_;        // KERNCAP_OUTPUT
     std::string gpu_arch_;          // e.g. "gfx90a" (queried at init)
     std::atomic<bool> captured_{false};  // true after a successful capture
+    uint64_t trace_dispatch_limit_ = 0;   // KERNCAP_TRACE_DISPATCHES
+    uint64_t trace_dispatch_per_queue_limit_ = 0;  // KERNCAP_TRACE_DISPATCHES_PER_QUEUE
 
     // Fork safety (multi-process support)
     pid_t initial_pid_ = 0;              // PID when CaptureState was created
