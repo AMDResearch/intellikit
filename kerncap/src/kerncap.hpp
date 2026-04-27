@@ -242,6 +242,9 @@ private:
     std::atomic<bool> captured_{false};  // true after a successful capture
     uint64_t trace_dispatch_limit_ = 0;   // KERNCAP_TRACE_DISPATCHES
     uint64_t trace_dispatch_per_queue_limit_ = 0;  // KERNCAP_TRACE_DISPATCHES_PER_QUEUE
+    bool intercept_first_queue_only_ = false;  // KERNCAP_INTERCEPT_FIRST_QUEUE_ONLY
+    bool bypass_after_capture_ = false;  // KERNCAP_BYPASS_AFTER_CAPTURE
+    bool disable_code_object_hooks_ = false;  // KERNCAP_DISABLE_CODE_OBJECT_HOOKS
 
     // Fork safety (multi-process support)
     pid_t initial_pid_ = 0;              // PID when CaptureState was created

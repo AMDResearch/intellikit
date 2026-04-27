@@ -87,6 +87,12 @@ CaptureState::CaptureState(
     const char* trace_per_queue_env = std::getenv("KERNCAP_TRACE_DISPATCHES_PER_QUEUE");
     trace_dispatch_per_queue_limit_ =
         trace_per_queue_env ? std::strtoull(trace_per_queue_env, nullptr, 10) : 0;
+    intercept_first_queue_only_ =
+        (std::getenv("KERNCAP_INTERCEPT_FIRST_QUEUE_ONLY") != nullptr);
+    bypass_after_capture_ =
+        (std::getenv("KERNCAP_BYPASS_AFTER_CAPTURE") != nullptr);
+    disable_code_object_hooks_ =
+        (std::getenv("KERNCAP_DISABLE_CODE_OBJECT_HOOKS") != nullptr);
 
     // Fork safety: record PID and check for multi-process mode
     initial_pid_ = getpid();
@@ -118,6 +124,15 @@ CaptureState::CaptureState(
         KERNCAP_INFO("Per-queue dispatch tracing enabled for first %" PRIu64
                      " dispatches on each queue",
                      trace_dispatch_per_queue_limit_);
+    }
+    if (intercept_first_queue_only_) {
+        KERNCAP_INFO("Queue policy: intercept first queue only");
+    }
+    if (bypass_after_capture_) {
+        KERNCAP_INFO("Packet policy: bypass all interception after first capture");
+    }
+    if (disable_code_object_hooks_) {
+        KERNCAP_INFO("Code object policy: disable code object interception hooks");
     }
 
     // Create output directory
@@ -163,9 +178,9 @@ void CaptureState::reset_inherited_state() {
     executable_blobs_.clear();
     kernel_hsaco_.clear();
     queue_agents_.clear();
-queue_dispatch_seen_.clear();
+    queue_dispatch_seen_.clear();
     target_dispatch_count_ = 0;
-dispatch_seen_count_.store(0, std::memory_order_relaxed);
+    dispatch_seen_count_.store(0, std::memory_order_relaxed);
     captured_.store(false, std::memory_order_relaxed);
     gpu_arch_.clear();
 }
@@ -222,10 +237,12 @@ void CaptureState::hook_api() {
         CaptureState::hsa_amd_vmem_unmap;
 
     // Code object interception for .hsaco capture
-    api_table_->core_->hsa_code_object_reader_create_from_memory_fn =
-        CaptureState::hsa_code_object_reader_create_from_memory;
-    api_table_->core_->hsa_executable_load_agent_code_object_fn =
-        CaptureState::hsa_executable_load_agent_code_object;
+    if (!disable_code_object_hooks_) {
+        api_table_->core_->hsa_code_object_reader_create_from_memory_fn =
+            CaptureState::hsa_code_object_reader_create_from_memory;
+        api_table_->core_->hsa_executable_load_agent_code_object_fn =
+            CaptureState::hsa_executable_load_agent_code_object;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -459,9 +476,22 @@ hsa_status_t CaptureState::hsa_queue_create(
         void* data, uint32_t private_segment_size,
         uint32_t group_segment_size, hsa_queue_t** queue) {
     auto* inst = get_instance();
+    bool intercept_queue = true;
 
     if (!inst->is_active_process()) {
         KERNCAP_INFO("Passive mode (pid=%d): passing through hsa_queue_create",
+                     getpid());
+        return hsa_core_call(inst, hsa_queue_create, agent, size, type,
+                             callback, data, private_segment_size,
+                             group_segment_size, queue);
+    }
+
+    if (inst->intercept_first_queue_only_) {
+        std::shared_lock g(mutex_);
+        intercept_queue = inst->queue_agents_.empty();
+    }
+    if (!intercept_queue) {
+        KERNCAP_INFO("First-queue-only mode (pid=%d): passing through hsa_queue_create",
                      getpid());
         return hsa_core_call(inst, hsa_queue_create, agent, size, type,
                              callback, data, private_segment_size,
@@ -786,8 +816,8 @@ void CaptureState::capture_kernel(
         if (co_it != kernel_hsaco_.end()) {
             auto blob_it = executable_blobs_.find(co_it->second);
             if (blob_it != executable_blobs_.end()) {
-            std::string hsaco_path = output_dir_ + "/kernel.hsaco";
-            std::ofstream out(hsaco_path, std::ios::binary);
+                std::string hsaco_path = output_dir_ + "/kernel.hsaco";
+                std::ofstream out(hsaco_path, std::ios::binary);
                 out.write(reinterpret_cast<const char*>(blob_it->second.data()),
                           blob_it->second.size());
                 KERNCAP_INFO("Saved kernel.hsaco (%zu bytes)", blob_it->second.size());
@@ -820,6 +850,11 @@ void CaptureState::on_submit_packet(
         void* data, hsa_amd_queue_intercept_packet_writer writer) {
     auto* inst = get_instance();
     if (!inst || !inst->is_active_process()) {
+        writer(packets, count);
+        return;
+    }
+    if (inst->bypass_after_capture_ &&
+        inst->captured_.load(std::memory_order_relaxed)) {
         writer(packets, count);
         return;
     }
