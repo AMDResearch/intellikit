@@ -669,7 +669,9 @@ class TestRDNA4VRAMReadBandwidth:
         rdna_backend._raw_data = {
             "GL2C_EA_RDREQ_sum": 1000,
             "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,  # 100% active → live clock = base_clock
         }
+        rdna_backend._current_duration_us = 1000.0  # 1 ms
 
         result = compute(rdna_backend, "memory.hbm_read_bandwidth")
         expected = (1000 * 256 / 1e9) / 0.001
@@ -694,7 +696,9 @@ class TestRDNA4VRAMWriteBandwidth:
         rdna_backend._raw_data = {
             "GL2C_EA_WRREQ_sum": 1000,
             "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
         }
+        rdna_backend._current_duration_us = 1000.0  # 1 ms
 
         result = compute(rdna_backend, "memory.hbm_write_bandwidth")
         expected = (1000 * 256 / 1e9) / 0.001
@@ -722,7 +726,9 @@ class TestRDNA4BandwidthUtilization:
             "GL2C_EA_RDREQ_sum": 1000,
             "GL2C_EA_WRREQ_sum": 500,
             "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
         }
+        rdna_backend._current_duration_us = 1000.0  # 1 ms
 
         result = compute(rdna_backend, "memory.hbm_bandwidth_utilization")
         expected_bw = ((1000 + 500) * 256 / 1e9) / 0.001
@@ -735,7 +741,9 @@ class TestRDNA4BandwidthUtilization:
             "GL2C_EA_RDREQ_sum": 0,
             "GL2C_EA_WRREQ_sum": 0,
             "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
         }
+        rdna_backend._current_duration_us = 1000.0
 
         result = compute(rdna_backend, "memory.hbm_bandwidth_utilization")
         assert result == 0.0
