@@ -67,9 +67,12 @@ def _compile_gpu_query(source: Path) -> Path:
     if hipcc is None:
         raise RuntimeError("hipcc not found on PATH. Install ROCm or add hipcc to PATH.")
 
+    import os
     import tempfile
 
-    binary = Path(tempfile.mktemp(prefix="metrix_gpu_query_"))
+    fd, binary_path = tempfile.mkstemp(prefix="metrix_gpu_query_")
+    os.close(fd)
+    binary = Path(binary_path)
 
     try:
         proc = subprocess.run(
@@ -126,23 +129,23 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     """
     Build a DeviceSpecs by querying the GPU via a compiled HIP binary.
 
-    Raises RuntimeError if the requested *arch* does not match the
-    installed GPU or if hipcc / HIP is unavailable.
+    Raises RuntimeError if hipcc / HIP is unavailable. The *arch* argument
+    is a compatibility hint; the returned ``DeviceSpecs.arch`` is always
+    the hardware-detected gfx string.
 
     Args:
-        arch: GFX architecture string (e.g. "gfx90a", "gfx942")
-        device_id: HIP device index (default 0)
+        arch: GFX architecture string (compatibility hint).
+        device_id: HIP device index (default 0).
 
     Returns:
-        Fully populated DeviceSpecs
+        Fully populated DeviceSpecs.
     """
     from .base import DeviceSpecs
 
     results = _run_gpu_query(device_id)
     gpu = results[0]
     hw_arch = gpu["gcn_arch_name"].split(":")[0]
-    # Use the actual hardware arch, not the requested one — get_backend()
-    # already maps aliases (gfx1103 -> GFX1100Backend, gfx950 -> GFX942Backend)
+    # get_backend() already maps aliases, so use the hardware-detected arch.
     arch = hw_arch
 
     # Convert raw HIP values to DeviceSpecs units
