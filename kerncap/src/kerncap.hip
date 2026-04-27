@@ -249,15 +249,16 @@ hsa_status_t CaptureState::hsa_executable_symbol_get_info(
         std::lock_guard g(mutex_);
         inst->handle_to_symbol_[kernel_object] = symbol;
 
-        // Lazily associate kernel_object with its .hsaco blob by
-        // following symbol -> executable -> blob.
+        // Lazily associate kernel_object with its executable so we can
+        // retrieve the .hsaco blob at capture time. We deliberately do NOT
+        // copy the blob here: many kernels can share one executable, and
+        // duplicating a multi-MB blob per kernel symbol blows up memory
+        // (e.g. rocBLAS/Tensile loads ~15 MB executables containing
+        // hundreds of kernels).
         auto exec_it = inst->symbol_to_executable_.find(symbol);
         if (exec_it != inst->symbol_to_executable_.end()) {
             std::lock_guard co_lock(inst->code_object_mutex_);
-            auto blob_it = inst->executable_blobs_.find(exec_it->second);
-            if (blob_it != inst->executable_blobs_.end()) {
-                inst->kernel_hsaco_[kernel_object] = blob_it->second;
-            }
+            inst->kernel_hsaco_[kernel_object] = exec_it->second;
         }
     }
     return result;
@@ -743,16 +744,25 @@ void CaptureState::capture_kernel(
     }
 
     // Write .hsaco if we captured the code object (before snapshot,
-    // since snapshot's hsa_memory_copy may crash on freed regions)
+    // since snapshot's hsa_memory_copy may crash on freed regions).
+    // kernel_hsaco_ stores kernel_object -> executable_handle; the actual
+    // bytes live in executable_blobs_ (one copy per loaded executable).
     {
         std::lock_guard lock(code_object_mutex_);
         auto co_it = kernel_hsaco_.find(disp->kernel_object);
         if (co_it != kernel_hsaco_.end()) {
+            auto blob_it = executable_blobs_.find(co_it->second);
+            if (blob_it != executable_blobs_.end()) {
             std::string hsaco_path = output_dir_ + "/kernel.hsaco";
             std::ofstream out(hsaco_path, std::ios::binary);
-            out.write(reinterpret_cast<const char*>(co_it->second.data()),
-                      co_it->second.size());
-            KERNCAP_INFO("Saved kernel.hsaco (%zu bytes)", co_it->second.size());
+                out.write(reinterpret_cast<const char*>(blob_it->second.data()),
+                          blob_it->second.size());
+                KERNCAP_INFO("Saved kernel.hsaco (%zu bytes)", blob_it->second.size());
+            } else {
+                KERNCAP_WARN("Kernel mapped to executable 0x%lx but no blob "
+                             "stored for that executable",
+                             static_cast<unsigned long>(co_it->second));
+            }
         } else {
             KERNCAP_WARN("No .hsaco blob captured for this kernel "
                          "(code object interception may not have fired)");

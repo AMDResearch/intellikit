@@ -207,10 +207,17 @@ private:
     std::unordered_set<void*> vmem_tracked_;  // subset of pointer_sizes_ from VMEM APIs
     std::mutex ptr_mutex_;
 
-    // Code object tracking for .hsaco capture
+    // Code object tracking for .hsaco capture.
+    //
+    // The executable bytes are stored exactly once per loaded executable
+    // (in executable_blobs_). kernel_hsaco_ only records which executable
+    // a given kernel_object came from, so N kernel symbols sharing one
+    // executable do NOT each hold a copy of the (potentially many-MB) blob.
+    // This is critical for libraries like rocBLAS/Tensile that pack many
+    // kernels into a single executable.
     std::unordered_map<uint64_t, std::vector<uint8_t>> pending_reader_blobs_;  // reader handle -> blob
     std::unordered_map<uint64_t, std::vector<uint8_t>> executable_blobs_;      // executable handle -> blob
-    std::unordered_map<uint64_t, std::vector<uint8_t>> kernel_hsaco_;          // kernel_object -> blob
+    std::unordered_map<uint64_t, uint64_t> kernel_hsaco_;                      // kernel_object -> executable handle
     std::mutex code_object_mutex_;
 
     // Queue tracking
