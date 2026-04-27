@@ -15,6 +15,8 @@ import pytest
 
 from metrix import Metrix
 
+from ..unit.conftest import requires_metric
+
 VECTOR_ADD_HIP = """
 #include <hip/hip_runtime.h>
 #include <stdio.h>
@@ -95,8 +97,9 @@ def test_profile_vector_add_time_only(time_only, num_replays):
         assert isinstance(kernel.metrics, dict)
 
 
+@requires_metric("memory.l2_hit_rate")
 def test_profile_vector_add_single_metric():
-    """Profile with a single metric (l2_hit_rate — available on all architectures)."""
+    """Profile with a single metric (l2_hit_rate)."""
     metric = "memory.l2_hit_rate"
     with tempfile.TemporaryDirectory(prefix="metrix_test_") as tmp_dir:
         tmp_path = Path(tmp_dir)

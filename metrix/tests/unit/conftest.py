@@ -72,10 +72,10 @@ def requires_metric(*metric_names: str):
         @requires_metric("compute.total_flops", "compute.hbm_gflops")
         def test_flops(self): ...
     """
+    if HW_ARCH is None:
+        return pytest.mark.skipif(True, reason="no GPU detected")
     missing = [m for m in metric_names if m not in HW_METRICS]
     return pytest.mark.skipif(
-        HW_ARCH is None or len(missing) > 0,
-        reason=(f"requires metric(s) {', '.join(missing)} but {HW_ARCH} does not support them")
-        if missing
-        else "no GPU detected",
+        len(missing) > 0,
+        reason=f"requires metric(s) {', '.join(missing)} but {HW_ARCH} does not support them",
     )

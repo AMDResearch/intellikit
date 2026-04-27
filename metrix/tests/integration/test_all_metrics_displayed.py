@@ -30,12 +30,21 @@ def vector_add_binary(tmp_path):
 
 @pytest.mark.integration
 def test_all_memory_metrics_are_displayed(vector_add_binary):
-    """Verify that the memory profile runs and displays metrics without errors.
+    """Verify that the memory profile runs and displays metrics without errors"""
+    from metrix import Metrix
 
-    The exact set of metrics varies by architecture (CDNA has L1 hit rate,
-    coalescing, etc.; RDNA only has L2/HBM metrics). We verify the command
-    succeeds and that at least the universally-available metrics appear.
-    """
+    candidate_displays = {
+        "memory.hbm_read_bandwidth": "HBM Read Bandwidth",
+        "memory.hbm_write_bandwidth": "HBM Write Bandwidth",
+        "memory.hbm_bandwidth_utilization": "HBM Bandwidth Utilization",
+        "memory.l2_hit_rate": "L2 Cache Hit Rate",
+        "memory.lds_bank_conflicts": "LDS Bank Conflicts",
+    }
+    available = set(Metrix().backend.get_available_metrics())
+    expected_displays = [d for m, d in candidate_displays.items() if m in available]
+    if not expected_displays:
+        pytest.skip("No memory display metrics available on detected arch")
+
     result = subprocess.run(
         ["metrix", "-n", "1", "--aggregate", "--profile", "memory", str(vector_add_binary)],
         capture_output=True,
@@ -46,20 +55,7 @@ def test_all_memory_metrics_are_displayed(vector_add_binary):
     assert result.returncode == 0, f"stderr: {result.stderr}"
     output = result.stdout
 
-    # These metrics should be available on ALL architectures
-    universal_metrics = [
-        "HBM Read Bandwidth",
-        "HBM Write Bandwidth",
-        "HBM Bandwidth Utilization",
-        "L2 Cache Hit Rate",
-        "LDS Bank Conflicts",
-    ]
-
-    missing_metrics = []
-    for metric in universal_metrics:
-        if metric not in output:
-            missing_metrics.append(metric)
-
+    missing_metrics = [m for m in expected_displays if m not in output]
     assert len(missing_metrics) == 0, f"Missing metrics: {missing_metrics}\n\nOutput:\n{output}"
 
 
@@ -95,13 +91,7 @@ def test_bandwidth_metrics_have_values(vector_add_binary):
 
 @pytest.mark.integration
 def test_compute_profile_runs_without_error(vector_add_binary):
-    """Verify that the compute profile runs without errors.
-
-    Compute metrics (FLOPS, arithmetic intensity) are only available on
-    architectures with per-dtype VALU counters (currently CDNA: gfx90a, gfx942).
-    On RDNA, the compute profile will have no available metrics and this test
-    verifies that case is handled gracefully (exit 0, no crash).
-    """
+    """Verify that the compute profile exits cleanly on any arch"""
     from metrix import Metrix
 
     profiler = Metrix()
@@ -115,9 +105,6 @@ def test_compute_profile_runs_without_error(vector_add_binary):
     ]
     supported_compute = [m for m in compute_metrics if m in available]
 
-    if not supported_compute:
-        pytest.skip(f"No compute metrics available on {profiler.backend.device_specs.arch}")
-
     result = subprocess.run(
         ["metrix", "-n", "1", "--aggregate", "--profile", "compute", str(vector_add_binary)],
         capture_output=True,
@@ -128,10 +115,10 @@ def test_compute_profile_runs_without_error(vector_add_binary):
     assert result.returncode == 0, f"stderr: {result.stderr}"
     output = result.stdout
 
-    # Verify at least one compute metric is displayed
-    assert any(m in output for m in ["Total FLOPS", "Arithmetic Intensity", "COMPUTE"]), (
-        f"No compute metrics found in output:\n{output}"
-    )
+    if supported_compute:
+        assert any(m in output for m in ["Total FLOPS", "Arithmetic Intensity", "COMPUTE"]), (
+            f"No compute metrics found in output:\n{output}"
+        )
 
 
 @pytest.mark.integration

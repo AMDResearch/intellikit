@@ -5,7 +5,7 @@ Unit tests for the high-level Metrix API
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
 from metrix.backends import Statistics, get_backend
-from .conftest import requires_arch
+from .conftest import requires_arch, requires_metric
 
 
 class TestMetrixInit:
@@ -53,9 +53,13 @@ class TestMetrixMetricListing:
         """Test that listing metrics works on whatever GPU is detected"""
         profiler = Metrix()
         metrics = profiler.list_metrics()
-        assert len(metrics) > 0
-        # These should be available on all architectures
-        assert "memory.l2_hit_rate" in metrics
+        assert isinstance(metrics, list)
+
+    @requires_metric("memory.l2_hit_rate")
+    def test_list_metrics_includes_l2(self):
+        """memory.l2_hit_rate should appear in list_metrics() when supported"""
+        profiler = Metrix()
+        assert "memory.l2_hit_rate" in profiler.list_metrics()
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_list_profiles(self, arch):

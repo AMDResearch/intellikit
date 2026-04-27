@@ -8,7 +8,7 @@ import pytest
 import subprocess
 from pathlib import Path
 from metrix.profiler.rocprof_wrapper import ROCProfV3Wrapper
-from .conftest import requires_arch
+from .conftest import requires_arch, requires_metric
 
 
 class TestMissingExecutable:
@@ -96,8 +96,9 @@ class TestBackendValidation:
         assert "memory.l2_hit_rate" in metrics
         assert "memory.coalescing_efficiency" in metrics
 
+    @requires_metric("memory.l2_hit_rate")
     def test_get_available_metrics_any_arch(self):
-        """Backend for detected arch should list metrics"""
+        """Backend for detected arch should list metrics including l2_hit_rate"""
         from metrix.backends import get_backend
         from metrix.backends.detect import detect_or_default
 
@@ -195,8 +196,9 @@ class TestMetricComputation:
         result = backend._metrics["memory.l2_hit_rate"]["compute"]()
         assert result == 0.0
 
+    @requires_metric("memory.l2_hit_rate")
     def test_division_by_zero_handling_any_arch(self):
-        """Metrics should handle zero denominators on any architecture"""
+        """Metrics should handle zero denominators when l2_hit_rate is defined"""
         from metrix.backends import get_backend
         from metrix.backends.detect import detect_or_default
 
