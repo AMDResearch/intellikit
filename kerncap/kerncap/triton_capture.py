@@ -118,6 +118,69 @@ _HOOK_INSTALLER = textwrap.dedent('''\
 
         triton.runtime.jit.JITFunction.run = _hooked_run
 
+        # ------------------------------------------------------------------
+        # Inductor (torch.compile) bypasses JITFunction.run entirely: it
+        # compiles Triton kernels itself and dispatches them through
+        # ``torch._inductor.runtime.triton_heuristics.CachingAutotuner.run``.
+        # We hook that path separately so torch.compile workloads can be
+        # captured.  The "real" kernel name (e.g. triton_poi_fused_relu_0)
+        # lives in ``self.inductor_meta["kernel_name"]``; ``self.fn.__name__``
+        # is the generic placeholder ``"triton_"``.
+        # ------------------------------------------------------------------
+        try:
+            from torch._inductor.runtime import (
+                triton_heuristics as _triton_heuristics,
+            )
+            import torch as _torch_ind
+
+            _OrigCARun = _triton_heuristics.CachingAutotuner.run
+
+            def _hooked_caching_autotuner_run(self_ca, *args, **kwargs):
+                global _call_count, _captured
+                kn = ""
+                try:
+                    kn = self_ca.inductor_meta.get("kernel_name", "") or ""
+                except AttributeError:
+                    kn = ""
+                if not kn:
+                    try:
+                        kn = self_ca.fn.fn.__name__
+                    except AttributeError:
+                        kn = ""
+
+                match = bool(kn) and (
+                    _target_kernel in kn or kn in _target_kernel
+                )
+
+                should_capture = (
+                    match and not _captured
+                    and (_dispatch < 0 or _call_count == _dispatch)
+                )
+
+                if match and not _captured:
+                    _call_count += 1
+
+                if should_capture:
+                    _captured = True
+                    grid = kwargs.get("grid")
+                    tensor_args = _save_capture(
+                        self_ca.fn, args, {}, grid,
+                        _autotuner_config_keys,
+                        kernel_name_override=kn,
+                    )
+                    result = _OrigCARun(self_ca, *args, **kwargs)
+                    _torch_ind.cuda.synchronize()
+                    _save_reference_outputs(tensor_args)
+                    return result
+
+                return _OrigCARun(self_ca, *args, **kwargs)
+
+            _triton_heuristics.CachingAutotuner.run = (
+                _hooked_caching_autotuner_run
+            )
+        except (ImportError, AttributeError):
+            pass
+
 
     def _resolve_grid(grid, all_args=None):
         """Normalise a Triton grid to a 3-tuple of ints."""
@@ -181,7 +244,10 @@ _HOOK_INSTALLER = textwrap.dedent('''\
         return str(val)
 
 
-    def _save_capture(jit_fn, args, kwargs, grid, autotuner_config_keys):
+    def _save_capture(
+        jit_fn, args, kwargs, grid, autotuner_config_keys,
+        kernel_name_override=None,
+    ):
         """Save pre-kernel tensor inputs and scalar args."""
         import torch
         import numpy as np
@@ -199,7 +265,7 @@ _HOOK_INSTALLER = textwrap.dedent('''\
         grid_val = _resolve_grid(grid, all_args)
 
         metadata = {
-            "kernel_name": jit_fn.fn.__name__,
+            "kernel_name": kernel_name_override or jit_fn.fn.__name__,
             "grid": {"x": grid_val[0], "y": grid_val[1], "z": grid_val[2]},
             "block": {"x": 1, "y": 1, "z": 1},
             "language": "triton",
@@ -281,7 +347,7 @@ _HOOK_INSTALLER = textwrap.dedent('''\
             json.dump(metadata, f, indent=2)
 
         print(
-            f"[kerncap] Captured {jit_fn.fn.__name__} "
+            f"[kerncap] Captured {metadata['kernel_name']} "
             f"({len(metadata['args'])} args) -> {_output_dir}",
             flush=True,
         )
