@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
-# Run via: .github/scripts/apptainer_wrap.sh test_editable_install.sh
-
 set -euo pipefail
 
 _THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
-source "${_THIS_DIR}/install_test_pip_diff.inc.sh"
 
-SCRIPT_DIR="${_THIS_DIR}"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-
+REPO_ROOT="$(cd "${_THIS_DIR}/../.." && pwd)"
 SOURCE_REPO="${INTELLIKIT_REPO_ROOT:-${REPO_ROOT}}"
-
-_testname="$(basename "$0" .sh)"
-_intellikit_pip_log_setup "${_testname}" || true
 
 TMP_DIR="$(mktemp -d -t intellikit-editable-XXXX)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
@@ -40,10 +31,6 @@ for pkg in "${PKGS[@]}"; do
   "${local_vdir}/bin/pip" install --upgrade pip >/dev/null
 done
 
-if [[ -n "${_INTELLIKIT_PIP_BEFORE:-}" ]]; then
-  _intellikit_pip_aggregate_venvs "${TMP_DIR}" "${_INTELLIKIT_PIP_BEFORE}"
-fi
-
 _editable_install_pkg() {
   local pkg="$1"
   local vdir="${TMP_DIR}/venv-${pkg}"
@@ -66,11 +53,6 @@ PY
 for pkg in "${PKGS[@]}"; do
   _editable_install_pkg "${pkg}"
 done
-
-if [[ -n "${_INTELLIKIT_PIP_AFTER:-}" ]]; then
-  _intellikit_pip_aggregate_venvs "${TMP_DIR}" "${_INTELLIKIT_PIP_AFTER}"
-fi
-_intellikit_pip_log_finish "${_testname}"
 
 echo ""
 echo "[editable] Success — all subdirectory editable installs verified."

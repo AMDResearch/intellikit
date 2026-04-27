@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
-# Run via: .github/scripts/apptainer_wrap.sh test_pip_subdir_install.sh
-
 set -euo pipefail
 
 _THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
-source "${_THIS_DIR}/install_test_pip_diff.inc.sh"
 
 REF="${INTELLIKIT_INSTALL_REF:-main}"
 GIT_URL="${INTELLIKIT_GIT_URL:-https://github.com/AMDResearch/intellikit.git}"
-
-_testname="$(basename "$0" .sh)"
-_intellikit_pip_log_setup "${_testname}" || true
 
 TMP_DIR="$(mktemp -d -t intellikit-pip-XXXX)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
@@ -23,10 +16,6 @@ for pkg in "${PKGS[@]}"; do
   python3 -m venv "${vdir}"
   "${vdir}/bin/pip" install --upgrade pip >/dev/null
 done
-
-if [[ -n "${_INTELLIKIT_PIP_BEFORE:-}" ]]; then
-  _intellikit_pip_aggregate_venvs "${TMP_DIR}" "${_INTELLIKIT_PIP_BEFORE}"
-fi
 
 _pip_subdir_install_pkg() {
   local pkg="$1"
@@ -51,11 +40,6 @@ PY
 for pkg in "${PKGS[@]}"; do
   _pip_subdir_install_pkg "${pkg}"
 done
-
-if [[ -n "${_INTELLIKIT_PIP_AFTER:-}" ]]; then
-  _intellikit_pip_aggregate_venvs "${TMP_DIR}" "${_INTELLIKIT_PIP_AFTER}"
-fi
-_intellikit_pip_log_finish "${_testname}"
 
 echo ""
 echo "[pip-subdir] Success — each subdirectory install in its own venv, verified after pip."
