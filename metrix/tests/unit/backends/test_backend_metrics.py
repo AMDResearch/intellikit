@@ -56,6 +56,17 @@ _TEST_SPECS = {
         l2_size_mb=6.0,
         lds_size_per_cu_kb=128.0,
     ),
+    "gfx1030": DeviceSpecs(
+        arch="gfx1030",
+        name="AMD Radeon RX 6800 XT",
+        num_cu=72,
+        max_waves_per_cu=32,
+        wavefront_size=32,
+        base_clock_mhz=2575.0,
+        hbm_bandwidth_gbs=512.0,
+        l2_size_mb=4.0,
+        lds_size_per_cu_kb=128.0,
+    ),
 }
 
 
@@ -780,3 +791,150 @@ class TestRDNA4BytesTransferred:
 
         result = compute(rdna_backend, "memory.bytes_transferred_hbm")
         assert result == 0
+
+
+# ═══════════════════════════════════════════════════════════════════
+# RDNA2 (gfx1030) tests
+# ═══════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def rdna2_backend():
+    """Fixture for gfx1030 (RDNA2) backend"""
+    with patch(
+        "metrix.backends.gfx1030.query_device_specs",
+        return_value=_TEST_SPECS["gfx1030"],
+    ):
+        return get_backend("gfx1030")
+
+
+# Read traffic decomposed across the 4 size buckets exposed on RDNA2:
+#   100×32B + 200×64B + 50×96B + 25×128B = 3200 + 12800 + 4800 + 3200 = 24000 B
+_RDNA2_READ_BYTES = 100 * 32 + 200 * 64 + 50 * 96 + 25 * 128
+# Write traffic with 32B residual: 64B_sum=100 (100×64=6400 B),
+#   MC_WRREQ_sum=250 → residual 150 attributed to 32B (150×32=4800 B), total 11200 B.
+_RDNA2_WRITE_64B_SUM = 100
+_RDNA2_WRITE_MC_SUM = 250
+_RDNA2_WRITE_BYTES = (
+    _RDNA2_WRITE_64B_SUM * 64
+    + (_RDNA2_WRITE_MC_SUM - _RDNA2_WRITE_64B_SUM) * 32
+)
+
+
+def _rdna2_read_counters():
+    return {
+        "GL2C_EA_RDREQ_32B_sum": 100,
+        "GL2C_EA_RDREQ_64B_sum": 200,
+        "GL2C_EA_RDREQ_96B_sum": 50,
+        "GL2C_EA_RDREQ_128B_sum": 25,
+    }
+
+
+def _rdna2_write_counters():
+    return {
+        "GL2C_EA_WRREQ_64B_sum": _RDNA2_WRITE_64B_SUM,
+        "GL2C_MC_WRREQ_sum": _RDNA2_WRITE_MC_SUM,
+    }
+
+
+class TestRDNA2MetricDiscovery:
+    """Test gfx1030 discovers VRAM bandwidth metrics from YAML"""
+
+    def test_discovers_vram_bandwidth_metrics(self, rdna2_backend):
+        metrics = rdna2_backend.get_available_metrics()
+        assert "memory.hbm_read_bandwidth" in metrics
+        assert "memory.hbm_write_bandwidth" in metrics
+        assert "memory.hbm_bandwidth_utilization" in metrics
+        assert "memory.bytes_transferred_hbm" in metrics
+
+    def test_required_counters_use_per_size_buckets(self, rdna2_backend):
+        """RDNA2 must request per-size GL2C_EA_RDREQ_*B_sum, not the gfx1201 aggregate"""
+        counters = set(rdna2_backend.get_required_counters(["memory.hbm_read_bandwidth"]))
+        for size in ("32B", "64B", "96B", "128B"):
+            assert f"GL2C_EA_RDREQ_{size}_sum" in counters
+        assert "GL2C_EA_RDREQ_sum" not in counters
+
+
+class TestRDNA2VRAMReadBandwidth:
+    """gfx1030 sums per-size GL2C_EA_RDREQ buckets (no aggregate _sum exists)"""
+
+    def test_read_bandwidth_per_size_buckets(self, rdna2_backend):
+        active_cycles = int(rdna2_backend.device_specs.base_clock_mhz * 1000)
+        rdna2_backend._raw_data = {
+            **_rdna2_read_counters(),
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna2_backend._current_duration_us = 1000.0  # 1 ms
+
+        result = compute(rdna2_backend, "memory.hbm_read_bandwidth")
+        expected = (_RDNA2_READ_BYTES / 1e9) / 0.001
+        assert abs(result - expected) < 1e-6
+
+    def test_read_bandwidth_zero_cycles(self, rdna2_backend):
+        rdna2_backend._raw_data = {
+            **_rdna2_read_counters(),
+            "GRBM_GUI_ACTIVE": 0,
+            "GRBM_COUNT": 0,
+        }
+        rdna2_backend._current_duration_us = 0.0
+        assert compute(rdna2_backend, "memory.hbm_read_bandwidth") == 0.0
+
+
+class TestRDNA2VRAMWriteBandwidth:
+    """gfx1030 only exposes the 64B write bucket; residual := MC_WRREQ_sum - 64B_sum @ 32B"""
+
+    def test_write_bandwidth_with_32B_residual(self, rdna2_backend):
+        active_cycles = int(rdna2_backend.device_specs.base_clock_mhz * 1000)
+        rdna2_backend._raw_data = {
+            **_rdna2_write_counters(),
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna2_backend._current_duration_us = 1000.0
+
+        result = compute(rdna2_backend, "memory.hbm_write_bandwidth")
+        expected = (_RDNA2_WRITE_BYTES / 1e9) / 0.001
+        assert abs(result - expected) < 1e-6
+
+    def test_write_bandwidth_zero_cycles(self, rdna2_backend):
+        rdna2_backend._raw_data = {
+            **_rdna2_write_counters(),
+            "GRBM_GUI_ACTIVE": 0,
+            "GRBM_COUNT": 0,
+        }
+        rdna2_backend._current_duration_us = 0.0
+        assert compute(rdna2_backend, "memory.hbm_write_bandwidth") == 0.0
+
+
+class TestRDNA2BandwidthUtilization:
+    """Combined read+write traffic / peak BW * 100"""
+
+    def test_utilization_percentage(self, rdna2_backend):
+        active_cycles = int(rdna2_backend.device_specs.base_clock_mhz * 1000)
+        peak_bw = rdna2_backend.device_specs.hbm_bandwidth_gbs
+
+        rdna2_backend._raw_data = {
+            **_rdna2_read_counters(),
+            **_rdna2_write_counters(),
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna2_backend._current_duration_us = 1000.0
+
+        result = compute(rdna2_backend, "memory.hbm_bandwidth_utilization")
+        expected_bw = ((_RDNA2_READ_BYTES + _RDNA2_WRITE_BYTES) / 1e9) / 0.001
+        expected_pct = expected_bw / peak_bw * 100
+        assert abs(result - expected_pct) < 1e-6
+
+
+class TestRDNA2BytesTransferred:
+    """Total bytes through L2 -> Fabric (no time term, PERF_LEVEL-independent)"""
+
+    def test_bytes_read_and_write(self, rdna2_backend):
+        rdna2_backend._raw_data = {
+            **_rdna2_read_counters(),
+            **_rdna2_write_counters(),
+        }
+        result = compute(rdna2_backend, "memory.bytes_transferred_hbm")
+        assert result == _RDNA2_READ_BYTES + _RDNA2_WRITE_BYTES
