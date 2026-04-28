@@ -17,7 +17,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
@@ -26,11 +26,92 @@ import numpy as np
 
 @dataclass
 class ValidationResult:
-    """Result of validating a reproducer."""
+    """Result of validating a reproducer.
+
+    ``mode`` selects which Result-line schema applies and tells the CLI
+    how to summarise the run.  ``details`` carries always-shown lines
+    (build/run status, summary counts, failure rows); ``region_lines``
+    carries the per-region/per-arg PASS noise that should only print
+    on FAIL or under ``-v``.
+    """
 
     passed: bool
     details: List[str]
     max_error: float = 0.0
+    mode: str = "smoke"  # one of: "smoke", "byte-exact", "numeric"
+    region_lines: List[str] = field(default_factory=list)
+    # Structured fields populated by the byte-exact / numeric paths.
+    # Leave None when not applicable; ``format_result`` falls back gracefully.
+    regions_total: Optional[int] = None
+    regions_identical: Optional[int] = None
+    outputs_total: Optional[int] = None
+    outputs_passed: Optional[int] = None
+    atol: Optional[float] = None
+
+
+def format_result(result: ValidationResult) -> str:
+    """Render the canonical ``Result: ...`` line for a validation outcome.
+
+    Same shape across smoke / byte-exact / numeric so a HIP user and a
+    Triton user read the same footer.  Tail-grep-friendly: every line
+    starts with ``Result: PASS`` or ``Result: FAIL``.
+    """
+    verdict = "PASS" if result.passed else "FAIL"
+
+    if result.mode == "byte-exact":
+        n_total = result.regions_total or 0
+        n_id = result.regions_identical or 0
+        if result.passed:
+            return f"Result: {verdict}  (byte-exact, {n_id} of {n_total} regions identical)"
+        n_diff = n_total - n_id
+        return (
+            f"Result: {verdict}  (byte-exact, "
+            f"{n_id} of {n_total} regions identical, {n_diff} differ)"
+        )
+
+    if result.mode == "numeric":
+        atol_str = f"{result.atol:g}" if result.atol is not None else "1e-06"
+        err_str = "nan" if math.isnan(result.max_error) else f"{result.max_error:.2e}"
+        if result.passed:
+            return f"Result: {verdict}  (numeric, max_error = {err_str}, atol = {atol_str})"
+        n_total = result.outputs_total or 0
+        n_passed = result.outputs_passed or 0
+        n_diff = n_total - n_passed
+        return (
+            f"Result: {verdict}  (numeric, "
+            f"{n_diff} of {n_total} outputs differ, "
+            f"max_error = {err_str}, atol = {atol_str})"
+        )
+
+    # Default / smoke path -- no numeric or byte comparison was performed.
+    return f"Result: {verdict}  (smoke)"
+
+
+def format_replay_result(
+    returncode: int,
+    iterations: int,
+    avg_us: Optional[float],
+    min_us: Optional[float],
+    max_us: Optional[float],
+) -> str:
+    """Render the canonical ``Result: ...`` line for a replay outcome.
+
+    Mirrors :func:`format_result` so the user sees the same footer
+    contract regardless of which subcommand they ran.
+    """
+    if returncode != 0:
+        return f"Result: FAIL  (replay exited with code {returncode})"
+    head = f"replayed {iterations} iteration(s) OK"
+    timing = []
+    if avg_us is not None:
+        timing.append(f"avg = {avg_us:.2f} us")
+    if min_us is not None:
+        timing.append(f"min = {min_us:.2f}")
+    if max_us is not None:
+        timing.append(f"max = {max_us:.2f}")
+    if timing:
+        head = f"{head} ({', '.join(timing)})"
+    return f"Result: PASS  {head}"
 
 
 def validate_reproducer(
@@ -99,12 +180,14 @@ def _validate_replay(
 ) -> ValidationResult:
     """Validate using kerncap-replay.
 
-    Without ``--hsaco``: smoke test only — confirms the captured kernel
-    replays without crashing.
+    With ``--hsaco`` (or when ``candidate.hsaco`` exists in the
+    reproducer dir from a prior ``python3 reproducer.py`` run): runs
+    replay twice (captured HSACO, then variant HSACO), compares
+    post-execution memory regions byte-for-byte, and fails on any
+    difference.
 
-    With ``--hsaco``: runs replay twice (captured HSACO, then variant
-    HSACO), compares post-execution memory regions byte-for-byte, and
-    fails on any difference.
+    Without ``--hsaco`` and no ``candidate.hsaco``: smoke test only --
+    confirms the captured kernel replays without crashing.
     """
     from kerncap import _get_replay_path
 
@@ -115,6 +198,21 @@ def _validate_replay(
         replay_bin = _get_replay_path()
     except FileNotFoundError as e:
         return ValidationResult(passed=False, details=[str(e)])
+
+    # Auto-pick up the rebuilt HSACO from the user's most recent edit-
+    # rebuild step:
+    #   * Triton-HSA: ``reproducer.py`` writes ``candidate.hsaco``.
+    #   * HIP:        ``make recompile`` writes ``optimized.hsaco``.
+    # Either way the user's loop collapses to
+    # ``$EDITOR <variant> && <rebuild> && kerncap validate <dir>``
+    # without remembering a flag or cache path.
+    if not hsaco:
+        for candidate_name in ("candidate.hsaco", "optimized.hsaco"):
+            candidate = os.path.join(reproducer_dir, candidate_name)
+            if os.path.isfile(candidate):
+                hsaco = candidate
+                details.append(f"Auto-detected rebuilt HSACO from prior rebuild: {candidate}")
+                break
 
     if hsaco:
         return _validate_replay_variant(
@@ -132,8 +230,14 @@ def _run_replay(
     details: List[str],
     hsaco: Optional[str] = None,
     dump_output: bool = False,
+    label: str = "Replay",
 ) -> Optional[subprocess.CompletedProcess]:
-    """Run kerncap-replay and append stdout to *details*.
+    """Run kerncap-replay and append a labeled status header + stdout to *details*.
+
+    The header ``<label>: OK (...)`` is appended in place so two back-to-back
+    replays (baseline + variant) read top-to-bottom in the order they ran,
+    instead of both headers stacking at the top with no way to tell which is
+    which.
 
     Returns the CompletedProcess on success, or ``None`` after
     appending failure info to *details*.
@@ -146,20 +250,21 @@ def _run_replay(
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        details.append(f"Replay failed (exit {proc.returncode}):\n{proc.stderr}")
+        details.append(f"{label} failed (exit {proc.returncode}):\n{proc.stderr}")
         return None
 
     timing_line = ""
+    body_lines: List[str] = []
     for line in proc.stdout.splitlines():
         if "Average GPU time:" in line:
             timing_line = line.strip()
-        details.append(line.rstrip())
+        body_lines.append(line.rstrip())
 
-    label = "Replay"
     if timing_line:
-        details.insert(0, f"{label}: OK ({timing_line})")
+        details.append(f"{label}: OK ({timing_line})")
     else:
-        details.insert(0, f"{label}: OK")
+        details.append(f"{label}: OK")
+    details.extend(body_lines)
 
     return proc
 
@@ -172,10 +277,10 @@ def _validate_replay_baseline(
     """Smoke test: confirm the captured kernel replays without crashing."""
     proc = _run_replay(replay_bin, capture_dir, details)
     if proc is None:
-        return ValidationResult(passed=False, details=details)
+        return ValidationResult(passed=False, details=details, mode="smoke")
 
     details.append("Baseline replay OK (smoke test — no variant HSACO to compare against)")
-    return ValidationResult(passed=True, details=details)
+    return ValidationResult(passed=True, details=details, mode="smoke")
 
 
 def _validate_replay_variant(
@@ -196,14 +301,15 @@ def _validate_replay_variant(
         capture_dir,
         details,
         dump_output=True,
+        label="Baseline replay (captured HSACO)",
     )
     if baseline_proc is None:
-        return ValidationResult(passed=False, details=details)
+        return ValidationResult(passed=False, details=details, mode="byte-exact")
 
     output_dir = os.path.join(capture_dir, "output")
     if not os.path.isdir(output_dir):
         details.append("Baseline produced no output directory")
-        return ValidationResult(passed=False, details=details)
+        return ValidationResult(passed=False, details=details, mode="byte-exact")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         baseline_dir = os.path.join(tmpdir, "output_baseline")
@@ -211,20 +317,20 @@ def _validate_replay_variant(
 
         # --- variant replay ---
         details.append("")
-        details.append(f"Variant HSACO: {hsaco}")
         variant_proc = _run_replay(
             replay_bin,
             capture_dir,
             details,
             hsaco=hsaco,
             dump_output=True,
+            label=f"Variant replay ({hsaco})",
         )
         if variant_proc is None:
-            return ValidationResult(passed=False, details=details)
+            return ValidationResult(passed=False, details=details, mode="byte-exact")
 
         if not os.path.isdir(output_dir):
             details.append("Variant produced no output directory")
-            return ValidationResult(passed=False, details=details)
+            return ValidationResult(passed=False, details=details, mode="byte-exact")
 
         return _compare_replay_outputs(baseline_dir, output_dir, details)
 
@@ -234,7 +340,13 @@ def _compare_replay_outputs(
     variant_dir: str,
     details: List[str],
 ) -> ValidationResult:
-    """Byte-exact comparison of two replay output directories."""
+    """Byte-exact comparison of two replay output directories.
+
+    Per-region PASS lines are emitted into ``region_lines`` (printed only
+    on FAIL or under ``-v``); failures and summary counts go into
+    ``details`` (always shown).  This stops big kernels from drowning the
+    user in 200 lines of ``region_<addr>.bin: PASS (identical)``.
+    """
     baseline_files = sorted(
         f for f in os.listdir(baseline_dir) if f.startswith("region_") and f.endswith(".bin")
     )
@@ -244,13 +356,22 @@ def _compare_replay_outputs(
 
     if not baseline_files:
         details.append("No output region files to compare")
-        return ValidationResult(passed=True, details=details)
+        return ValidationResult(
+            passed=True,
+            details=details,
+            mode="byte-exact",
+            regions_total=0,
+            regions_identical=0,
+        )
 
     matched = set(baseline_files) & set(variant_files)
     only_baseline = set(baseline_files) - set(variant_files)
     only_variant = set(variant_files) - set(baseline_files)
 
+    region_lines: List[str] = []
     all_passed = True
+    n_total = len(set(baseline_files) | set(variant_files))
+    n_identical = 0
 
     for f in sorted(only_baseline):
         details.append(f"  {f}: MISSING in variant output")
@@ -278,12 +399,14 @@ def _compare_replay_outputs(
             continue
 
         if base_data.size == 0:
-            details.append(f"  {region_file}: PASS (empty)")
+            region_lines.append(f"  {region_file}: PASS (empty)")
+            n_identical += 1
             continue
 
         diff_count = int(np.sum(base_data != var_data))
         if diff_count == 0:
-            details.append(f"  {region_file}: PASS (identical)")
+            region_lines.append(f"  {region_file}: PASS (identical)")
+            n_identical += 1
         else:
             pct = 100.0 * diff_count / base_data.size
             details.append(
@@ -292,7 +415,20 @@ def _compare_replay_outputs(
             )
             all_passed = False
 
-    return ValidationResult(passed=all_passed, details=details)
+    # Always show the rollup so the user has one numeric summary line.
+    details.append(
+        f"  {n_identical} of {n_total} regions identical"
+        + ("" if all_passed else f" ({n_total - n_identical} differ)")
+    )
+
+    return ValidationResult(
+        passed=all_passed,
+        details=details,
+        mode="byte-exact",
+        region_lines=region_lines,
+        regions_total=n_total,
+        regions_identical=n_identical,
+    )
 
 
 def _validate_hsaco(
@@ -314,6 +450,7 @@ def _validate_hsaco(
         return ValidationResult(
             passed=False,
             details=[f"Build failed:\n{build_proc.stderr}"],
+            mode="numeric",
         )
     details.append("Build: OK")
 
@@ -323,6 +460,7 @@ def _validate_hsaco(
         return ValidationResult(
             passed=False,
             details=details + ["kernel.hsaco not found — cannot run harness"],
+            mode="numeric",
         )
 
     # Run
@@ -336,6 +474,7 @@ def _validate_hsaco(
         return ValidationResult(
             passed=False,
             details=details + [f"Run failed (exit {run_proc.returncode}):\n{run_proc.stderr}"],
+            mode="numeric",
         )
     details.append(f"Run: OK\n{run_proc.stdout.strip()}")
 
@@ -361,6 +500,7 @@ def _validate_hip(
         return ValidationResult(
             passed=False,
             details=[f"Build failed:\n{build_proc.stderr}"],
+            mode="numeric",
         )
     details.append("Build: OK")
 
@@ -375,6 +515,7 @@ def _validate_hip(
         return ValidationResult(
             passed=False,
             details=details + [f"Run failed (exit {run_proc.returncode}):\n{run_proc.stderr}"],
+            mode="numeric",
         )
     details.append(f"Run: OK\n{run_proc.stdout.strip()}")
 
@@ -400,6 +541,7 @@ def _validate_triton(
         return ValidationResult(
             passed=False,
             details=[f"Run failed (exit {run_proc.returncode}):\n{run_proc.stderr}"],
+            mode="numeric",
         )
     details.append(f"Run: OK\n{run_proc.stdout.strip()}")
 
@@ -419,10 +561,19 @@ def _compare_outputs(
 
     if not output_args:
         details.append("No output arguments to validate")
-        return ValidationResult(passed=True, details=details)
+        return ValidationResult(
+            passed=True,
+            details=details,
+            mode="numeric",
+            atol=atol,
+            outputs_total=0,
+            outputs_passed=0,
+        )
 
     all_passed = True
     max_error = 0.0
+    n_passed = 0
+    n_total = len(output_args)
 
     for arg in output_args:
         idx = arg["index"]
@@ -495,11 +646,17 @@ def _compare_outputs(
             details.append(f"  arg_{idx}: {status} (max_error={error:.2e}, atol={atol})")
         if status == "FAIL":
             all_passed = False
+        else:
+            n_passed += 1
 
     return ValidationResult(
         passed=all_passed,
         details=details,
         max_error=max_error,
+        mode="numeric",
+        atol=atol,
+        outputs_total=n_total,
+        outputs_passed=n_passed,
     )
 
 

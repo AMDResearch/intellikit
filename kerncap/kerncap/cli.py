@@ -241,8 +241,11 @@ def replay(reproducer_dir, hsaco, iterations, json_output, dump_output, hip_laun
 
     REPRODUCER_DIR is the path to the reproducer project (containing capture/).
     """
-    import os
+    import re
+    import subprocess
+
     from kerncap import _get_replay_path
+    from kerncap.validator import format_replay_result
 
     capture_dir = os.path.join(reproducer_dir, "capture")
     if not os.path.isdir(capture_dir):
@@ -266,16 +269,58 @@ def replay(reproducer_dir, hsaco, iterations, json_output, dump_output, hip_laun
     if hip_launch:
         cmd.append("--hip-launch")
 
-    import subprocess
+    # Capture both streams so we can suppress kerncap-replay's
+    # ``Stage 0 / 0.5 / 1 / 2 / 3`` setup chatter (emitted on stderr)
+    # unless the user asked for ``-v`` or the binary failed.  This makes
+    # the default replay output a clean header + timing block.
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    stdout = proc.stdout or ""
+    stderr = proc.stderr or ""
+    show_stderr = _is_verbose() or proc.returncode != 0
 
-    proc = subprocess.run(cmd, capture_output=not json_output, text=True)
+    if json_output:
+        # JSON mode: stdout is machine-readable; do not append the
+        # Result line and do not strip ``.kd`` (would change byte-exact
+        # output downstream parsers depend on).
+        if stdout:
+            click.echo(stdout.rstrip())
+        if stderr and show_stderr:
+            click.echo(stderr.rstrip(), err=True)
+        sys.exit(proc.returncode)
 
-    if not json_output and proc.stdout:
-        click.echo(proc.stdout.rstrip())
-    if proc.stderr:
-        click.echo(proc.stderr.rstrip(), err=True)
+    if stdout:
+        click.echo(_strip_kd(stdout.rstrip()))
+    if stderr and show_stderr:
+        click.echo(stderr.rstrip(), err=True)
 
+    avg_us = _grep_float(stdout, r"Average GPU time:\s*([\d.eE+\-]+)\s*us")
+    min_us = _grep_float(stdout, r"^Min:\s*([\d.eE+\-]+)\s*us", flags=re.MULTILINE)
+    max_us = _grep_float(stdout, r"^Max:\s*([\d.eE+\-]+)\s*us", flags=re.MULTILINE)
+
+    click.echo()
+    click.echo(
+        format_replay_result(
+            returncode=proc.returncode,
+            iterations=iterations,
+            avg_us=avg_us,
+            min_us=min_us,
+            max_us=max_us,
+        )
+    )
     sys.exit(proc.returncode)
+
+
+def _grep_float(text: str, pattern: str, flags: int = 0) -> Optional[float]:
+    """Pluck the first regex group as a float; return None if no match."""
+    import re
+
+    m = re.search(pattern, text, flags=flags)
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except (ValueError, IndexError):
+        return None
 
 
 @main.command()
@@ -290,12 +335,19 @@ def replay(reproducer_dir, hsaco, iterations, json_output, dump_output, hip_laun
     type=click.Path(exists=True),
     help="Override HSACO file (validate a recompiled variant).",
 )
-def validate(reproducer_dir, tolerance, rtol, hsaco):
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Show per-region byte-comparison detail (one line per output region).",
+)
+def validate(reproducer_dir, tolerance, rtol, hsaco, verbose):
     """Validate a reproducer by comparing outputs to captured reference.
 
     REPRODUCER_DIR is the path to the reproducer project.
     """
-    from kerncap.validator import validate_reproducer
+    from kerncap.validator import format_result, validate_reproducer
 
     click.echo(f"Validating reproducer at {reproducer_dir} ...")
     if hsaco:
@@ -313,26 +365,39 @@ def validate(reproducer_dir, tolerance, rtol, hsaco):
         sys.exit(1)
 
     for detail in result.details:
-        click.echo(f"  {detail}")
+        click.echo(f"  {_strip_kd(detail)}")
 
-    import math
+    # Per-region/per-arg PASS noise (e.g. ``region_<addr>.bin: PASS (identical)``
+    # for a kernel with 200 regions) is only useful on FAIL or when the user
+    # explicitly asks for it via ``-v`` (subcommand) or top-level ``kerncap -v``.
+    # Failure lines already live in ``details``.
+    if result.region_lines and (verbose or _is_verbose() or not result.passed):
+        for line in result.region_lines:
+            click.echo(f"  {_strip_kd(line)}")
 
-    is_smoke_test = any("smoke test" in d for d in result.details)
-    if result.passed:
-        if is_smoke_test:
-            click.echo("\nPASS (smoke test)")
-        elif result.max_error == 0.0:
-            click.echo("\nPASS")
-        else:
-            err_str = "nan" if math.isnan(result.max_error) else f"{result.max_error:.2e}"
-            click.echo(f"\nPASS (max error: {err_str})")
-    else:
-        err_str = "nan" if math.isnan(result.max_error) else f"{result.max_error:.2e}"
-        if is_smoke_test or result.max_error == 0.0:
-            click.echo("\nFAIL")
-        else:
-            click.echo(f"\nFAIL (max error: {err_str})")
+    click.echo()
+    click.echo(format_result(result))
+    if not result.passed:
         sys.exit(1)
+
+
+def _is_verbose() -> bool:
+    """Whether the user passed ``-v`` to the top-level kerncap command."""
+    return logging.getLogger("kerncap").isEnabledFor(logging.DEBUG)
+
+
+def _strip_kd(text: str) -> str:
+    """Drop the HSA ``.kd`` (kernel descriptor) suffix from displayed
+    kernel names.
+
+    The on-disk artifacts (``dispatch.json``, ``metadata.json``) keep the
+    raw HSA symbol; this is a presentation-only edit so a Triton user
+    sees ``triton_poi_fused_relu_0`` instead of
+    ``triton_poi_fused_relu_0.kd``.
+    """
+    import re
+
+    return re.sub(r"(\b[A-Za-z_][A-Za-z0-9_]*)\.kd\b", r"\1", text)
 
 
 if __name__ == "__main__":
