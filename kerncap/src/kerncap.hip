@@ -17,8 +17,11 @@
 #include <rocprofiler-sdk/intercept_table.h>
 
 #include <cinttypes>
+#include <cstdio>
+#include <cstdlib>
 #include <cxxabi.h>
 #include <fcntl.h>
+#include <iomanip>
 #include <pthread.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -30,6 +33,105 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+
+// SHA-256 implementation (compact public-domain).  We avoid pulling in a
+// full crypto dependency for what is essentially a content-hash lookup.
+namespace {
+
+struct Sha256 {
+    uint32_t state[8];
+    uint64_t bitlen;
+    uint8_t buf[64];
+    uint32_t buflen;
+
+    static constexpr uint32_t K[64] = {
+        0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+    };
+
+    static uint32_t rotr(uint32_t x, uint32_t n) { return (x >> n) | (x << (32 - n)); }
+
+    void init() {
+        static const uint32_t H0[8] = {
+            0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
+            0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19,
+        };
+        std::memcpy(state, H0, sizeof(state));
+        bitlen = 0;
+        buflen = 0;
+    }
+
+    void transform(const uint8_t* d) {
+        uint32_t w[64];
+        for (int i = 0; i < 16; ++i) {
+            w[i] = (uint32_t(d[4*i])   << 24) |
+                   (uint32_t(d[4*i+1]) << 16) |
+                   (uint32_t(d[4*i+2]) <<  8) |
+                   (uint32_t(d[4*i+3])      );
+        }
+        for (int i = 16; i < 64; ++i) {
+            uint32_t s0 = rotr(w[i-15], 7) ^ rotr(w[i-15], 18) ^ (w[i-15] >> 3);
+            uint32_t s1 = rotr(w[i-2], 17) ^ rotr(w[i-2], 19) ^ (w[i-2] >> 10);
+            w[i] = w[i-16] + s0 + w[i-7] + s1;
+        }
+        uint32_t a=state[0],b=state[1],c=state[2],d2=state[3],
+                 e=state[4],f=state[5],g=state[6],h=state[7];
+        for (int i = 0; i < 64; ++i) {
+            uint32_t S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+            uint32_t ch = (e & f) ^ (~e & g);
+            uint32_t t1 = h + S1 + ch + K[i] + w[i];
+            uint32_t S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+            uint32_t mj = (a & b) ^ (a & c) ^ (b & c);
+            uint32_t t2 = S0 + mj;
+            h=g; g=f; f=e; e=d2+t1; d2=c; c=b; b=a; a=t1+t2;
+        }
+        state[0]+=a; state[1]+=b; state[2]+=c; state[3]+=d2;
+        state[4]+=e; state[5]+=f; state[6]+=g; state[7]+=h;
+    }
+
+    void update(const uint8_t* data, size_t len) {
+        for (size_t i = 0; i < len; ++i) {
+            buf[buflen++] = data[i];
+            if (buflen == 64) {
+                transform(buf);
+                bitlen += 512;
+                buflen = 0;
+            }
+        }
+    }
+
+    std::string hex_finalize() {
+        uint64_t total_bits = bitlen + uint64_t(buflen) * 8;
+        buf[buflen++] = 0x80;
+        if (buflen > 56) {
+            while (buflen < 64) buf[buflen++] = 0;
+            transform(buf);
+            buflen = 0;
+        }
+        while (buflen < 56) buf[buflen++] = 0;
+        for (int i = 7; i >= 0; --i) buf[buflen++] = uint8_t(total_bits >> (8 * i));
+        transform(buf);
+        std::ostringstream os;
+        os << std::hex << std::setfill('0');
+        for (int i = 0; i < 8; ++i) os << std::setw(8) << state[i];
+        return os.str();
+    }
+};
+
+std::string sha256_hex(const void* data, size_t bytes) {
+    Sha256 h;
+    h.init();
+    h.update(static_cast<const uint8_t*>(data), bytes);
+    return h.hex_finalize();
+}
+
+}  // namespace
 
 namespace kerncap {
 
@@ -93,6 +195,12 @@ CaptureState::CaptureState(
         (std::getenv("KERNCAP_BYPASS_AFTER_CAPTURE") != nullptr);
     disable_code_object_hooks_ =
         (std::getenv("KERNCAP_DISABLE_CODE_OBJECT_HOOKS") != nullptr);
+
+    triton_name_map_path_ = safe_getenv("KERNCAP_TRITON_NAME_MAP");
+    if (!triton_name_map_path_.empty()) {
+        KERNCAP_INFO("Triton HSA capture mode: name_map=%s",
+                     triton_name_map_path_.c_str());
+    }
 
     // Fork safety: record PID and check for multi-process mode
     initial_pid_ = getpid();
@@ -177,6 +285,8 @@ void CaptureState::reset_inherited_state() {
     pending_reader_blobs_.clear();
     executable_blobs_.clear();
     kernel_hsaco_.clear();
+    executable_kernargs_.clear();
+    executable_blob_sha256_.clear();
     queue_agents_.clear();
     queue_dispatch_seen_.clear();
     target_dispatch_count_ = 0;
@@ -344,13 +454,79 @@ hsa_status_t CaptureState::hsa_executable_load_agent_code_object(
         // holds its internal executable lock.
         auto it = inst->pending_reader_blobs_.find(code_object_reader.handle);
         if (it != inst->pending_reader_blobs_.end()) {
+            const auto& blob = it->second;
+
+            // Parse kernarg metadata up front (cheap; ~ms per HSACO) so
+            // dispatch-time has zero comgr cost in the hot path.
+            auto kernels = parse_kernarg_metadata(blob.data(), blob.size());
+            if (!kernels.empty()) {
+                KERNCAP_INFO(
+                    "Parsed %zu kernel(s) from code object on executable 0x%lx",
+                    kernels.size(), executable.handle);
+                inst->executable_kernargs_[executable.handle] = std::move(kernels);
+            }
+
+            inst->executable_blob_sha256_[executable.handle] =
+                sha256_hex(blob.data(), blob.size());
             inst->executable_blobs_[executable.handle] = std::move(it->second);
             inst->pending_reader_blobs_.erase(it);
-            KERNCAP_INFO("Stored code object blob for executable 0x%lx",
-                         executable.handle);
+            KERNCAP_INFO("Stored code object blob for executable 0x%lx (sha256=%.16s...)",
+                         executable.handle,
+                         inst->executable_blob_sha256_[executable.handle].c_str());
+            // Refresh the Triton name map so the user-name lookup can hit.
+            inst->maybe_reload_triton_name_map();
         }
     }
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// Triton name_map.json — populated by the compile-hook wrapper, consumed
+// here at dispatch time to resolve loaded-blob SHA-256 -> user name.
+// ---------------------------------------------------------------------------
+static int64_t mtime_ns(const std::string& path) {
+    struct stat st{};
+    if (stat(path.c_str(), &st) != 0) return 0;
+    return int64_t(st.st_mtim.tv_sec) * 1000000000 + int64_t(st.st_mtim.tv_nsec);
+}
+
+void CaptureState::maybe_reload_triton_name_map() {
+    std::lock_guard lock(triton_name_map_mutex_);
+    if (triton_name_map_path_.empty()) return;
+    auto cur = mtime_ns(triton_name_map_path_);
+    if (cur == 0 || cur == triton_name_map_mtime_ns_) return;
+
+    std::ifstream f(triton_name_map_path_);
+    if (!f) return;
+    nlohmann::json j;
+    try {
+        f >> j;
+    } catch (const std::exception& e) {
+        KERNCAP_WARN("name_map.json parse error: %s", e.what());
+        return;
+    }
+    triton_name_map_.clear();
+    if (!j.is_array()) return;
+    for (const auto& row : j) {
+        TritonNameMapRow r;
+        r.user_name    = row.value("user_name", "");
+        r.hsaco_sha256 = row.value("hsaco_sha256", "");
+        r.hsaco_path   = row.value("hsaco_path", "");
+        if (row.contains("constexpr_values")) r.constexpr_values = row["constexpr_values"];
+        triton_name_map_.push_back(std::move(r));
+    }
+    triton_name_map_mtime_ns_ = cur;
+    KERNCAP_INFO("Reloaded triton name_map (%zu rows) from %s",
+                 triton_name_map_.size(), triton_name_map_path_.c_str());
+}
+
+std::optional<CaptureState::TritonNameMapRow>
+CaptureState::lookup_triton_user_name(const std::string& blob_sha256) {
+    std::lock_guard lock(triton_name_map_mutex_);
+    for (const auto& r : triton_name_map_) {
+        if (r.hsaco_sha256 == blob_sha256) return r;
+    }
+    return std::nullopt;
 }
 
 // ---------------------------------------------------------------------------
@@ -643,25 +819,82 @@ void CaptureState::snapshot_all_tracked_memory(
 
     // Now do the D2H copies. If hsa_memory_copy crashes on a freed
     // region, at least memory_regions.json and dispatch.json are safe.
+    //
+    // Stream each region in fixed-size chunks via a single reusable
+    // staging buffer so kerncap's host-RAM footprint is bounded by the
+    // chunk size (default 64 MiB) regardless of how large any
+    // individual GPU allocation is.  Without this, a multi-GiB region
+    // (e.g. vLLM's KV-cache slabs) would force a full-region
+    // ``std::vector<char>`` allocation and an equally large in-flight
+    // D2H copy, easily pushing the host into OOM.
+    //
+    // Tunable via ``KERNCAP_SNAPSHOT_CHUNK_BYTES`` (bytes, min 64 KiB).
+    constexpr size_t kDefaultChunkBytes = 64ULL << 20;  // 64 MiB
+    constexpr size_t kMinChunkBytes     = 64ULL << 10;  // 64 KiB
+    size_t chunk_bytes = kDefaultChunkBytes;
+    if (const char* env = std::getenv("KERNCAP_SNAPSHOT_CHUNK_BYTES")) {
+        try {
+            long long v = std::stoll(env);
+            if (v >= static_cast<long long>(kMinChunkBytes)) {
+                chunk_bytes = static_cast<size_t>(v);
+            } else {
+                KERNCAP_WARN("KERNCAP_SNAPSHOT_CHUNK_BYTES=%s below minimum "
+                             "(%zu); using default %zu",
+                             env, kMinChunkBytes, kDefaultChunkBytes);
+            }
+        } catch (const std::exception&) {
+            KERNCAP_WARN("KERNCAP_SNAPSHOT_CHUNK_BYTES=%s not parseable; "
+                         "using default %zu", env, kDefaultChunkBytes);
+        }
+    }
+
+    std::vector<char> buf(chunk_bytes);  // allocated ONCE, reused per region
+    KERNCAP_INFO("Memory snapshot: streaming %zu region(s) in %zu-byte chunks",
+                 allocs.size(), chunk_bytes);
+
     int ok_count = 0;
     for (const auto& a : allocs) {
         if (a.size == 0 || a.size > (1ULL << 40)) continue;
 
         uint64_t base = reinterpret_cast<uint64_t>(a.ptr);
 
-        std::vector<char> buf(a.size);
-        hsa_status_t st = hsa_memory_copy(buf.data(), a.ptr, a.size);
-
-        if (st == HSA_STATUS_SUCCESS) {
             char filename[256];
             std::snprintf(filename, sizeof(filename),
                          "%s/region_%" PRIx64 ".bin", memdir.c_str(), base);
+
             std::ofstream out(filename, std::ios::binary);
-            out.write(buf.data(), a.size);
+        if (!out) {
+            KERNCAP_WARN("snapshot: failed to open %s for writing", filename);
+            continue;
+        }
+
+        bool region_ok = true;
+        for (size_t off = 0; off < a.size; off += chunk_bytes) {
+            size_t n = std::min(chunk_bytes, a.size - off);
+            void* src = static_cast<char*>(a.ptr) + off;
+            hsa_status_t st = hsa_memory_copy(buf.data(), src, n);
+            if (st != HSA_STATUS_SUCCESS) {
+                KERNCAP_WARN("snapshot: hsa_memory_copy failed for region 0x%"
+                             PRIx64 " at offset %zu (chunk %zu bytes, err=%d)",
+                             base, off, n, static_cast<int>(st));
+                region_ok = false;
+                break;
+            }
+            out.write(buf.data(), n);
+            if (!out) {
+                KERNCAP_WARN("snapshot: write to %s failed at offset %zu",
+                             filename, off);
+                region_ok = false;
+                break;
+            }
+        }
+        out.close();
+
+        if (region_ok) {
             ok_count++;
         } else {
-            KERNCAP_WARN("snapshot: hsa_memory_copy failed for region 0x%" PRIx64
-                         " (%zu bytes, err=%d)", base, a.size, static_cast<int>(st));
+            // Avoid leaving truncated/garbage region files around.
+            std::remove(filename);
         }
     }
 
@@ -733,6 +966,79 @@ void CaptureState::capture_kernel(
                      {"y", disp->workgroup_size_y},
                      {"z", disp->workgroup_size_z}};
     meta["lds_size"] = disp->group_segment_size;
+
+    // ----- Kernarg slot table (parsed from AMDGPU metadata at load time) -----
+    //
+    // Two-phase lookup to keep the lock order ``mutex_ -> code_object_mutex_``
+    // consistent with ``hsa_executable_symbol_get_info`` (the only other
+    // place that takes both).  Phase 1 reads symbol-side state under
+    // ``mutex_`` and copies the executable handle + symbol string out;
+    // phase 2 reads code-object-side state under ``code_object_mutex_``
+    // alone.  The previous code held ``code_object_mutex_`` first and
+    // then took ``mutex_``, which is the AB-BA partner of
+    // ``hsa_executable_symbol_get_info``'s ``mutex_ -> code_object_mutex_``
+    // and could deadlock when Triton compiles new kernels concurrently
+    // with active dispatches.
+    std::optional<KernelKernargInfo> kinfo;
+    std::string blob_sha;
+    uint64_t exec_handle = 0;
+    bool exec_found = false;
+    std::string sym_str;
+    {
+        std::shared_lock g(mutex_);
+        auto sym_it = handle_to_symbol_.find(disp->kernel_object);
+        if (sym_it != handle_to_symbol_.end()) {
+            auto exec_it = symbol_to_executable_.find(sym_it->second);
+            if (exec_it != symbol_to_executable_.end()) {
+                exec_handle = exec_it->second;
+                exec_found = true;
+            }
+            auto sit = symbol_names_.find(sym_it->second);
+            if (sit != symbol_names_.end()) sym_str = sit->second;
+        }
+    }
+    if (exec_found) {
+        std::lock_guard lock(code_object_mutex_);
+        auto kit = executable_kernargs_.find(exec_handle);
+        if (kit != executable_kernargs_.end()) {
+            auto found = find_kernarg_metadata(kit->second, sym_str);
+            if (found) kinfo = std::move(*found);
+        }
+        auto bit = executable_blob_sha256_.find(exec_handle);
+        if (bit != executable_blob_sha256_.end()) blob_sha = bit->second;
+    }
+
+    if (kinfo) {
+        nlohmann::json slots = nlohmann::json::array();
+        for (const auto& s : kinfo->args) {
+            slots.push_back({
+                {"offset", s.offset},
+                {"size",   s.size},
+                {"value_kind", s.kind_str.empty() ? to_string(s.kind) : s.kind_str},
+                {"value_type", s.value_type},
+                {"address_space", s.address_space},
+                {"name", s.name},
+            });
+        }
+        meta["kernarg_slots"] = slots;
+        meta["kernarg_segment_size_meta"] = kinfo->kernarg_segment_size;
+        meta["sgpr_count"] = kinfo->sgpr_count;
+        meta["vgpr_count"] = kinfo->vgpr_count;
+    }
+
+    // ----- Triton name_map.json lookup (by content hash) -----
+    if (!blob_sha.empty()) {
+        meta["hsaco_sha256"] = blob_sha;
+        if (!triton_name_map_path_.empty()) {
+            maybe_reload_triton_name_map();
+            auto row = lookup_triton_user_name(blob_sha);
+            if (row) {
+                meta["triton_user_name"] = row->user_name;
+                if (!row->constexpr_values.is_null())
+                    meta["constexpr_values"] = row->constexpr_values;
+            }
+        }
+    }
 
     // Dump the raw kernarg buffer
     {
@@ -836,10 +1142,31 @@ void CaptureState::capture_kernel(
     // This creates memory_regions.json + memory/region_*.bin files
     // that kerncap-replay uses to restore device state at original VAs.
     // Done LAST because hsa_memory_copy may crash on freed regions.
+    //
+    // Diagnostic knob: ``KERNCAP_DISABLE_SNAPSHOT=1`` skips the D2H
+    // copy entirely.  Useful for isolating whether D2H copies on
+    // HMM-mapped regions are what triggers downstream GPU page faults
+    // (replay artifacts will be incomplete in that case).
+    if (std::getenv("KERNCAP_DISABLE_SNAPSHOT") != nullptr) {
+        KERNCAP_INFO("Skipping memory snapshot (KERNCAP_DISABLE_SNAPSHOT=1)");
+    } else {
     snapshot_all_tracked_memory(disp);
 
     KERNCAP_INFO("Capture complete -> %s", meta_path.c_str());
     captured_.store(true, std::memory_order_relaxed);
+
+    // Drop a sentinel file the orchestrator can poll on.  Once this
+    // exists, every artifact the reproducer needs is already on disk,
+    // and the orchestrator is free to terminate the child process --
+    // continuing past this point only exposes us to whatever the host
+    // app does next (vLLM warmup, async benchmark loops, etc.) which
+    // doesn't benefit from kerncap's hooks and frequently OOMs or
+    // hangs because of them.
+    {
+        std::string sentinel_path = output_dir_ + "/capture_complete";
+        std::ofstream sentinel(sentinel_path);
+        sentinel << "ok\n";
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -888,9 +1215,51 @@ void CaptureState::handle_packets(
         // Resolve kernel name
         std::string kernel_name = get_kernel_name(disp->kernel_object);
 
-        // Check if this is our target kernel
+        // Check if this is our target kernel.  In Triton-HSA mode the
+        // user name lives in name_map.json keyed by content hash; fall
+        // through to that lookup when the mangled symbol does not match.
         bool is_target = !target_kernel_.empty() &&
                          kernel_name.find(target_kernel_) != std::string::npos;
+        if (!is_target && !target_kernel_.empty() &&
+            !triton_name_map_path_.empty()) {
+            // Two-phase lookup with consistent lock order
+            // (``mutex_ -> code_object_mutex_``) to avoid the AB-BA
+            // deadlock with ``hsa_executable_symbol_get_info``.  This
+            // path is hot: it fires on every non-target dispatch for
+            // the entire life of a Triton-HSA capture.
+            uint64_t exec_handle = 0;
+            bool exec_found = false;
+            {
+                std::shared_lock g(mutex_);
+                auto sit = handle_to_symbol_.find(disp->kernel_object);
+                if (sit != handle_to_symbol_.end()) {
+                    auto eit = symbol_to_executable_.find(sit->second);
+                    if (eit != symbol_to_executable_.end()) {
+                        exec_handle = eit->second;
+                        exec_found = true;
+                    }
+                }
+            }
+            std::string blob_sha;
+            if (exec_found) {
+                std::lock_guard lock(code_object_mutex_);
+                auto bit = executable_blob_sha256_.find(exec_handle);
+                if (bit != executable_blob_sha256_.end())
+                    blob_sha = bit->second;
+            }
+            if (!blob_sha.empty()) {
+                maybe_reload_triton_name_map();
+                auto row = lookup_triton_user_name(blob_sha);
+                if (row && row->user_name.find(target_kernel_) != std::string::npos) {
+                    is_target = true;
+                    KERNCAP_INFO("Matched Triton kernel '%s' via content-hash lookup",
+                                 row->user_name.c_str());
+                }
+            }
+        }
+
+        // Dispatch tracing (after is_target is finalized so the
+        // target_match field reflects the post-Triton-match value).
         bool trace_dispatch = should_trace_dispatch(
             queue_id, dispatch_seq, queue_dispatch_seq, is_target);
         if (trace_dispatch) {

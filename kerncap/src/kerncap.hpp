@@ -26,6 +26,7 @@
 #include <nlohmann/json.hpp>
 
 #include "kerncap_log.hpp"
+#include "kernarg_metadata.hpp"
 
 #define PUBLIC_API __attribute__((visibility("default")))
 
@@ -225,6 +226,33 @@ private:
     std::unordered_map<uint64_t, std::vector<uint8_t>> executable_blobs_;      // executable handle -> blob
     std::unordered_map<uint64_t, uint64_t> kernel_hsaco_;                      // kernel_object -> executable handle
     std::mutex code_object_mutex_;
+
+    // Kernarg slot tables parsed from each loaded code object's AMDGPU
+    // metadata. Keyed by executable handle (since ``hsa_*_load_agent_code_object``
+    // gives us the executable; the kernel_object -> symbol -> executable
+    // mapping is built lazily and gives us the right entry on dispatch).
+    std::unordered_map<uint64_t, std::vector<KernelKernargInfo>>
+        executable_kernargs_;
+    std::unordered_map<uint64_t, std::string> executable_blob_sha256_;
+
+    // Triton HSA capture mode: name_map.json path (KERNCAP_TRITON_NAME_MAP)
+    // and the rows we have already loaded.  We re-read on mtime change
+    // because libkerncap.so is preloaded *before* the Python wrapper has
+    // had a chance to populate the file.
+    struct TritonNameMapRow {
+        std::string user_name;
+        std::string hsaco_sha256;
+        std::string hsaco_path;
+        nlohmann::json constexpr_values;
+    };
+    std::string triton_name_map_path_;
+    std::vector<TritonNameMapRow> triton_name_map_;
+    int64_t triton_name_map_mtime_ns_ = 0;
+    std::mutex triton_name_map_mutex_;
+
+    void maybe_reload_triton_name_map();
+    std::optional<TritonNameMapRow>
+        lookup_triton_user_name(const std::string& blob_sha256);
 
     // Queue tracking
     std::map<hsa_queue_t*, hsa_agent_t> queue_agents_;
