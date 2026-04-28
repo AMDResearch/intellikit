@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import sys
 from typing import Optional
 
@@ -130,7 +131,23 @@ def profile(cmd, output, timeout):
     type=int,
     help="Maximum seconds to wait for the application (default: 300).",
 )
-def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines, timeout):
+@click.option(
+    "--triton-backend",
+    type=click.Choice(["hsa", "python"]),
+    default="hsa",
+    help=(
+        "How to capture Triton kernels.  ``hsa`` (default) loads "
+        "libkerncap.so via LD_PRELOAD, parses kernarg layout from the "
+        "AMDGPU code-object metadata, and produces a VA-faithful capture "
+        "compatible with kerncap-replay -- recommended for all new work.  "
+        "``python`` is the legacy path that intercepts JITFunction.run "
+        "from a sitecustomize.py hook; kept only for back-compat with "
+        "captures taken before the HSA backend existed."
+    ),
+)
+def extract(
+    kernel_name, cmd, source_dir, output, language, dispatch, defines, timeout, triton_backend
+):
     """Extract a kernel into a standalone reproducer.
 
     KERNEL_NAME is the kernel name (or substring) to capture.
@@ -147,6 +164,7 @@ def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines, t
             dispatch=dispatch,
             defines=list(defines) if defines else None,
             timeout=timeout,
+            triton_backend=triton_backend,
         )
     except Exception as e:
         click.echo(f"Extract failed: {e}", err=True)
@@ -154,6 +172,46 @@ def extract(kernel_name, cmd, source_dir, output, language, dispatch, defines, t
 
     click.echo(f"  Generated: {', '.join(result.generated_files)}")
     click.echo("\nDone.")
+    _print_next_steps(result)
+
+
+def _print_next_steps(result) -> None:
+    """Print a uniform 3-line ``edit / rebuild / verify`` block.
+
+    Same shape across languages so a HIP cookbook reads the same way as a
+    Triton one; values differ by language.
+    """
+    out = result.output_dir
+    edit_file = _pick_edit_file(result)
+    if result.language == "triton":
+        rebuild = f"cd {out} && python3 reproducer.py"
+    else:
+        rebuild = f"cd {out} && make recompile"
+
+    click.echo("\nNext steps:")
+    if edit_file:
+        click.echo(f"  edit:    {os.path.join(out, edit_file)}")
+    click.echo(f"  rebuild: {rebuild}")
+    click.echo(f"  verify:  kerncap validate {out}")
+
+
+def _pick_edit_file(result) -> Optional[str]:
+    """Choose the file the user should edit, based on what extract wrote."""
+    files = result.generated_files or []
+    if result.language == "triton":
+        # Prefer the cleanly-named ``kernel_variant.py`` (package-source path);
+        # fall back to the first non-reproducer/non-dir Python file in the
+        # generated list (flat-file path: a copy of the original source).
+        if "kernel_variant.py" in files:
+            return "kernel_variant.py"
+        for f in files:
+            if f.endswith(".py") and f != "reproducer.py":
+                return f
+        return None
+    # HIP / HSACO path
+    if "kernel_variant.cpp" in files:
+        return "kernel_variant.cpp"
+    return None
 
 
 @main.command()
