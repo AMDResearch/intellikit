@@ -159,10 +159,12 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
 
     # Compute theoretical bandwidth from memory clock + bus width.
     # HIP's memoryClockRate is the MCLK from amdgpu_dpm_get_mclk():
-    #   HBM2/HBM2e (gfx90a): MCLK = data strobe clock, DDR → 2x multiplier
-    #   HBM3 (gfx94x):       MCLK = CK (command clock) = half the data strobe → 4x
-    #   HBM3e (gfx95x):      same as HBM3 → 4x
-    #   GDDR6 (RDNA):        MCLK = base CK; 16n prefetch → 16x multiplier
+    #   HBM2/HBM2e (gfx90a):     MCLK = data strobe clock, DDR → 2x multiplier
+    #   HBM3 (gfx94x):           MCLK = CK (command clock) = half the data strobe → 4x
+    #   HBM3e (gfx95x):          same as HBM3 → 4x
+    #   GDDR6 (discrete RDNA):   MCLK = base CK; 16n prefetch → 16x multiplier
+    #   LPDDR5X (RDNA 3.5 APUs): MCLK = CK; 8:1 DQ:CK ratio → 8x multiplier
+    #     e.g. gfx1151 / Strix Halo: 1 GHz × 8 = 8 GT/s × 256-bit / 8 ≈ 256 GB/s
     mem_clock = gpu["memory_clock_rate_khz"]
     bus_width = gpu["memory_bus_width_bits"]
     if mem_clock <= 0 or bus_width <= 0:
@@ -172,6 +174,8 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
         )
     if arch.startswith(("gfx94", "gfx95")):
         mem_multiplier = 4.0  # HBM3/HBM3e: CK → 4x
+    elif arch == "gfx1151":
+        mem_multiplier = 8.0  # LPDDR5X (Strix Halo APU): CK → 8x
     elif arch.startswith("gfx1"):
         mem_multiplier = 16.0  # GDDR6: base CK → 16x (16n prefetch)
     else:

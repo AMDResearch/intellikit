@@ -1,9 +1,11 @@
 """
-Unit tests for backend metric computations (gfx942, gfx950, gfx90a, and gfx1201)
+Unit tests for backend metric computations (gfx942, gfx950, gfx90a, gfx1201,
+gfx1030, and gfx1151)
 
 Tests use MOCK counter data (no hardware counters in test code!)
 Tests are parametrized to run on MI300X (gfx942), MI350X (gfx950), MI200 (gfx90a),
-and RDNA4 (gfx1201). All metrics are loaded from counter_defs.yaml.
+RDNA4 (gfx1201), RDNA2 (gfx1030), and RDNA 3.5 (gfx1151).
+All metrics are loaded from counter_defs.yaml.
 """
 
 import pytest
@@ -65,6 +67,17 @@ _TEST_SPECS = {
         base_clock_mhz=2575.0,
         hbm_bandwidth_gbs=512.0,
         l2_size_mb=4.0,
+        lds_size_per_cu_kb=128.0,
+    ),
+    "gfx1151": DeviceSpecs(
+        arch="gfx1151",
+        name="AMD Strix Halo",
+        num_cu=40,
+        max_waves_per_cu=32,
+        wavefront_size=32,
+        base_clock_mhz=2900.0,
+        hbm_bandwidth_gbs=256.0,
+        l2_size_mb=8.0,
         lds_size_per_cu_kb=128.0,
     ),
 }
@@ -935,3 +948,177 @@ class TestRDNA2BytesTransferred:
         }
         result = compute(rdna2_backend, "memory.bytes_transferred_hbm")
         assert result == _RDNA2_READ_BYTES + _RDNA2_WRITE_BYTES
+
+
+# ═══════════════════════════════════════════════════════════════════
+# RDNA 3.5 (gfx1151) tests
+#
+# gfx1151 is the Strix Halo APU. Like gfx1030 it exposes per-size
+# GL2C_EA_RDREQ_{32,64,96,128}B_sum buckets and only the 64B GL2C_EA_WRREQ
+# bucket. The aggregate GL2C_EA_RDREQ_sum / GL2C_EA_WRREQ_sum counters
+# that gfx1201 has built-in are NOT available on gfx1151, so the YAML
+# routes gfx1151 through the same expressions as gfx1030.
+# ═══════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def rdna35_backend():
+    """Fixture for gfx1151 (RDNA 3.5 / Strix Halo) backend"""
+    with patch(
+        "metrix.backends.gfx1151.query_device_specs",
+        return_value=_TEST_SPECS["gfx1151"],
+    ):
+        return get_backend("gfx1151")
+
+
+# Reuse the same synthetic counter values as the RDNA2 tests; gfx1151 uses
+# the identical YAML expression so the expected outputs match exactly.
+_RDNA35_READ_BYTES = _RDNA2_READ_BYTES
+_RDNA35_WRITE_BYTES = _RDNA2_WRITE_BYTES
+_rdna35_read_counters = _rdna2_read_counters
+_rdna35_write_counters = _rdna2_write_counters
+
+
+class TestRDNA35MetricDiscovery:
+    """gfx1151 must surface the same RDNA bandwidth metrics as gfx1030"""
+
+    def test_discovers_vram_bandwidth_metrics(self, rdna35_backend):
+        metrics = rdna35_backend.get_available_metrics()
+        assert "memory.hbm_read_bandwidth" in metrics
+        assert "memory.hbm_write_bandwidth" in metrics
+        assert "memory.hbm_bandwidth_utilization" in metrics
+        assert "memory.bytes_transferred_hbm" in metrics
+
+    def test_discovers_l2_metrics(self, rdna35_backend):
+        metrics = rdna35_backend.get_available_metrics()
+        assert "memory.l2_hit_rate" in metrics
+        assert "memory.l2_bandwidth" in metrics
+        assert "memory.bytes_transferred_l2" in metrics
+
+    def test_required_counters_use_per_size_buckets(self, rdna35_backend):
+        """gfx1151 must request per-size GL2C_EA_RDREQ_*B_sum, not the gfx1201 aggregate"""
+        counters = set(rdna35_backend.get_required_counters(["memory.hbm_read_bandwidth"]))
+        for size in ("32B", "64B", "96B", "128B"):
+            assert f"GL2C_EA_RDREQ_{size}_sum" in counters
+        assert "GL2C_EA_RDREQ_sum" not in counters
+
+    def test_required_counters_use_mc_wrreq_for_writes(self, rdna35_backend):
+        """gfx1151 must derive total writes from GL2C_MC_WRREQ_sum + 64B bucket"""
+        counters = set(rdna35_backend.get_required_counters(["memory.hbm_write_bandwidth"]))
+        assert "GL2C_EA_WRREQ_64B_sum" in counters
+        assert "GL2C_MC_WRREQ_sum" in counters
+        assert "GL2C_EA_WRREQ_sum" not in counters
+
+
+class TestRDNA35VRAMReadBandwidth:
+    """gfx1151 sums per-size GL2C_EA_RDREQ buckets (mirrors gfx1030)"""
+
+    def test_read_bandwidth_per_size_buckets(self, rdna35_backend):
+        active_cycles = int(rdna35_backend.device_specs.base_clock_mhz * 1000)
+        rdna35_backend._raw_data = {
+            **_rdna35_read_counters(),
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna35_backend._current_duration_us = 1000.0  # 1 ms
+
+        result = compute(rdna35_backend, "memory.hbm_read_bandwidth")
+        expected = (_RDNA35_READ_BYTES / 1e9) / 0.001
+        assert abs(result - expected) < 1e-6
+
+    def test_read_bandwidth_zero_cycles(self, rdna35_backend):
+        rdna35_backend._raw_data = {
+            **_rdna35_read_counters(),
+            "GRBM_GUI_ACTIVE": 0,
+            "GRBM_COUNT": 0,
+        }
+        rdna35_backend._current_duration_us = 0.0
+        assert compute(rdna35_backend, "memory.hbm_read_bandwidth") == 0.0
+
+
+class TestRDNA35VRAMWriteBandwidth:
+    """gfx1151 only exposes the 64B write bucket; residual := MC_WRREQ_sum - 64B_sum @ 32B"""
+
+    def test_write_bandwidth_with_32B_residual(self, rdna35_backend):
+        active_cycles = int(rdna35_backend.device_specs.base_clock_mhz * 1000)
+        rdna35_backend._raw_data = {
+            **_rdna35_write_counters(),
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna35_backend._current_duration_us = 1000.0
+
+        result = compute(rdna35_backend, "memory.hbm_write_bandwidth")
+        expected = (_RDNA35_WRITE_BYTES / 1e9) / 0.001
+        assert abs(result - expected) < 1e-6
+
+    def test_write_bandwidth_zero_cycles(self, rdna35_backend):
+        rdna35_backend._raw_data = {
+            **_rdna35_write_counters(),
+            "GRBM_GUI_ACTIVE": 0,
+            "GRBM_COUNT": 0,
+        }
+        rdna35_backend._current_duration_us = 0.0
+        assert compute(rdna35_backend, "memory.hbm_write_bandwidth") == 0.0
+
+
+class TestRDNA35BandwidthUtilization:
+    """Combined read+write traffic / peak BW * 100"""
+
+    def test_utilization_percentage(self, rdna35_backend):
+        active_cycles = int(rdna35_backend.device_specs.base_clock_mhz * 1000)
+        peak_bw = rdna35_backend.device_specs.hbm_bandwidth_gbs
+
+        rdna35_backend._raw_data = {
+            **_rdna35_read_counters(),
+            **_rdna35_write_counters(),
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna35_backend._current_duration_us = 1000.0
+
+        result = compute(rdna35_backend, "memory.hbm_bandwidth_utilization")
+        expected_bw = ((_RDNA35_READ_BYTES + _RDNA35_WRITE_BYTES) / 1e9) / 0.001
+        expected_pct = expected_bw / peak_bw * 100
+        assert abs(result - expected_pct) < 1e-6
+
+    def test_utilization_zero_traffic(self, rdna35_backend):
+        active_cycles = int(rdna35_backend.device_specs.base_clock_mhz * 1000)
+        rdna35_backend._raw_data = {
+            "GL2C_EA_RDREQ_32B_sum": 0,
+            "GL2C_EA_RDREQ_64B_sum": 0,
+            "GL2C_EA_RDREQ_96B_sum": 0,
+            "GL2C_EA_RDREQ_128B_sum": 0,
+            "GL2C_EA_WRREQ_64B_sum": 0,
+            "GL2C_MC_WRREQ_sum": 0,
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna35_backend._current_duration_us = 1000.0
+        assert compute(rdna35_backend, "memory.hbm_bandwidth_utilization") == 0.0
+
+
+class TestRDNA35BytesTransferred:
+    """Total bytes through L2 -> Fabric (no time term, PERF_LEVEL-independent)"""
+
+    def test_bytes_read_and_write(self, rdna35_backend):
+        rdna35_backend._raw_data = {
+            **_rdna35_read_counters(),
+            **_rdna35_write_counters(),
+        }
+        result = compute(rdna35_backend, "memory.bytes_transferred_hbm")
+        assert result == _RDNA35_READ_BYTES + _RDNA35_WRITE_BYTES
+
+
+class TestRDNA35L2Metrics:
+    """gfx1151 reuses gfx1030's GL2C_HIT/GL2C_MISS L2 expressions"""
+
+    def test_l2_hit_rate(self, rdna35_backend):
+        rdna35_backend._raw_data = {"GL2C_HIT_sum": 800, "GL2C_MISS_sum": 200}
+        result = compute(rdna35_backend, "memory.l2_hit_rate")
+        assert abs(result - 80.0) < 1e-9
+
+    def test_bytes_transferred_l2(self, rdna35_backend):
+        rdna35_backend._raw_data = {"GL2C_HIT_sum": 100, "GL2C_MISS_sum": 50}
+        result = compute(rdna35_backend, "memory.bytes_transferred_l2")
+        assert result == (100 + 50) * 128
