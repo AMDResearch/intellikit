@@ -24,6 +24,8 @@ import tempfile
 import textwrap
 from typing import List, Optional
 
+from kerncap._subprocess import run_streaming
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -488,13 +490,7 @@ def run_triton_capture(
         )
 
         try:
-            proc = subprocess.run(
-                cmd,
-                env=env,
-                timeout=timeout,
-                capture_output=True,
-                text=True,
-            )
+            proc = run_streaming(cmd, env=env, timeout=timeout)
         except subprocess.TimeoutExpired:
             raise TimeoutError(f"Application did not complete within {timeout}s")
 
