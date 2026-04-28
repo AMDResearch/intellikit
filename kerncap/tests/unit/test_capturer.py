@@ -11,7 +11,7 @@ from kerncap.capturer import run_capture
 class TestLdPreload:
     """Verify that run_capture sets LD_PRELOAD (not HSA_TOOLS_LIB)."""
 
-    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap.capturer.run_streaming")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_sets_ld_preload(self, _mock_lib, mock_run, tmp_path):
         dispatch = tmp_path / "dispatch.json"
@@ -30,7 +30,7 @@ class TestLdPreload:
         assert env["LD_PRELOAD"] == "/fake/libkerncap.so"
         assert "HSA_TOOLS_LIB" not in env
 
-    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap.capturer.run_streaming")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_prepends_to_existing_ld_preload(self, _mock_lib, mock_run, tmp_path):
         dispatch = tmp_path / "dispatch.json"
@@ -48,7 +48,7 @@ class TestLdPreload:
         env = mock_run.call_args.kwargs["env"]
         assert env["LD_PRELOAD"] == "/fake/libkerncap.so:/other/lib.so"
 
-    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap.capturer.run_streaming")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_strips_hsa_tools_lib(self, _mock_lib, mock_run, tmp_path):
         dispatch = tmp_path / "dispatch.json"
@@ -67,7 +67,7 @@ class TestLdPreload:
         assert "HSA_TOOLS_LIB" not in env
         assert "LD_PRELOAD" in env
 
-    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap.capturer.run_streaming")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_sets_kerncap_env_vars(self, _mock_lib, mock_run, tmp_path):
         dispatch = tmp_path / "dispatch.json"
@@ -87,7 +87,7 @@ class TestLdPreload:
         assert env["KERNCAP_OUTPUT"] == str(tmp_path)
         assert env["KERNCAP_DISPATCH"] == "3"
 
-    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap.capturer.run_streaming")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_dispatch_not_set_when_negative(self, _mock_lib, mock_run, tmp_path):
         dispatch = tmp_path / "dispatch.json"
@@ -105,7 +105,7 @@ class TestLdPreload:
         env = mock_run.call_args.kwargs["env"]
         assert "KERNCAP_DISPATCH" not in env
 
-    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap.capturer.run_streaming")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
     def test_sets_capture_child_env(self, _mock_lib, mock_run, tmp_path):
         dispatch = tmp_path / "dispatch.json"
@@ -122,9 +122,25 @@ class TestLdPreload:
         env = mock_run.call_args.kwargs["env"]
         assert env.get("KERNCAP_CAPTURE_CHILD") == "1"
 
-    @patch("kerncap.capturer.subprocess.run")
+    @patch("kerncap.capturer.run_streaming")
     @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
-    def test_triton_delegates_to_triton_capture(self, _mock_lib, mock_run, tmp_path):
+    def test_triton_default_uses_hsa_backend(self, _mock_lib, mock_run, tmp_path):
+        with patch("kerncap.triton_capture_hsa.run_triton_capture_hsa") as mock_hsa:
+            mock_hsa.return_value = str(tmp_path)
+
+            run_capture(
+                kernel_name="kern",
+                cmd=["python", "train.py"],
+                output_dir=str(tmp_path),
+                language="triton",
+            )
+
+            mock_hsa.assert_called_once()
+            mock_run.assert_not_called()
+
+    @patch("kerncap.capturer.run_streaming")
+    @patch("kerncap._get_lib_path", return_value="/fake/libkerncap.so")
+    def test_triton_python_backend_opt_in(self, _mock_lib, mock_run, tmp_path):
         with patch("kerncap.triton_capture.run_triton_capture") as mock_triton:
             mock_triton.return_value = str(tmp_path)
 
@@ -133,6 +149,7 @@ class TestLdPreload:
                 cmd=["python", "train.py"],
                 output_dir=str(tmp_path),
                 language="triton",
+                triton_backend="python",
             )
 
             mock_triton.assert_called_once()
