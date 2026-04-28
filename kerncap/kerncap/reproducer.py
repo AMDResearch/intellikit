@@ -20,6 +20,61 @@ from kerncap.source_finder import KernelSource
 logger = logging.getLogger(__name__)
 
 
+# Triton dtype ``str()`` representations as they appear in legacy
+# name_map.json files (captured before the dtype-tagging fix in
+# ``triton_capture_hsa.py``).  ``str(tl.bfloat16)`` is ``"bf16"`` etc;
+# we map those back to the qualified ``tl.<name>`` Python expression
+# the reproducer can pass to ``tl.zeros(dtype=...)``.  New captures
+# tag the value as ``{"__triton_dtype__": "<name>"}`` and are
+# unambiguous; this table only exists so old captures keep working
+# without re-running the (expensive) workload.
+_LEGACY_TRITON_DTYPE_STRS = {
+    "bf16": "bfloat16",
+    "fp16": "float16",
+    "fp32": "float32",
+    "fp64": "float64",
+    "i1":   "int1",
+    "i8":   "int8",
+    "i16":  "int16",
+    "i32":  "int32",
+    "i64":  "int64",
+    "u8":   "uint8",
+    "u16":  "uint16",
+    "u32":  "uint32",
+    "u64":  "uint64",
+    "fp8e4nv":   "float8e4nv",
+    "fp8e4b8":   "float8e4b8",
+    "fp8e4b15":  "float8e4b15",
+    "fp8e5":     "float8e5",
+    "fp8e5b16":  "float8e5b16",
+}
+
+
+def _constexpr_repr(v: object) -> str:
+    """Render a constexpr value as Python source for the reproducer.
+
+    Triton dtype constexprs (e.g. ``compute_type=tl.bfloat16``) need to
+    appear as the qualified ``tl.<name>`` expression in the generated
+    file -- not a string literal -- because the kernel passes them to
+    APIs like ``tl.zeros(dtype=...)`` that reject bare strings.
+
+    Two encodings are honoured:
+
+    1. ``{"__triton_dtype__": "<name>"}`` -- written by the dtype-aware
+       compile-shim in ``triton_capture_hsa.py`` (preferred, lossless).
+    2. Bare strings like ``"bf16"`` -- written by older captures whose
+       compile shim ``str()``'d the dtype object.  Mapped back to the
+       canonical ``tl.<name>`` form via ``_LEGACY_TRITON_DTYPE_STRS``.
+
+    Anything else falls back to ``repr`` so plain literals keep working.
+    """
+    if isinstance(v, dict) and "__triton_dtype__" in v:
+        return f"tl.{v['__triton_dtype__']}"
+    if isinstance(v, str) and v in _LEGACY_TRITON_DTYPE_STRS:
+        return f"tl.{_LEGACY_TRITON_DTYPE_STRS[v]}"
+    return repr(v)
+
+
 def _get_template_env() -> jinja2.Environment:
     """Create a Jinja2 environment pointing at our templates directory."""
     templates_dir = os.path.join(os.path.dirname(__file__), "templates")
@@ -28,6 +83,7 @@ def _get_template_env() -> jinja2.Environment:
         keep_trailing_newline=True,
     )
     env.filters["pyrepr"] = repr
+    env.filters["constrepr"] = _constexpr_repr
     return env
 
 
@@ -545,6 +601,296 @@ def generate_triton_reproducer(
         f.write(template.render(**context))
 
     # Make it executable
+    os.chmod(reproducer_path, 0o755)
+
+    return output_dir
+
+
+# ---------------------------------------------------------------------------
+# HSA-backed Triton reproducer (editable Python loop, but driven by the
+# byte-faithful artifacts captured at the HSA layer).
+# ---------------------------------------------------------------------------
+
+
+# Triton scalar (by_value) types -> struct format char + Python decoder
+_TRITON_SCALAR_FORMATS: Dict[str, Tuple[str, type]] = {
+    "i1": ("?", bool),
+    "i8": ("b", int),
+    "u8": ("B", int),
+    "i16": ("h", int),
+    "u16": ("H", int),
+    "i32": ("i", int),
+    "u32": ("I", int),
+    "i64": ("q", int),
+    "u64": ("Q", int),
+    "fp16": ("e", float),
+    "bf16": ("H", int),  # raw bits; user can reinterpret if they care
+    "fp32": ("f", float),
+    "f32": ("f", float),
+    "fp64": ("d", float),
+    "f64": ("d", float),
+}
+
+
+def _decode_scalar(kernarg_bytes: bytes, offset: int, size: int, value_type: str):
+    """Decode a single by_value kernarg slot into a Python literal."""
+    import struct
+
+    fmt = _TRITON_SCALAR_FORMATS.get(value_type)
+    if fmt is None:
+        # Fall back to size-based heuristic: signed integer
+        size_to_fmt = {1: "b", 2: "h", 4: "i", 8: "q"}
+        fmt_char = size_to_fmt.get(size, "")
+        if not fmt_char:
+            return None
+        return struct.unpack_from("<" + fmt_char, kernarg_bytes, offset)[0]
+    fmt_char, _decoder = fmt
+    try:
+        return struct.unpack_from("<" + fmt_char, kernarg_bytes, offset)[0]
+    except struct.error:
+        return None
+
+
+def _find_region_for_pointer(pointer: int, regions: List[dict]) -> Optional[Tuple[dict, int]]:
+    """Return the (region, byte_offset_within_region) for *pointer*."""
+    for r in regions:
+        base = int(r.get("base", 0))
+        size = int(r.get("size", 0))
+        if base <= pointer < base + size:
+            return r, pointer - base
+    return None
+
+
+def _select_name_map_row(
+    name_map: List[dict],
+    hsaco_sha256: str,
+    user_name: str,
+) -> Optional[dict]:
+    """Pick the best name_map row for the captured dispatch.
+
+    Prefer exact SHA-256 match; fall back to user_name match (latest
+    row wins, since the observer attaches layout to the most recent).
+    """
+    for row in name_map:
+        if hsaco_sha256 and row.get("hsaco_sha256") == hsaco_sha256:
+            return row
+    matching = [
+        r
+        for r in name_map
+        if user_name and (r.get("user_name") == user_name or user_name in r.get("user_name", ""))
+    ]
+    if matching:
+        return matching[-1]
+    return None
+
+
+def generate_triton_hsa_reproducer(
+    capture_dir: str,
+    kernel_source: KernelSource,
+    output_dir: str,
+) -> str:
+    """Generate an editable Triton reproducer from HSA-captured artifacts.
+
+    Combines:
+      * ``capture/metadata.json`` (kernarg slot table from ELF metadata)
+      * ``capture/kernarg_raw.bin`` (exact kernarg buffer bytes)
+      * ``capture/memory_regions.json`` + ``capture/memory/*`` (pointer-backed
+        buffers, byte-exact)
+      * ``capture/name_map.json`` (Triton signature, constexprs, launch
+        attributes, optional tensor_layout from the runtime observer)
+
+    Produces a self-contained ``reproducer.py`` plus ``kernel_variant.py``
+    (extracted standalone Triton module).  Editing ``kernel_variant.py``
+    and rerunning ``python3 reproducer.py`` re-JITs through Triton's
+    compiler -- there is no separate "make recompile" step.
+
+    Returns *output_dir*.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    capture_dest = os.path.join(output_dir, "capture")
+    if os.path.realpath(capture_dir) != os.path.realpath(capture_dest):
+        if os.path.exists(capture_dest):
+            shutil.rmtree(capture_dest)
+        shutil.copytree(capture_dir, capture_dest)
+
+    os.makedirs(os.path.join(output_dir, "reference_output"), exist_ok=True)
+
+    meta_path = os.path.join(capture_dest, "metadata.json")
+    with open(meta_path) as f:
+        metadata = json.load(f)
+
+    kernarg_path = os.path.join(capture_dest, "kernarg_raw.bin")
+    with open(kernarg_path, "rb") as f:
+        kernarg_bytes = f.read()
+
+    regions_path = os.path.join(capture_dest, "memory_regions.json")
+    regions: List[dict] = []
+    if os.path.isfile(regions_path):
+        with open(regions_path) as f:
+            regions = json.load(f).get("regions", [])
+
+    name_map_path = os.path.join(capture_dest, "name_map.json")
+    name_map: List[dict] = []
+    if os.path.isfile(name_map_path):
+        with open(name_map_path) as f:
+            name_map = json.load(f)
+
+    hsaco_sha256 = metadata.get("hsaco_sha256", "")
+    user_name = metadata.get("triton_user_name") or metadata.get("kernel_name", "")
+    row = _select_name_map_row(name_map, hsaco_sha256, user_name) or {}
+
+    signature: Dict[str, str] = row.get("signature") or {}
+    param_names: List[str] = row.get("param_names") or []
+    constexprs: Dict[str, object] = row.get("constexpr_values") or {}
+    launch: Dict[str, int] = row.get("launch") or {}
+    tensor_layout: List[dict] = row.get("tensor_layout") or []
+    layout_by_name = {lay["name"]: lay for lay in tensor_layout if "name" in lay}
+
+    # Build the ordered list of params that *actually* take a kernarg slot,
+    # i.e. all JIT params minus the constexprs (which Triton folds into
+    # the IR).  The AMDGPU ABI emits these in source order, so a
+    # positional walk over the kernarg slots reconstructs the names that
+    # ``triton.compiler.compile`` saw -- which is exactly what
+    # ``JITFunction.run`` expects as kwargs.
+    constexpr_param_names = set(constexprs.keys())
+    constexpr_signature_names = {n for n, t in signature.items() if str(t).lower() == "constexpr"}
+    constexpr_param_names |= constexpr_signature_names
+    runtime_params: List[str] = [p for p in param_names if p not in constexpr_param_names]
+
+    # Walk kernarg slots in offset order, classify each into pointer / scalar.
+    slots = metadata.get("kernarg_slots") or []
+    pointer_args: List[dict] = []
+    scalar_args: List[dict] = []
+    runtime_cursor = 0
+
+    for slot in slots:
+        kind = (slot.get("value_kind") or "").lower()
+        raw_slot_name = slot.get("name", "") or ""
+        # Strip names auto-injected by AMDGPU runtime (hidden args, padding).
+        if kind.startswith("hidden_"):
+            continue
+        # Prefer the AMDGPU metadata name when present; otherwise consume
+        # the next runtime param in source order.  If the slot table is
+        # longer than the JIT signature it usually means Triton emitted
+        # trailing ``readnone`` placeholder pointers (a known quirk of
+        # the AMDGPU backend) -- those have no user-facing param and
+        # passing a bogus kwarg would make ``JITFunction.run`` reject
+        # the launch, so we skip them.
+        if raw_slot_name:
+            slot_name = raw_slot_name
+        elif runtime_cursor < len(runtime_params):
+            slot_name = runtime_params[runtime_cursor]
+            runtime_cursor += 1
+        elif runtime_params:
+            logger.debug(
+                "Skipping kernarg slot %d (kind=%r): no matching JIT param "
+                "(likely a trailing readnone placeholder).",
+                slot["offset"],
+                kind,
+            )
+            continue
+        else:
+            slot_name = f"slot_{slot['offset']}"
+
+        if kind in ("global_buffer", "dynamic_shared_pointer"):
+            ptr = int.from_bytes(
+                kernarg_bytes[slot["offset"] : slot["offset"] + slot["size"]],
+                "little",
+                signed=False,
+            )
+            region_info = _find_region_for_pointer(ptr, regions)
+            triton_dtype = signature.get(slot_name, "*i8")
+            layout = layout_by_name.get(slot_name)
+            shape = layout["shape"] if layout else None
+            stride = layout["stride"] if layout else None
+            storage_offset = int(layout["storage_offset"]) if layout else 0
+            if region_info is None:
+                logger.warning(
+                    "Pointer arg '%s' (0x%x) does not map to any captured memory region; skipping.",
+                    slot_name,
+                    ptr,
+                )
+                continue
+            region, byte_offset = region_info
+            base_hex = format(int(region["base"]), "x")
+            pointer_args.append(
+                {
+                    "index": len(pointer_args),
+                    "name": slot_name,
+                    "triton_dtype": triton_dtype,
+                    "region_file": f"region_{base_hex}.bin",
+                    "byte_offset": byte_offset,
+                    "shape": shape,
+                    "stride": stride,
+                    "storage_offset": storage_offset,
+                }
+            )
+        elif kind == "by_value":
+            if slot_name in constexpr_param_names:
+                # Constexpr: value lives in name_map, not the kernarg buffer.
+                continue
+            # AMDGPU metadata frequently leaves ``value_type`` empty for
+            # Triton-emitted scalars, so fall back to the JIT signature
+            # (e.g. ``dropout_p`` -> ``fp32``).  Without this, a 4-byte
+            # float would be misdecoded as ``int32`` and the reproducer
+            # would launch with a type-mismatched argument.
+            value_type = (slot.get("value_type") or "").lower()
+            if not value_type and slot_name in signature:
+                value_type = signature[slot_name].lstrip("*").lower()
+            value = _decode_scalar(kernarg_bytes, slot["offset"], slot["size"], value_type)
+            scalar_args.append(
+                {
+                    "name": slot_name,
+                    "value": value,
+                    "value_type": value_type or "?",
+                    "offset": slot["offset"],
+                }
+            )
+        else:
+            logger.debug("Skipping kernarg slot kind=%r name=%r", kind, slot_name)
+
+    # Resolve module / function name for the reproducer's import line.
+    main_file = kernel_source.main_file
+    main_dir = os.path.dirname(main_file)
+    pkg_init = os.path.join(main_dir, "__init__.py")
+    is_standalone = os.path.isfile(pkg_init)
+    if is_standalone:
+        variant_path = os.path.join(output_dir, "kernel_variant.py")
+        _extract_triton_kernel_standalone(main_file, kernel_source.kernel_function, variant_path)
+        kernel_module = "kernel_variant"
+        logger.info(
+            "Extracted standalone Triton module: %s (avoided full package copy)",
+            variant_path,
+        )
+    else:
+        for src_file in kernel_source.source_files:
+            dest = os.path.join(output_dir, os.path.basename(src_file))
+            if not os.path.exists(dest):
+                shutil.copy2(src_file, dest)
+        kernel_module = Path(main_file).stem
+
+    grid = metadata.get("grid", {"x": 1, "y": 1, "z": 1})
+    block = metadata.get("block", {"x": 1, "y": 1, "z": 1})
+
+    context = {
+        "kernel_name": metadata.get("kernel_name", user_name),
+        "kernel_module": kernel_module,
+        "kernel_function": kernel_source.kernel_function,
+        "grid": grid,
+        "block": block,
+        "pointer_args": pointer_args,
+        "scalar_args": scalar_args,
+        "constexprs": constexprs,
+        "launch": launch,
+        "deps_dir": "deps" if os.path.isdir(os.path.join(output_dir, "deps")) else "",
+    }
+
+    env = _get_template_env()
+    template = env.get_template("triton_reproducer_hsa.py.j2")
+    reproducer_path = os.path.join(output_dir, "reproducer.py")
+    with open(reproducer_path, "w") as f:
+        f.write(template.render(**context))
     os.chmod(reproducer_path, 0o755)
 
     return output_dir
