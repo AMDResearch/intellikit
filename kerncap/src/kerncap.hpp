@@ -177,6 +177,12 @@ private:
     // Snapshot all tracked device memory for VA-faithful replay
     void snapshot_all_tracked_memory(const hsa_kernel_dispatch_packet_t* disp);
 
+    // Snapshot module-scope variables (HSA_SYMBOL_KIND_VARIABLE) from every
+    // observed executable. Required for kernels that read state populated via
+    // hipMemcpyToSymbol / __constant__ / __device__ globals (e.g. Kokkos's
+    // hip_parallel_launch_constant_memory<...> launchers used by LAMMPS).
+    void snapshot_module_variables(const hsa_kernel_dispatch_packet_t* disp);
+
     // Capture kernel dispatch data to the output directory
     void capture_kernel(const hsa_kernel_dispatch_packet_t* disp,
                         const std::string& kernel_name);

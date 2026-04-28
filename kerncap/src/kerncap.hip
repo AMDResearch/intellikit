@@ -858,11 +858,11 @@ void CaptureState::snapshot_all_tracked_memory(
 
         uint64_t base = reinterpret_cast<uint64_t>(a.ptr);
 
-            char filename[256];
-            std::snprintf(filename, sizeof(filename),
-                         "%s/region_%" PRIx64 ".bin", memdir.c_str(), base);
+        char filename[256];
+        std::snprintf(filename, sizeof(filename),
+                     "%s/region_%" PRIx64 ".bin", memdir.c_str(), base);
 
-            std::ofstream out(filename, std::ios::binary);
+        std::ofstream out(filename, std::ios::binary);
         if (!out) {
             KERNCAP_WARN("snapshot: failed to open %s for writing", filename);
             continue;
@@ -900,6 +900,244 @@ void CaptureState::snapshot_all_tracked_memory(
 
     KERNCAP_INFO("Memory snapshot: %d/%zu regions captured",
                  ok_count, allocs.size());
+}
+
+// ---------------------------------------------------------------------------
+// Module-variable snapshot (HSA_SYMBOL_KIND_VARIABLE) for VA-faithful replay
+// ---------------------------------------------------------------------------
+//
+// Kernels launched via Kokkos's hip_parallel_launch_constant_memory<...>
+// (used by LAMMPS TagPairEAMKernelC, SPARTA, ExaMPM, etc.) carry their View
+// pointers and scalars in the HSACO module variable
+// ``kokkos_impl_hip_constant_memory_buffer``, populated at runtime by
+// ``hipMemcpyToSymbol``. The dynamic-allocation snapshot (above) does not
+// see these bytes because they live in the executable's data segment, not
+// a tracked allocation. Without restoring them at replay time, the kernel
+// reads NULL ``View::m_data`` and faults at ``(nil)``.
+//
+// Iterate every observed executable's symbols, capture each variable's
+// device bytes via the same chunked staging pattern as the memory
+// snapshot, and write a ``module_variables.json`` manifest plus one
+// ``module_variables/<exec_sha16>_<name>.bin`` blob per variable.
+void CaptureState::snapshot_module_variables(
+        const hsa_kernel_dispatch_packet_t* /*disp*/) {
+    // Snapshot the (executable handle, sha256) pairs we currently know
+    // about. Copy out under lock so the iteration runs without blocking
+    // concurrent intercepted calls.
+    std::vector<std::pair<uint64_t, std::string>> execs;
+    {
+        std::shared_lock g(mutex_);
+        std::unordered_set<uint64_t> seen;
+        for (const auto& [sym, exec_handle] : symbol_to_executable_) {
+            (void)sym;
+            if (!seen.insert(exec_handle).second) continue;
+            std::string sha;
+            auto sit = executable_blob_sha256_.find(exec_handle);
+            if (sit != executable_blob_sha256_.end()) sha = sit->second;
+            execs.push_back({exec_handle, std::move(sha)});
+        }
+    }
+
+    if (execs.empty()) {
+        KERNCAP_INFO("Module-variable snapshot: no executables observed; nothing to capture");
+        return;
+    }
+
+    struct VarEntry {
+        uint64_t exec_handle;
+        std::string exec_sha256;   // first 16 hex chars are used in the blob filename
+        std::string name;          // raw HSA symbol name (may include ':')
+        std::string sanitized_name;
+        uint64_t address;
+        size_t size;
+        std::string blob_relpath;  // module_variables/<exec16>_<name>.bin
+    };
+
+    std::vector<VarEntry> variables;
+
+    auto sanitize = [](const std::string& s) {
+        std::string out;
+        out.reserve(s.size());
+        for (char c : s) {
+            if (c == ':' || c == '/' || c == '\\' || c == ' ') out += '_';
+            else out += c;
+        }
+        return out;
+    };
+
+    // Pass 1: discover variable symbols, addresses, and sizes (no D2H yet).
+    // Per-variable size cap of 1 GiB is applied inline in the callback below.
+    for (const auto& [exec_handle, exec_sha] : execs) {
+        struct IterCtx {
+            std::vector<VarEntry>* out;
+            uint64_t exec_handle;
+            const std::string* exec_sha;
+            decltype(sanitize)* sanitize_fn;
+        } ctx{&variables, exec_handle, &exec_sha, &sanitize};
+
+        hsa_executable_t exec{exec_handle};
+        hsa_status_t it_st = hsa_executable_iterate_symbols(
+            exec,
+            [](hsa_executable_t /*e*/,
+               hsa_executable_symbol_t sym,
+               void* data) -> hsa_status_t {
+                auto* c = static_cast<IterCtx*>(data);
+                hsa_symbol_kind_t kind;
+                if (hsa_executable_symbol_get_info(
+                        sym, HSA_EXECUTABLE_SYMBOL_INFO_TYPE, &kind)
+                    != HSA_STATUS_SUCCESS) {
+                    return HSA_STATUS_SUCCESS;
+                }
+                if (kind != HSA_SYMBOL_KIND_VARIABLE) return HSA_STATUS_SUCCESS;
+
+                uint32_t name_len = 0;
+                if (hsa_executable_symbol_get_info(
+                        sym, HSA_EXECUTABLE_SYMBOL_INFO_NAME_LENGTH, &name_len)
+                    != HSA_STATUS_SUCCESS || name_len == 0) {
+                    return HSA_STATUS_SUCCESS;
+                }
+                std::string name(name_len, '\0');
+                if (hsa_executable_symbol_get_info(
+                        sym, HSA_EXECUTABLE_SYMBOL_INFO_NAME, name.data())
+                    != HSA_STATUS_SUCCESS) {
+                    return HSA_STATUS_SUCCESS;
+                }
+
+                uint64_t addr = 0;
+                size_t size = 0;
+                if (hsa_executable_symbol_get_info(
+                        sym, HSA_EXECUTABLE_SYMBOL_INFO_VARIABLE_ADDRESS, &addr)
+                    != HSA_STATUS_SUCCESS) {
+                    return HSA_STATUS_SUCCESS;
+                }
+                if (hsa_executable_symbol_get_info(
+                        sym, HSA_EXECUTABLE_SYMBOL_INFO_VARIABLE_SIZE, &size)
+                    != HSA_STATUS_SUCCESS) {
+                    return HSA_STATUS_SUCCESS;
+                }
+                if (size == 0 || size > (1ULL << 30) || addr == 0) {
+                    return HSA_STATUS_SUCCESS;
+                }
+
+                VarEntry e{};
+                e.exec_handle = c->exec_handle;
+                e.exec_sha256 = *c->exec_sha;
+                e.name = name;
+                e.sanitized_name = (*c->sanitize_fn)(name);
+                e.address = addr;
+                e.size = size;
+
+                std::string sha16 = e.exec_sha256.substr(
+                    0, std::min<size_t>(16, e.exec_sha256.size()));
+                if (sha16.empty()) {
+                    char buf[32];
+                    std::snprintf(buf, sizeof(buf), "exec%lx", (unsigned long)c->exec_handle);
+                    sha16 = buf;
+                }
+                e.blob_relpath =
+                    std::string("module_variables/") + sha16 + "_" + e.sanitized_name + ".bin";
+
+                c->out->push_back(std::move(e));
+                return HSA_STATUS_SUCCESS;
+            },
+            &ctx);
+        if (it_st != HSA_STATUS_SUCCESS) {
+            KERNCAP_WARN("Module-variable snapshot: hsa_executable_iterate_symbols "
+                         "failed for executable 0x%lx (err=%d)",
+                         static_cast<unsigned long>(exec_handle),
+                         static_cast<int>(it_st));
+        }
+    }
+
+    // Build manifest JSON and write it FIRST, so a crash mid-snapshot
+    // still leaves a parseable manifest (matches the memory-snapshot
+    // defensive ordering above).
+    nlohmann::json vars_arr = nlohmann::json::array();
+    for (const auto& v : variables) {
+        vars_arr.push_back({
+            {"executable_sha256", v.exec_sha256},
+            {"name", v.name},
+            {"size", v.size},
+            {"blob", v.blob_relpath},
+        });
+    }
+    nlohmann::json doc;
+    doc["variables"] = vars_arr;
+    {
+        std::string manifest_path = output_dir_ + "/module_variables.json";
+        std::ofstream mout(manifest_path);
+        mout << doc.dump(2);
+        mout.close();
+    }
+
+    if (variables.empty()) {
+        KERNCAP_INFO("Module-variable snapshot: 0 variables across %zu executable(s)",
+                     execs.size());
+        return;
+    }
+
+    // Make sure the blob directory exists.
+    std::string vardir = output_dir_ + "/module_variables";
+    mkdir(vardir.c_str(), 0755);
+
+    // Reuse the same chunked staging-buffer pattern as
+    // ``snapshot_all_tracked_memory`` so a single large variable
+    // (rare but possible for big __device__ arrays) cannot blow up
+    // host RAM. Default 64 MiB, tunable via KERNCAP_SNAPSHOT_CHUNK_BYTES.
+    constexpr size_t kDefaultChunkBytes = 64ULL << 20;
+    constexpr size_t kMinChunkBytes     = 64ULL << 10;
+    size_t chunk_bytes = kDefaultChunkBytes;
+    if (const char* env = std::getenv("KERNCAP_SNAPSHOT_CHUNK_BYTES")) {
+        try {
+            long long v = std::stoll(env);
+            if (v >= static_cast<long long>(kMinChunkBytes)) {
+                chunk_bytes = static_cast<size_t>(v);
+            }
+        } catch (const std::exception&) {
+            // already warned about by snapshot_all_tracked_memory
+        }
+    }
+    std::vector<char> buf(chunk_bytes);
+
+    int ok = 0;
+    for (const auto& v : variables) {
+        std::string blob_path = output_dir_ + "/" + v.blob_relpath;
+        std::ofstream out(blob_path, std::ios::binary);
+        if (!out) {
+            KERNCAP_WARN("Module-variable snapshot: failed to open %s for writing",
+                         blob_path.c_str());
+            continue;
+        }
+        bool var_ok = true;
+        for (size_t off = 0; off < v.size; off += chunk_bytes) {
+            size_t n = std::min(chunk_bytes, v.size - off);
+            void* src = reinterpret_cast<void*>(v.address + off);
+            hsa_status_t st = hsa_memory_copy(buf.data(), src, n);
+            if (st != HSA_STATUS_SUCCESS) {
+                KERNCAP_WARN("Module-variable snapshot: hsa_memory_copy failed "
+                             "for '%s' at offset %zu (chunk %zu, err=%d)",
+                             v.name.c_str(), off, n, static_cast<int>(st));
+                var_ok = false;
+                break;
+            }
+            out.write(buf.data(), n);
+            if (!out) {
+                KERNCAP_WARN("Module-variable snapshot: write to %s failed at offset %zu",
+                             blob_path.c_str(), off);
+                var_ok = false;
+                break;
+            }
+        }
+        out.close();
+        if (var_ok) {
+            ++ok;
+        } else {
+            std::remove(blob_path.c_str());
+        }
+    }
+
+    KERNCAP_INFO("Module-variable snapshot: %d/%zu variables captured across %zu executable(s)",
+                 ok, variables.size(), execs.size());
 }
 
 
@@ -1150,7 +1388,24 @@ void CaptureState::capture_kernel(
     if (std::getenv("KERNCAP_DISABLE_SNAPSHOT") != nullptr) {
         KERNCAP_INFO("Skipping memory snapshot (KERNCAP_DISABLE_SNAPSHOT=1)");
     } else {
-    snapshot_all_tracked_memory(disp);
+        snapshot_all_tracked_memory(disp);
+    }
+
+    // Module-variable snapshot (HSA_SYMBOL_KIND_VARIABLE) for kernels that
+    // read state populated via hipMemcpyToSymbol / __constant__ / __device__
+    // globals. Without this, Kokkos's hip_parallel_launch_constant_memory<...>
+    // launchers (LAMMPS TagPairEAMKernelC, SPARTA, ExaMPM) replay against a
+    // zero-initialized constant buffer and the kernel faults reading NULL
+    // View pointers.
+    //
+    // Escape hatch: ``KERNCAP_DISABLE_VARIABLE_SNAPSHOT=1`` skips this pass
+    // (replay STAGE 4.5 will then no-op for back-compat with older captures).
+    if (std::getenv("KERNCAP_DISABLE_VARIABLE_SNAPSHOT") != nullptr) {
+        KERNCAP_INFO("Skipping module-variable snapshot "
+                     "(KERNCAP_DISABLE_VARIABLE_SNAPSHOT=1)");
+    } else {
+        snapshot_module_variables(disp);
+    }
 
     KERNCAP_INFO("Capture complete -> %s", meta_path.c_str());
     captured_.store(true, std::memory_order_relaxed);

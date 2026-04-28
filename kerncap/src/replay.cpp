@@ -617,6 +617,162 @@ int main(int argc, char** argv) {
     }
 
     // ==========================================================
+    // STAGE 4.5: RESTORE MODULE-SCOPE VARIABLES
+    // ==========================================================
+    //
+    // Kokkos's hip_parallel_launch_constant_memory<...> launchers (LAMMPS
+    // TagPairEAMKernelC, SPARTA, ExaMPM) carry their View pointers and
+    // scalars in the HSACO module variable
+    // ``kokkos_impl_hip_constant_memory_buffer``, populated at runtime by
+    // hipMemcpyToSymbol. Without restoring these bytes the kernel reads
+    // NULL ``View::m_data`` and faults at (nil).
+    //
+    // module_variables.json is optional: older captures (or captures with
+    // ``KERNCAP_DISABLE_VARIABLE_SNAPSHOT=1``) won't have it, in which
+    // case we silently no-op for back-compat.
+    struct ModuleVarRestore {
+        std::string name;
+        uint64_t addr;        // device address looked up in the loaded executable
+        size_t   captured;    // bytes in the on-disk blob
+        size_t   current;     // bytes the loaded variable actually has
+        std::vector<char> blob;
+    };
+    std::vector<ModuleVarRestore> module_var_restores;
+
+    {
+        std::vector<char> mvbuf = read_file(capture_dir + "/module_variables.json");
+        if (!mvbuf.empty()) {
+            std::string mvtext(mvbuf.begin(), mvbuf.end());
+            nlohmann::json mvjson = nlohmann::json::parse(
+                mvtext, nullptr, /*exceptions=*/false);
+            if (mvjson.is_discarded()) {
+                std::cerr << "Stage 4.5: WARNING module_variables.json is malformed; "
+                             "skipping module-variable restore\n";
+            } else {
+                auto entries_it = mvjson.find("variables");
+                if (entries_it != mvjson.end() && entries_it->is_array()) {
+                    size_t total = entries_it->size();
+                    size_t restored = 0;
+                    for (const auto& entry : *entries_it) {
+                        std::string name = entry.value("name", std::string{});
+                        size_t captured_size = entry.value("size", size_t{0});
+                        std::string blob_rel = entry.value("blob", std::string{});
+                        if (name.empty() || captured_size == 0 || blob_rel.empty()) {
+                            continue;
+                        }
+
+                        // Look up the symbol's current device address.
+                        // HIP path uses hipModuleGetGlobal because the
+                        // hsa_executable_t isn't directly exposed; HSA
+                        // path goes through hsa_executable_get_symbol_by_name.
+                        uint64_t addr = 0;
+                        size_t   current_size = 0;
+                        if (use_hip) {
+                            hipDeviceptr_t dptr = nullptr;
+                            size_t bytes = 0;
+                            hipError_t st = hipModuleGetGlobal(
+                                &dptr, &bytes, hip_module, name.c_str());
+                            if (st != hipSuccess) {
+                                std::cerr << "Stage 4.5: WARNING symbol '" << name
+                                          << "' not found in loaded module ("
+                                          << hipGetErrorString(st)
+                                          << "); skipping (likely --hsaco variant "
+                                             "renamed/removed it)\n";
+                                continue;
+                            }
+                            addr = reinterpret_cast<uint64_t>(dptr);
+                            current_size = bytes;
+                        } else {
+                            hsa_executable_symbol_t sym{};
+                            hsa_status_t st = hsa_executable_get_symbol_by_name(
+                                executable, name.c_str(), &g_gpu_agent, &sym);
+                            if (st != HSA_STATUS_SUCCESS) {
+                                std::cerr << "Stage 4.5: WARNING symbol '" << name
+                                          << "' not found in loaded executable "
+                                             "(status=" << st
+                                          << "); skipping (likely --hsaco variant "
+                                             "renamed/removed it)\n";
+                                continue;
+                            }
+                            if (hsa_executable_symbol_get_info(
+                                    sym,
+                                    HSA_EXECUTABLE_SYMBOL_INFO_VARIABLE_ADDRESS,
+                                    &addr) != HSA_STATUS_SUCCESS ||
+                                hsa_executable_symbol_get_info(
+                                    sym,
+                                    HSA_EXECUTABLE_SYMBOL_INFO_VARIABLE_SIZE,
+                                    &current_size) != HSA_STATUS_SUCCESS) {
+                                std::cerr << "Stage 4.5: WARNING failed to query "
+                                             "address/size for '" << name
+                                          << "'; skipping\n";
+                                continue;
+                            }
+                        }
+
+                        if (addr == 0 || current_size == 0) {
+                            std::cerr << "Stage 4.5: WARNING '" << name
+                                      << "' resolved to addr=0 or size=0; skipping\n";
+                            continue;
+                        }
+
+                        if (current_size != captured_size) {
+                            // ABI drift on --hsaco variants. Same posture as
+                            // the kernarg-size mismatch warning below: copy
+                            // min(...) and warn so the user can reason about it.
+                            std::cerr << "Stage 4.5: WARNING size mismatch for '"
+                                      << name << "': captured=" << captured_size
+                                      << " current=" << current_size
+                                      << "; copying min(...)\n";
+                        }
+
+                        std::vector<char> blob =
+                            read_file(capture_dir + "/" + blob_rel);
+                        if (blob.empty()) {
+                            std::cerr << "Stage 4.5: WARNING blob '" << blob_rel
+                                      << "' is missing or empty; skipping '"
+                                      << name << "'\n";
+                            continue;
+                        }
+                        if (blob.size() != captured_size) {
+                            std::cerr << "Stage 4.5: WARNING blob '" << blob_rel
+                                      << "' is " << blob.size() << " bytes but "
+                                         "manifest says " << captured_size
+                                      << "; using actual blob size\n";
+                        }
+
+                        ModuleVarRestore mvr;
+                        mvr.name = std::move(name);
+                        mvr.addr = addr;
+                        mvr.captured = blob.size();
+                        mvr.current = current_size;
+                        mvr.blob = std::move(blob);
+                        module_var_restores.push_back(std::move(mvr));
+                        ++restored;
+                    }
+                    std::cerr << "Stage 4.5: restored " << restored << "/" << total
+                              << " module variable(s)\n";
+                } else {
+                    std::cerr << "Stage 4.5: module_variables.json has no 'variables' "
+                                 "array; skipping\n";
+                }
+            }
+        }
+        // No file: silently no-op (back-compat with older captures).
+    }
+
+    auto restore_module_variables = [&]() {
+        for (const auto& mvr : module_var_restores) {
+            size_t copy_size = std::min(mvr.captured, mvr.current);
+            hsa_status_t cst = hsa_memory_copy(
+                reinterpret_cast<void*>(mvr.addr), mvr.blob.data(), copy_size);
+            if (cst != HSA_STATUS_SUCCESS) {
+                std::cerr << "Stage 4.5: hsa_memory_copy failed for '"
+                          << mvr.name << "' (status=" << cst << ")\n";
+            }
+        }
+    };
+
+    // ==========================================================
     // STAGE 5: MULTI-ITERATION DISPATCH WITH PROFILING
     // ==========================================================
 
@@ -686,10 +842,12 @@ int main(int argc, char** argv) {
                   << "  regions: " << runtime_regions.size() << "\n";
 
         restore_memory();
+        restore_module_variables();
 
         for (size_t iter = 0; iter < iterations; ++iter) {
             if (iter > 0 && recopy) {
                 restore_memory();
+                restore_module_variables();
             }
 
             hipModuleLaunchKernel(
@@ -742,11 +900,13 @@ int main(int argc, char** argv) {
                   << "  regions: " << runtime_regions.size() << "\n";
 
         restore_memory();
+        restore_module_variables();
 
         for (size_t iter = 0; iter < iterations; ++iter) {
 
             if (iter > 0 && recopy) {
                 restore_memory();
+                restore_module_variables();
             }
 
             uint64_t index = hsa_queue_load_write_index_relaxed(queue);
