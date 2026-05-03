@@ -11,7 +11,7 @@
 #   GRBM_GUI_ACTIVE — GPU active cycles (convert to seconds: cycles / (clock_MHz * 1e6))
 #   GRBM_COUNT — total elapsed cycles (including idle)
 #   TCC_* — L2 cache (Texture Cache Channel) counters (CDNA)
-#   GL2C_* — L2 cache (Global L2 Cache) counters (RDNA)
+#   GL2C_* — L2 cache (Global L2 Cache) counters (RDNA: gfx1030, gfx1100, gfx1151, gfx1201)
 #   TCP_* — L1 vector cache (Texture Cache per Pipe) counters (CDNA only)
 #   SQ_* — Shader Sequencer instruction counters
 #
@@ -35,7 +35,7 @@ rocprofiler-sdk:
       unit: Percent
       definitions:
         - expression: (GRBM_GUI_ACTIVE / GRBM_COUNT) * 100
-          architectures: [gfx1201, gfx1030, gfx1151]
+          architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     # --- rocprofiler-sdk built-in derived counters (gfx1201) ---
     # Passthrough — no expression needed; the SDK computes these internally.
@@ -43,7 +43,7 @@ rocprofiler-sdk:
     - name: OccupancyPercent
       unit: Percent
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1151]
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: VALUBusy
       unit: Percent
@@ -53,7 +53,7 @@ rocprofiler-sdk:
     - name: MemUnitBusy
       unit: Percent
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1151]
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: L0CacheHit
       unit: Percent
@@ -68,47 +68,80 @@ rocprofiler-sdk:
     - name: WriteUnitStalled
       unit: Percent
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1151]
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: VALUInsts
       unit: Instructions/Work-item
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1151]
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: SALUInsts
       unit: Instructions/Work-item
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1151]
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: Wavefronts
       unit: Count
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1151]
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: WAVE_DEP_WAIT
       unit: Percent
       definitions:
-        - architectures: [gfx1201, gfx1030]
+        - architectures: [gfx1201, gfx1030, gfx1100]
 
     - name: WAVE_ISSUE_WAIT
       unit: Percent
       definitions:
-        - architectures: [gfx1201, gfx1030]
+        - architectures: [gfx1201, gfx1030, gfx1100]
 
     - name: L2CacheHit
       unit: Percent
       definitions:
-        - architectures: [gfx1030, gfx1151]
+        - architectures: [gfx1030, gfx1100, gfx1151]
 
     - name: MeanOccupancyPerCU
       unit: Percent
       definitions:
+        # gfx1100: aqlprofile rejects with
+        #   "input metric 'MeanOccupancyPerCU' not supported on this hardware: gfx1100"
+        # so it is intentionally excluded.
         - architectures: [gfx1030, gfx1151]
 
     - name: GPUBusy
       unit: Percent
       definitions:
-        - architectures: [gfx1030, gfx1151]
+        - architectures: [gfx1030, gfx1100, gfx1151]
+
+    - name: ALUStalledByLDS
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+
+    - name: LdsLatency
+      unit: Cycles
+      definitions:
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+
+    - name: MeanOccupancyPerActiveCU
+      unit: Percent
+      definitions:
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+
+    - name: TA_BUSY_avr
+      unit: Cycles
+      definitions:
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+
+    - name: TA_BUFFER_LOAD_WAVEFRONTS_sum
+      unit: Count
+      definitions:
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+
+    - name: TA_BUFFER_STORE_WAVEFRONTS_sum
+      unit: Count
+      definitions:
+        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     # --- Cache hit rates ---
     # L2 (TCC): hits / (hits + misses). L1 (TCP): misses go to L2 via TCC_READ_REQ.
@@ -119,7 +152,7 @@ rocprofiler-sdk:
         - expression: (TCC_HIT_sum / (TCC_HIT_sum + TCC_MISS_sum)) * 100
           architectures: [gfx942, gfx950, gfx90a]
         - expression: (GL2C_HIT_sum / (GL2C_HIT_sum + GL2C_MISS_sum)) * 100
-          architectures: [gfx1201, gfx1030, gfx1151]
+          architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: memory.l1_hit_rate
       unit: Percent
@@ -144,7 +177,7 @@ rocprofiler-sdk:
             (GL2C_HIT_sum + GL2C_MISS_sum) * 128
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
-          architectures: [gfx1201, gfx1030, gfx1151]
+          architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     # --- Bytes transferred ---
     # Raw byte counts: requests * cacheline size.
@@ -156,7 +189,7 @@ rocprofiler-sdk:
         - expression: TCC_REQ_sum * 128
           architectures: [gfx942, gfx950, gfx90a]
         - expression: (GL2C_HIT_sum + GL2C_MISS_sum) * 128
-          architectures: [gfx1201, gfx1030, gfx1151]
+          architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     - name: memory.bytes_transferred_l1
       unit: Bytes
@@ -204,7 +237,7 @@ rocprofiler-sdk:
         - expression: SQ_LDS_BANK_CONFLICT / SQ_INSTS_LDS
           architectures: [gfx942, gfx950, gfx90a]
         - expression: LDSBankConflict
-          architectures: [gfx1201, gfx1030, gfx1151]
+          architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
     # --- HBM/VRAM read bandwidth ---
     # Total bytes read from HBM (CDNA) or VRAM (RDNA) / kernel active time.
@@ -237,7 +270,7 @@ rocprofiler-sdk:
             + GL2C_EA_RDREQ_128B_sum * 128)
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
-          architectures: [gfx1030, gfx1151]
+          architectures: [gfx1030, gfx1100, gfx1151]
 
     # --- HBM/VRAM write bandwidth ---
     # Total bytes written to HBM / kernel active time.
@@ -267,7 +300,7 @@ rocprofiler-sdk:
             + (GL2C_MC_WRREQ_sum - GL2C_EA_WRREQ_64B_sum) * 32)
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
-          architectures: [gfx1030, gfx1151]
+          architectures: [gfx1030, gfx1100, gfx1151]
 
     # --- HBM/VRAM bandwidth utilization ---
     # (actual read+write bandwidth) / (peak HBM bandwidth) * 100.
@@ -308,7 +341,7 @@ rocprofiler-sdk:
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             / HBM_BANDWIDTH_GBS * 100)
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
-          architectures: [gfx1030, gfx1151]
+          architectures: [gfx1030, gfx1100, gfx1151]
 
     # --- Total HBM/VRAM bytes ---
     # Sum of all read + write bytes through L2-to-Fabric interface.
@@ -339,7 +372,7 @@ rocprofiler-sdk:
             + GL2C_EA_RDREQ_128B_sum * 128
             + GL2C_EA_WRREQ_64B_sum * 64
             + (GL2C_MC_WRREQ_sum - GL2C_EA_WRREQ_64B_sum) * 32
-          architectures: [gfx1030, gfx1151]
+          architectures: [gfx1030, gfx1100, gfx1151]
 
     # --- Atomic latency ---
     # Average L2 cache atomic operation latency in GPU cycles.
