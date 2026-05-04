@@ -69,7 +69,8 @@ def _constexpr_repr(v: object) -> str:
     Anything else falls back to ``repr`` so plain literals keep working.
     """
     if isinstance(v, dict) and "__triton_dtype__" in v:
-        return f"tl.{v['__triton_dtype__']}"
+        name = v["__triton_dtype__"]
+        return f"tl.{_LEGACY_TRITON_DTYPE_STRS.get(name, name)}"
     if isinstance(v, str) and v in _LEGACY_TRITON_DTYPE_STRS:
         return f"tl.{_LEGACY_TRITON_DTYPE_STRS[v]}"
     return repr(v)
