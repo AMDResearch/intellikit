@@ -790,10 +790,22 @@ int main(int argc, char** argv) {
     };
 
     void* kernarg = nullptr;
-    hsa_amd_memory_pool_allocate(backing_pool,
+    hsa_amd_memory_pool_allocate(kernarg_pool,
                                  kernarg_size,
                                  0,
                                  &kernarg);
+
+    // Belt-and-suspenders: ensure the GPU agent can read the kernarg buffer.
+    // Kernarg-flagged pools are typically already accessible to all execution
+    // agents, but on configurations where the pool lives on the CPU agent this
+    // grant guarantees GPU visibility. Failure here is non-fatal -- most often
+    // it means access is already granted.
+    hsa_status_t aa_st = hsa_amd_agents_allow_access(
+        1, &g_gpu_agent, nullptr, kernarg);
+    if (aa_st != HSA_STATUS_SUCCESS) {
+        std::cerr << "Warning: hsa_amd_agents_allow_access for kernarg "
+                     "returned status=" << aa_st << " (likely already accessible)\n";
+    }
 
     std::vector<char> kblob = read_file(capture_dir + "/kernarg.bin");
     // kernarg_size comes from the loaded HSACO symbol; kblob is from the captured
