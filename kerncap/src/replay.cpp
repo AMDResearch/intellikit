@@ -574,7 +574,8 @@ int main(int argc, char** argv) {
         hsa_executable_symbol_get_info(kernel_symbol,
             HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
             &kernel_object);
-        hsa_executable_symbol_get_info(kernel_symbol,
+        hsa_status_t kernarg_query_st = hsa_executable_symbol_get_info(
+            kernel_symbol,
             HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
             &kernarg_size);
         hsa_executable_symbol_get_info(kernel_symbol,
@@ -583,6 +584,78 @@ int main(int argc, char** argv) {
         hsa_executable_symbol_get_info(kernel_symbol,
             HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE,
             &private_segment);
+
+        // kernarg_size may be 0 for assembly-origin kernels whose .kd
+        // doesn't expose the standard symbol attribute (notably Tensile-
+        // generated rocBLAS GEMMs). Fall back to the AMDGPU-note value
+        // from metadata.json first (strictly authoritative -- read from
+        // the same code object's .kernarg_segment_size note), then to
+        // dispatch.json's kernarg_size as a last resort.
+        //
+        // metadata.json is preferred over dispatch.json because old
+        // captures from pre-fix kerncap versions wrote a guessed 4096
+        // into dispatch.json, while metadata.json's value has always
+        // been parsed authoritatively. Trusting dispatch.json first
+        // would silently propagate that historical bug.
+        //
+        // Special case: if the user supplied --hsaco for a recompiled
+        // variant, falling back silently to the captured kernarg size
+        // would substitute possibly-wrong-ABI bytes into the variant's
+        // launch. Escalate to a hard error in that case.
+        bool kernarg_query_failed =
+            (kernarg_query_st != HSA_STATUS_SUCCESS) || (kernarg_size == 0);
+        if (kernarg_query_failed) {
+            uint32_t fallback_size = 0;
+            std::string fallback_source;
+
+            auto meta_blob_for_kernarg = read_file(capture_dir + "/metadata.json");
+            if (!meta_blob_for_kernarg.empty()) {
+                nlohmann::json mj = nlohmann::json::parse(
+                    std::string(meta_blob_for_kernarg.begin(),
+                                meta_blob_for_kernarg.end()),
+                    nullptr, /*exceptions=*/false);
+                if (!mj.is_discarded()) {
+                    auto it = mj.find("kernarg_segment_size_meta");
+                    if (it != mj.end() && it->is_number()) {
+                        fallback_size = it->get<uint32_t>();
+                        fallback_source = "metadata.json (AMDGPU note)";
+                    }
+                }
+            }
+
+            if (fallback_size == 0) {
+                uint32_t dispatch_kernarg = get_uint("kernarg_size");
+                if (dispatch_kernarg > 0) {
+                    fallback_size = dispatch_kernarg;
+                    fallback_source = "dispatch.json";
+                }
+            }
+
+            if (fallback_size == 0) {
+                std::cerr << "Fatal: cannot determine kernarg_size from HSACO "
+                             "(symbol query unavailable), dispatch.json, or "
+                             "metadata.json. Capture is unusable; re-capture "
+                             "with a kerncap version that records "
+                             "kernarg_segment_size_meta.\n";
+                return 1;
+            }
+
+            if (!override_hsaco_path.empty()) {
+                std::cerr << "Fatal: --hsaco variant (" << override_hsaco_path
+                          << ") exposes no kernarg_size via HSA symbol query, "
+                             "and the captured kernarg_size (" << fallback_size
+                          << " bytes from " << fallback_source << ") cannot be "
+                             "safely substituted -- the variant may have a "
+                             "different ABI. Re-assemble the variant with "
+                             "proper AMDGPU metadata (.kernarg_segment_size).\n";
+                return 1;
+            }
+
+            std::cerr << "Note: HSACO kernarg_size unavailable; using "
+                      << fallback_size << " bytes from " << fallback_source
+                      << " (assembly-origin kernel).\n";
+            kernarg_size = fallback_size;
+        }
     }
 
     uint32_t grid[3] = {1, 1, 1};

@@ -1164,48 +1164,14 @@ void CaptureState::capture_kernel(
 
     char* kernarg = static_cast<char*>(disp->kernarg_address);
 
-    // Query the actual kernarg segment size from the kernel symbol so we
-    // dump exactly the right number of bytes (not a fixed 4096 slab).
-    uint32_t kernarg_segment_size = 0;
-    {
-        hsa_executable_symbol_t sym{};
-        bool found = false;
-        {
-            std::shared_lock g(mutex_);
-            auto hit = handle_to_symbol_.find(disp->kernel_object);
-            if (hit != handle_to_symbol_.end()) {
-                sym = hit->second;
-                found = true;
-            }
-        }
-        if (found) {
-            hsa_core_call(this, hsa_executable_symbol_get_info,
-                          sym,
-                          HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
-                          &kernarg_segment_size);
-        }
-        if (kernarg_segment_size == 0) {
-            KERNCAP_WARN("Could not query kernarg size; falling back to 4096");
-            kernarg_segment_size = 4096;
-        }
-    }
-
-    // Build metadata.json
-    nlohmann::json meta;
-    meta["kernel_name"] = kernel_name;
-    meta["kernel_symbol"] = get_kernel_symbol(disp->kernel_object);
-    if (!gpu_arch_.empty()) {
-        meta["gpu_arch"] = gpu_arch_;
-    }
-    meta["grid"]  = {{"x", disp->grid_size_x},
-                     {"y", disp->grid_size_y},
-                     {"z", disp->grid_size_z}};
-    meta["block"] = {{"x", disp->workgroup_size_x},
-                     {"y", disp->workgroup_size_y},
-                     {"z", disp->workgroup_size_z}};
-    meta["lds_size"] = disp->group_segment_size;
-
     // ----- Kernarg slot table (parsed from AMDGPU metadata at load time) -----
+    //
+    // Loaded BEFORE we resolve the actual kernarg segment size below, because
+    // ``kinfo->kernarg_segment_size`` (parsed from the AMDGPU note
+    // ``.kernarg_segment_size``) is the authoritative ABI declaration and our
+    // second-tier source if the HSA symbol query is unavailable (notably for
+    // assembly-origin kernels like Tensile-generated rocBLAS GEMMs whose .kd
+    // doesn't expose ``HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE``).
     //
     // Two-phase lookup to keep the lock order ``mutex_ -> code_object_mutex_``
     // consistent with ``hsa_executable_symbol_get_info`` (the only other
@@ -1222,10 +1188,14 @@ void CaptureState::capture_kernel(
     uint64_t exec_handle = 0;
     bool exec_found = false;
     std::string sym_str;
+    hsa_executable_symbol_t kernel_sym{};
+    bool kernel_sym_found = false;
     {
         std::shared_lock g(mutex_);
         auto sym_it = handle_to_symbol_.find(disp->kernel_object);
         if (sym_it != handle_to_symbol_.end()) {
+            kernel_sym = sym_it->second;
+            kernel_sym_found = true;
             auto exec_it = symbol_to_executable_.find(sym_it->second);
             if (exec_it != symbol_to_executable_.end()) {
                 exec_handle = exec_it->second;
@@ -1245,6 +1215,88 @@ void CaptureState::capture_kernel(
         auto bit = executable_blob_sha256_.find(exec_handle);
         if (bit != executable_blob_sha256_.end()) blob_sha = bit->second;
     }
+
+    // Resolve the actual kernarg segment size via a tiered fallback so we
+    // dump exactly the right number of bytes (not a fixed 4096 slab).
+    //
+    // Sources, in order of preference:
+    //   1. ``HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE`` -- works
+    //      for clang-emitted kernels (HIP, Triton).
+    //   2. ``kinfo->kernarg_segment_size`` -- parsed from the AMDGPU note
+    //      ``.kernarg_segment_size``, the authoritative ABI declaration.
+    //      Required for assembly-origin kernels (rocBLAS Tensile GEMMs) whose
+    //      .kd doesn't populate the standard symbol attribute.
+    //   3. ``KERNCAP_KERNARG_SIZE=<bytes>`` env override -- escape hatch for
+    //      power users with non-conformant code objects.
+    //   4. Hard fail: refuse capture rather than write a guessed-size buffer
+    //      (silent corruption of replay -- the bug that motivated this code).
+    //
+    // We use ``std::optional`` rather than ``== 0`` as the "unknown" sentinel
+    // because 0 is a legitimate value for kernels that take no arguments.
+    std::optional<uint32_t> kernarg_segment_size;
+
+    if (kernel_sym_found) {
+        uint32_t v = 0;
+        hsa_status_t st = hsa_core_call(
+            this, hsa_executable_symbol_get_info,
+            kernel_sym,
+            HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
+            &v);
+        if (st == HSA_STATUS_SUCCESS) {
+            kernarg_segment_size = v;
+        }
+    }
+    // Prefer the AMDGPU note when HSA reports 0 but the note declares
+    // non-zero. Assembly-origin kernels (notably Tensile-generated rocBLAS
+    // GEMMs) don't populate HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE
+    // -- the query returns SUCCESS with v=0 instead of an error -- but the
+    // .kernarg_segment_size note in the AMDGPU metadata is correct.
+    // For genuinely no-arg kernels both sources agree on 0 and we keep that.
+    if (kinfo && kinfo->kernarg_segment_size > 0 &&
+        (!kernarg_segment_size || *kernarg_segment_size == 0)) {
+        kernarg_segment_size = kinfo->kernarg_segment_size;
+        KERNCAP_INFO("kernarg size from AMDGPU note: %u (HSA symbol query "
+                     "%s)",
+                     *kernarg_segment_size,
+                     kernel_sym_found ? "reported 0" : "unavailable");
+    }
+    if (!kernarg_segment_size) {
+        if (const char* env = std::getenv("KERNCAP_KERNARG_SIZE")) {
+            try {
+                kernarg_segment_size = static_cast<uint32_t>(std::stoul(env));
+                KERNCAP_WARN("Using KERNCAP_KERNARG_SIZE=%u override "
+                             "(no authoritative source available)",
+                             *kernarg_segment_size);
+            } catch (...) {
+                KERNCAP_WARN("Ignoring malformed KERNCAP_KERNARG_SIZE='%s'", env);
+            }
+        }
+    }
+    if (!kernarg_segment_size) {
+        KERNCAP_ERROR(
+            "Cannot determine kernarg size for kernel '%s' from HSA symbol "
+            "query or AMDGPU note metadata. Refusing to write a guessed-size "
+            "kernarg buffer (would silently corrupt replay). "
+            "Set KERNCAP_KERNARG_SIZE=<bytes> to force a value if you know "
+            "the kernel's ABI.",
+            kernel_name.c_str());
+        return;
+    }
+
+    // Build metadata.json
+    nlohmann::json meta;
+    meta["kernel_name"] = kernel_name;
+    meta["kernel_symbol"] = get_kernel_symbol(disp->kernel_object);
+    if (!gpu_arch_.empty()) {
+        meta["gpu_arch"] = gpu_arch_;
+    }
+    meta["grid"]  = {{"x", disp->grid_size_x},
+                     {"y", disp->grid_size_y},
+                     {"z", disp->grid_size_z}};
+    meta["block"] = {{"x", disp->workgroup_size_x},
+                     {"y", disp->workgroup_size_y},
+                     {"z", disp->workgroup_size_z}};
+    meta["lds_size"] = disp->group_segment_size;
 
     if (kinfo) {
         nlohmann::json slots = nlohmann::json::array();
@@ -1283,7 +1335,7 @@ void CaptureState::capture_kernel(
         std::string blob_path = output_dir_ + "/kernarg_raw.bin";
         std::ofstream out(blob_path, std::ios::binary);
         if (out) {
-            out.write(kernarg, kernarg_segment_size);
+            out.write(kernarg, *kernarg_segment_size);
         }
         meta["kernarg_raw"] = "kernarg_raw.bin";
     }
@@ -1332,7 +1384,7 @@ void CaptureState::capture_kernel(
         dispatch_meta["group_segment_size"] = disp->group_segment_size;
         dispatch_meta["private_segment_size"] = disp->private_segment_size;
 
-        dispatch_meta["kernarg_size"] = kernarg_segment_size;
+        dispatch_meta["kernarg_size"] = *kernarg_segment_size;
         dispatch_meta["dispatch_index"] = target_dispatch_count_ - 1;
 
         std::string dispatch_path = output_dir_ + "/dispatch.json";
