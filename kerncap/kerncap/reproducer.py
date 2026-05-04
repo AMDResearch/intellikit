@@ -285,6 +285,8 @@ def _write_replay_makefile(
 
         tokens = shlex.split(kernel_source.compile_command)
         new_tokens = []
+        original_archs: List[str] = []
+        kept_arch: Optional[str] = None
         skip_next = False
         for i, tok in enumerate(tokens):
             if skip_next:
@@ -297,16 +299,54 @@ def _write_replay_makefile(
                 continue
             if tok.startswith("-o") and len(tok) > 2:
                 continue
+
+            # Filter --offload-arch down to a single instance matching the
+            # captured GPU. Multi-arch (fat-binary) builds emit one HSACO per
+            # arch under --no-gpu-bundle-output, which conflicts with our
+            # single -o output path. The captured kernel is by definition
+            # single-arch (came from one specific dispatch on one GPU), so we
+            # only need the arch that matches the capture.
+            if tok.startswith("--offload-arch="):
+                arch = tok.split("=", 1)[1]
+                original_archs.append(arch)
+                if arch == gpu_arch and kept_arch is None:
+                    new_tokens.append(tok)
+                    kept_arch = arch
+                continue
+            if tok == "--offload-arch" and i + 1 < len(tokens):
+                arch = tokens[i + 1]
+                original_archs.append(arch)
+                skip_next = True
+                if arch == gpu_arch and kept_arch is None:
+                    new_tokens.extend([tok, arch])
+                    kept_arch = arch
+                continue
+
             new_tokens.append(tok)
+
+        if original_archs and kept_arch is None:
+            raise RuntimeError(
+                f"Captured GPU arch '{gpu_arch}' is not in the original compile "
+                f"command's --offload-arch list: {original_archs}. The captured "
+                f"kernel cannot have come from a GPU not in the build targets; "
+                f"check your build configuration."
+            )
 
         clean_cmd = " ".join(shlex.quote(t) for t in new_tokens)
         compile_dir = kernel_source.compile_dir
+
+        arch_comment = (
+            f"# --offload-arch filtered: original={original_archs} kept={kept_arch}"
+            if original_archs
+            else "# --offload-arch: none in original compile command"
+        )
 
         lines.extend(
             [
                 "# Recompile the edited kernel_variant.cpp into a new HSACO via Clang VFS overlay.",
                 "# The VFS overlay tricks the compiler into using the edited file in place of the original.",
                 "# --no-gpu-bundle-output produces a raw code object, so no unbundling is needed.",
+                arch_comment,
                 "recompile: kernel_variant.cpp vfs.yaml",
                 '\t@echo "Recompiling optimized HSACO via VFS overlay..."',
                 f"\tcd {shlex.quote(compile_dir)} && \\",
