@@ -355,6 +355,47 @@ int main(int argc, char** argv) {
     std::cerr << "Stage 2: backing pool found\n";
     std::cerr.flush();
 
+    // Kernarg buffer requires a CPU-writable pool. The coarse-grained
+    // backing_pool selected above works for region backings (populated via
+    // hsa_memory_copy DMA, with CPU access granted via hsa_amd_vmem_set_access)
+    // but a plain memcpy into a coarse-grained allocation faults on RDNA
+    // discrete GPUs where ROCr doesn't pre-map coarse VRAM into the host
+    // process. Use a KERNARG_INIT-flagged pool instead -- guaranteed
+    // CPU-writable and dispatch-readable.
+    hsa_amd_memory_pool_t kernarg_pool{};
+    bool found_kernarg = false;
+
+    auto kernarg_cb = [](hsa_amd_memory_pool_t pool, void* data) {
+        auto* ctx = reinterpret_cast<std::pair<hsa_amd_memory_pool_t*, bool*>*>(data);
+        hsa_amd_segment_t segment;
+        hsa_amd_memory_pool_get_info(pool,
+            HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &segment);
+        if (segment != HSA_AMD_SEGMENT_GLOBAL) return HSA_STATUS_SUCCESS;
+
+        uint32_t flags = 0;
+        hsa_amd_memory_pool_get_info(pool,
+            HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flags);
+        if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT) {
+            *ctx->first = pool;
+            *ctx->second = true;
+            return HSA_STATUS_INFO_BREAK;
+        }
+        return HSA_STATUS_SUCCESS;
+    };
+
+    std::pair<hsa_amd_memory_pool_t*, bool*> kctx{&kernarg_pool, &found_kernarg};
+    hsa_amd_agent_iterate_memory_pools(g_gpu_agent, kernarg_cb, &kctx);
+    if (!found_kernarg) {
+        hsa_amd_agent_iterate_memory_pools(g_cpu_agent, kernarg_cb, &kctx);
+    }
+    if (!found_kernarg) {
+        std::cerr << "No KERNARG-flagged pool found on GPU or CPU agent\n";
+        return 1;
+    }
+
+    std::cerr << "Stage 2: kernarg pool found\n";
+    std::cerr.flush();
+
     // ==========================================================
     // STAGE 3: STRICT RESERVE + MAP (NO COPY YET)
     // ==========================================================
@@ -713,6 +754,42 @@ int main(int argc, char** argv) {
     std::vector<ModuleVarRestore> module_var_restores;
 
     {
+        // Identify the captured kernel's executable so we can filter the
+        // module-variable manifest to entries from THAT executable. Without
+        // this, a capture that observed many Kokkos kernels (LAMMPS,
+        // SPARTA, etc.) writes one ``kokkos_impl_hip_constant_memory_buffer``
+        // entry per executable, all with the SAME symbol name but DIFFERENT
+        // blob contents. Since only one HSACO is loaded at replay time,
+        // ``hsa_executable_get_symbol_by_name`` resolves them all to the
+        // SAME address; the last entry in JSON order silently stomps the
+        // correct blob, leaving the kernel's __constant__ View pointers
+        // pointing into the wrong kernel's data and faulting at (nil).
+        //
+        // The captured kernel's executable sha256 is recorded in
+        // metadata.json (``hsaco_sha256``). If absent (older captures or
+        // missing field) we fall back to copying every entry, matching
+        // the previous behavior.
+        std::string captured_exec_sha;
+        {
+            auto meta_blob = read_file(capture_dir + "/metadata.json");
+            if (!meta_blob.empty()) {
+                std::string mtext(meta_blob.begin(), meta_blob.end());
+                nlohmann::json mjson = nlohmann::json::parse(
+                    mtext, nullptr, /*exceptions=*/false);
+                if (!mjson.is_discarded()) {
+                    auto sit = mjson.find("hsaco_sha256");
+                    if (sit != mjson.end() && sit->is_string()) {
+                        captured_exec_sha = sit->get<std::string>();
+                    }
+                }
+            }
+            if (captured_exec_sha.empty()) {
+                std::cerr << "Stage 4.5: NOTE metadata.json missing 'hsaco_sha256'; "
+                             "module-variable restore will not filter by "
+                             "executable (older capture format)\n";
+            }
+        }
+
         std::vector<char> mvbuf = read_file(capture_dir + "/module_variables.json");
         if (!mvbuf.empty()) {
             std::string mvtext(mvbuf.begin(), mvbuf.end());
@@ -726,11 +803,25 @@ int main(int argc, char** argv) {
                 if (entries_it != mvjson.end() && entries_it->is_array()) {
                     size_t total = entries_it->size();
                     size_t restored = 0;
+                    size_t filtered_out = 0;
                     for (const auto& entry : *entries_it) {
                         std::string name = entry.value("name", std::string{});
                         size_t captured_size = entry.value("size", size_t{0});
                         std::string blob_rel = entry.value("blob", std::string{});
+                        std::string entry_exec_sha =
+                            entry.value("executable_sha256", std::string{});
                         if (name.empty() || captured_size == 0 || blob_rel.empty()) {
+                            continue;
+                        }
+
+                        // Only restore variables that belong to the captured
+                        // kernel's executable. Other entries describe symbols
+                        // from sibling Kokkos kernels and would alias onto the
+                        // same loaded address with incorrect bytes.
+                        if (!captured_exec_sha.empty() &&
+                            !entry_exec_sha.empty() &&
+                            entry_exec_sha != captured_exec_sha) {
+                            ++filtered_out;
                             continue;
                         }
 
@@ -823,7 +914,12 @@ int main(int argc, char** argv) {
                         ++restored;
                     }
                     std::cerr << "Stage 4.5: restored " << restored << "/" << total
-                              << " module variable(s)\n";
+                              << " module variable(s)";
+                    if (filtered_out > 0) {
+                        std::cerr << " (" << filtered_out
+                                  << " filtered out: belong to other captured executables)";
+                    }
+                    std::cerr << "\n";
                 } else {
                     std::cerr << "Stage 4.5: module_variables.json has no 'variables' "
                                  "array; skipping\n";
