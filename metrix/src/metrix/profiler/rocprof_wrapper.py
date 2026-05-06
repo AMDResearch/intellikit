@@ -4,6 +4,7 @@ Clean, robust interface - regex-free CSV parsing (uses the csv module).
 """
 
 import re
+import shlex
 import subprocess
 import tempfile
 import csv
@@ -165,9 +166,14 @@ class ROCProfV3Wrapper:
             if kernel_filter:
                 prof_cmd.extend(["--kernel-include-regex", kernel_filter])
 
-            # Add target command
+            # Add target command. Use shlex.split so quoted argument groups
+            # (e.g. ``pytest -k "X or Y"``) are kept as single argv tokens.
+            # rocprofv3 uses ``os.execvpe`` to launch the target, which does
+            # not pass through a shell, so naive whitespace splitting breaks
+            # any quoted args by stripping the quotes and splitting on the
+            # internal whitespace.
             prof_cmd.append("--")
-            prof_cmd.extend(command.split())
+            prof_cmd.extend(shlex.split(command))
 
             logger.debug(f"rocprofv3 command: {' '.join(prof_cmd)}")
             logger.info(f"Starting rocprofv3 with {len(counters)} counters")
