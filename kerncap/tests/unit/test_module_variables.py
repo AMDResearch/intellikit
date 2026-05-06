@@ -61,12 +61,7 @@ class TestModuleVariablesManifestSchema:
         # Sanitization rule applied by libkerncap: ':' '/' '\\' ' ' -> '_'
         # Verifies the conventions the C++ writer uses.
         raw = "ns::Type::__var name/with\\bad chars"
-        sanitized = (
-            raw.replace(":", "_")
-            .replace("/", "_")
-            .replace("\\", "_")
-            .replace(" ", "_")
-        )
+        sanitized = raw.replace(":", "_").replace("/", "_").replace("\\", "_").replace(" ", "_")
         assert ":" not in sanitized
         assert "/" not in sanitized
         assert "\\" not in sanitized
@@ -88,6 +83,7 @@ class TestModuleVariablesManifestSchema:
 # ---------------------------------------------------------------------------
 # Replay-side parsing tolerance (executed only when kerncap-replay exists)
 # ---------------------------------------------------------------------------
+
 
 def _replay_binary():
     """Locate kerncap-replay if it has been built/installed."""

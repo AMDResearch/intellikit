@@ -147,9 +147,7 @@ class TestConstantMemoryKernel:
     instead of the captured non-zero results).
     """
 
-    def test_capture_writes_module_variables_manifest(
-        self, weighted_add_app, tmp_path
-    ):
+    def test_capture_writes_module_variables_manifest(self, weighted_add_app, tmp_path):
         """A capture of a kernel using __constant__ memory must produce
         module_variables.json and at least one blob."""
         binary, _ = weighted_add_app
@@ -164,8 +162,7 @@ class TestConstantMemoryKernel:
 
         manifest_path = capture_dir / "module_variables.json"
         assert manifest_path.exists(), (
-            "Expected module_variables.json from libkerncap's "
-            "snapshot_module_variables() pass"
+            "Expected module_variables.json from libkerncap's snapshot_module_variables() pass"
         )
 
         manifest = json.loads(manifest_path.read_text())
@@ -182,13 +179,10 @@ class TestConstantMemoryKernel:
             blob_path = capture_dir / v["blob"]
             assert blob_path.exists(), f"Missing blob: {blob_path}"
             assert blob_path.stat().st_size == v["size"], (
-                f"Blob size {blob_path.stat().st_size} != manifest size {v['size']} "
-                f"for {v['name']}"
+                f"Blob size {blob_path.stat().st_size} != manifest size {v['size']} for {v['name']}"
             )
 
-    def test_full_pipeline_validates_byte_exact(
-        self, weighted_add_app, tmp_path
-    ):
+    def test_full_pipeline_validates_byte_exact(self, weighted_add_app, tmp_path):
         """Full capture -> reproducer -> validate. With STAGE 4.5 active
         the replay output should match the captured output."""
         binary, workdir = weighted_add_app
