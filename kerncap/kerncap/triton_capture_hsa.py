@@ -271,6 +271,7 @@ _HOOK_INSTALLER = textwrap.dedent('''\
         if _hsaco_dir:
             dst = Path(_hsaco_dir) / f"{name}.{sha[:16]}.hsaco"
             try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
                 if not dst.exists():
                     dst.write_bytes(bytes(hsaco_bytes))
                 hsaco_path = str(dst)
@@ -358,6 +359,7 @@ _HOOK_INSTALLER = textwrap.dedent('''\
         snapshot_path = ""
         if source_file and _source_dir and os.path.isfile(source_file):
             try:
+                os.makedirs(_source_dir, exist_ok=True)
                 src_dir = os.path.dirname(source_file)
                 base = os.path.basename(source_file)
                 if os.path.isfile(os.path.join(src_dir, "__init__.py")):
@@ -624,6 +626,8 @@ def run_triton_capture_hsa(
     name_map_path = os.path.join(output_dir, "name_map.json")
     hsaco_dir = os.path.join(output_dir, "triton_hsacos")
     source_dir = os.path.join(output_dir, "triton_sources")
+    os.makedirs(hsaco_dir, exist_ok=True)
+    os.makedirs(source_dir, exist_ok=True)
 
     try:
         with os.fdopen(hook_fd, "w") as f:
