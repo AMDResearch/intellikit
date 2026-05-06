@@ -2,7 +2,7 @@
 
 ## Unit tests (no GPU required)
 
-Tests the Python logic — CSV parsing, source finding, template rendering, output comparison, and metadata generation. Runs anywhere with Python 3.10+.
+Tests the Python logic — CSV parsing, source finding, template rendering, output comparison, Triton reproducer generation, kernarg metadata parsing, module-variable handling, and metadata generation. Runs anywhere with Python 3.10+.
 
 ```bash
 pip install pytest numpy jinja2 click
@@ -15,22 +15,33 @@ The reproducer tests include pointer-chasing kernel fixtures that verify the tem
 - **Scatter-gather** (`const float* const*`) — pointer array where only the double-pointer arg gets relocations
 - **Struct with pointer** (`TensorDesc*` containing `float* data`) — heuristic scan edge case with a single indirect buffer
 
+Additional unit coverage exercises:
+
+- **Triton reproducer generation** — reconstructs pointer/scalar/constexpr arguments from capture artifacts and emits an editable Python reproducer
+- **AMDGPU kernarg metadata parsing** — validates the C++ metadata parser used by Triton and assembly-origin captures
+- **Module variables** — verifies manifest/blob handling for constant-memory style captures
+- **Result formatting** — checks the concise `Result: PASS/FAIL (...)` replay and validation footer contract
+
 ## Integration tests
 
 ### Local (requires ROCm + AMD GPU)
 
-The `test_vector_add.py` test compiles a trivial HIP kernel with `hipcc`, then runs the full `profile → capture → source find → reproducer → validate` pipeline. No Docker needed.
+The local integration tests compile small HIP kernels with `hipcc`, then run the full `profile → capture → source find → reproducer → validate` pipeline. No Docker needed.
 
 ```bash
 pytest tests/integration/test_vector_add.py -v
+pytest tests/integration/test_constant_memory_kernel.py -v
+pytest tests/integration/test_triton_hsa_capture.py -v
 ```
+
+`test_constant_memory_kernel.py` covers module-variable snapshot/restore for constant-memory style launches. `test_triton_hsa_capture.py` covers Triton capture and reproducer generation.
 
 ### Docker-based (requires Docker + AMD GPU)
 
 These run the full pipeline inside official ROCm containers against real-world kernels. They pull the container, install kerncap from the local source tree, and exercise profiling.
 
 ```bash
-# Flash Attention Triton backend (rocm/pytorch container)
+# Flash Attention Triton workload (rocm/pytorch container)
 pytest tests/integration/test_flash_attn.py -v
 
 # Composable Kernel GEMM XDL (rocm/composable_kernel container)

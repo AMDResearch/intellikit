@@ -14,8 +14,8 @@ the kernel in isolation using VA-faithful HSA dispatch.
 1. Profile       rocprofv3 --kernel-trace --stats → rank kernels by duration
 2. Capture       HIP:    LD_PRELOAD=libkerncap.so → intercept target dispatch,
                          snapshot all tracked device memory + kernarg buffer + HSACO
-                 Triton: Python-level hook on JITFunction.run → capture all tensor,
-                         scalar, and constexpr args; pin autotuner config
+                 Triton: LD_PRELOAD capture with code-object metadata +
+                         compile-shim name mapping
 3. Find source   HIP: __global__ grep + #include tracing
                  Triton: @triton.jit AST match + import tracing (incl. relative imports)
 4. Generate      Jinja2 templates → standalone .hip+Makefile or .py reproducer
@@ -109,6 +109,8 @@ Capture a kernel's full runtime state and generate a standalone reproducer.
 
 > **Language detection**: Kerncap auto-detects whether a kernel is HIP or Triton from `--source-dir` contents. To override, pass `--language hip` or `--language triton` on the CLI (or `language="triton"` in the Python API).
 
+> **Triton backend compatibility**: The `--triton-backend` flag is available for compatibility with the legacy Python capture backend. HSA is the new default, and the Python backend will soon be deprecated.
+
 ### Replay
 
 Replay a captured kernel in isolation.
@@ -160,6 +162,10 @@ Check correctness of a reproducer or variant HSACO.
     # Triton — compare against captured reference with tolerance
     result = kc.validate("./isolated/flash_attn_fwd", tolerance=1e-3, rtol=1e-2)
     print("Passed:", result.passed)
+
+    # Edit loops auto-detect candidate.hsaco / optimized.hsaco
+    result = kc.validate("./isolated/flash_attn_fwd")
+    print("Passed:", result.passed)
     ```
   </TabItem>
   <TabItem label="CLI">
@@ -172,11 +178,16 @@ Check correctness of a reproducer or variant HSACO.
 
     # Triton — compare with relaxed tolerance
     kerncap validate ./isolated/flash_attn_fwd --tolerance 1e-3 --rtol 1e-2
+
+    # Edit loops auto-detect candidate.hsaco / optimized.hsaco
+    kerncap validate ./isolated/flash_attn_fwd
     ```
   </TabItem>
 </Tabs>
 
-> **HIP vs Triton validation**: For HIP kernels, baseline `validate` is a smoke test only. Pass `hsaco` to compare a recompiled variant byte-for-byte against the captured baseline. For Triton reproducers, `validate` compares outputs against captured reference data using `np.allclose`.
+> **Validation modes**: For VA-faithful captures, baseline `validate` is a smoke test only until a rebuilt HSACO is available. Pass `hsaco`, or let kerncap auto-detect `candidate.hsaco` / `optimized.hsaco`, to compare captured vs rebuilt execution byte-for-byte.
+
+`kerncap validate <dir>` auto-detects rebuilt HSACOs from the edit loop: `candidate.hsaco` from Triton `python3 reproducer.py`, or `optimized.hsaco` from HIP `make recompile`. In that case validation runs captured vs rebuilt HSACO and reports a byte-exact memory-region summary. The CLI prints a canonical `Result: PASS/FAIL (...)` footer for replay and validation; per-region PASS lines are hidden unless validation fails or `kerncap validate -v` is used.
 
 ## Extract methodology
 
@@ -188,7 +199,7 @@ Snapshots the full runtime state of a single kernel dispatch for later replay.
 
 **HIP kernels** are captured at the HSA level. `libkerncap.so` (loaded via `LD_PRELOAD` with rocprofiler-sdk registration) hooks `hsa_queue_create` to install a packet intercept callback. When the target dispatch arrives, kerncap interposes a completion signal, waits for the kernel to finish, then walks the kernarg buffer. All device memory allocations are tracked via `hsa_amd_memory_pool_allocate` and `hsa_amd_vmem_*` hooks. At capture time, a full device memory snapshot is taken — every tracked allocation is D2H copied. The replay binary restores all memory at the original virtual addresses using HSA VMEM APIs, then dispatches the kernel with the captured HSACO. No DWARF metadata or argument parsing needed.
 
-**Triton kernels** are captured at the Python level via monkey-patching `JITFunction.run` and `Autotuner.run`. Inputs (tensors, scalars, constexprs) are serialized before launch and reference outputs saved after. For autotuned kernels the winning config is recorded so the reproducer can pin it exactly.
+**Triton kernels** are captured with `libkerncap.so` loaded via `LD_PRELOAD` and a lightweight Python compile shim installed through `sitecustomize.py`. The shim records `name_map.json` rows that connect Triton's user-facing function name, signature, constexprs, launch attributes, source snapshot, and HSACO SHA-256 to the captured dispatch. A short-lived run observer records tensor layout metadata so the editable Python reproducer can rebuild accurate `torch.as_strided` views; the captured kernarg buffer and memory snapshot remain the source of truth.
 
 ### Find source
 
@@ -198,7 +209,9 @@ Locates the kernel's source so the reproducer can compile (HIP) or import (Trito
 
 > **Note**: `compile_commands.json` is **optional** — the capture/replay/validate workflow works without it. However, the `make recompile` target (for editing and rebuilding kernels) requires it. Generate it by adding `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` when configuring your CMake project. If missing, you'll see: *"No compile command found (compile_commands.json missing or has no entry for this file). The 'make recompile' target will not be available."* — basic validation still works, but you won't be able to test kernel modifications.
 
-**Triton**: Parses Python files under `--source-dir` with the `ast` module, matching `@triton.jit`/`@triton.autotune` decorators. `ImportFrom` nodes (including relative imports) are traced to resolve the full dependency set.
+**Triton**: Parses Python files under `--source-dir` with the `ast` module, matching `@triton.jit`/`@triton.autotune` decorators. `ImportFrom` nodes (including relative imports) are traced to resolve the full dependency set. Kerncap can also fall back to the source snapshots written by the compile shim when `--source-dir` was omitted or the original file came from a temporary `torch.compile`/Inductor path.
+
+If source lookup fails, kerncap classifies the failure instead of emitting a generic warning. It distinguishes cases where DWARF source paths exist but `--source-dir` is wrong, likely Triton kernels were routed as HIP, or the captured code object has no source trail at all, such as Tensile, hand-written assembly, JIT-generated binaries, or third-party HSACO blobs.
 
 ### Generate
 
@@ -222,7 +235,7 @@ This enables the [optimization workflow](#optimization-workflow) below.
 | VFS overlay (`vfs.yaml`) | — | Yes |
 | Makefile | Yes | Yes |
 
-**Triton kernels** produce a `reproducer.py` that imports the kernel from the copied source tree, loads tensor arguments from binary dumps, and calls the kernel. For autotuned kernels, the reproducer calls `kernel.fn` directly with pinned config kwargs, bypassing re-tuning entirely (see [Triton autotuner reproducibility](#triton-autotuner-reproducibility)).
+**Triton kernels** produce a `reproducer.py` that imports the kernel from the copied source tree, loads tensor arguments from binary dumps, and calls the kernel. The generated project also includes `capture/` and `reference_output/`; editing `kernel_variant.py` (or the copied source file) and rerunning `python3 reproducer.py` re-JITs through Triton and writes `candidate.hsaco` for validation.
 
 ## Optimization workflow
 
@@ -237,6 +250,15 @@ Makefile                make run | make recompile | make run-variant | make vali
 ```
 
 > **Prerequisites for `make recompile`**: The recompilation workflow requires `compile_commands.json` from your project's build directory. If your project was built with CMake, regenerate with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` to enable this. Without it, `make run` and `kerncap validate` still work (they use the captured HSACO), but `make recompile` won't be available.
+
+For Triton captures, the edit loop is Python-native rather than Makefile-based:
+
+```bash
+cd ./isolated/flash_attn_fwd
+# edit kernel_variant.py or the copied source file
+python3 reproducer.py     # re-JITs through Triton and writes candidate.hsaco
+kerncap validate .        # auto-detects candidate.hsaco
+```
 
 <Tabs syncKey="interface">
   <TabItem label="Python API">
@@ -274,7 +296,7 @@ Makefile                make run | make recompile | make run-variant | make vali
     # edit kernel_variant.cpp and/or deps/
     make recompile      # recompile into optimized.hsaco
     make run-variant    # replay variant
-    kerncap validate . --hsaco optimized.hsaco  # correctness check
+    kerncap validate .   # auto-detects optimized.hsaco for correctness check
     ```
   </TabItem>
 </Tabs>
@@ -295,6 +317,14 @@ The Python API is designed for LLM-driven workflows. A Cursor agent (or any LLM 
 
 Kerncap uses VA-faithful replay: all device memory is captured in a full snapshot and restored at the original virtual addresses during replay. Embedded device pointers (e.g. `T**` in batched BLAS, structs with pointer members) work automatically — no pointer patching or relocation tables needed.
 
+### Module variables and constant memory
+
+Some frameworks launch kernels through module-scope variables instead of ordinary dynamic allocations. Kokkos `hip_parallel_launch_constant_memory`, used by applications such as LAMMPS, SPARTA, and ExaMPM, stores kernel arguments in a `__constant__`-style HSACO module variable populated by `hipMemcpyToSymbol`. Kerncap snapshots executable module variables into `module_variables.json` plus binary blobs and restores only the variables whose executable SHA-256 matches the captured kernel during replay.
+
+### Large snapshots
+
+Device-memory snapshots are streamed through a bounded staging buffer instead of copied as one full host allocation per region. The default chunk size is 64 MiB; set `KERNCAP_SNAPSHOT_CHUNK_BYTES` when debugging captures with very large allocations.
+
 ### Triton autotuner reproducibility
 
 Triton's `@triton.autotune` selects a config by benchmarking (e.g. `BLOCK_M=128, num_warps=4`). Different configs change FP accumulation order, which can cause large numerical differences in FP16. Kerncap captures the winning config and pins it in the reproducer, bypassing re-tuning entirely.
@@ -305,7 +335,7 @@ If validation fails with tight tolerances, use `kerncap validate --tolerance <at
 
 ### Validation targets
 
-- **Triton**: Flash Attention forward kernel (`ROCm/flash-attention`, Triton backend) in `rocm/pytorch` container
+- **Triton**: Flash Attention forward kernel (`ROCm/flash-attention`) in `rocm/pytorch` container
 - **HIP**: Composable Kernel GEMM XDL FP16 (`ROCm/composable_kernel`) in `rocm/composable_kernel:ck_pytorch` container
 - **HIP (embedded pointers)**: Batched vector scale kernel in local ROCm environment, testing T** (double-pointer) arguments via VA-faithful replay
 
@@ -316,6 +346,7 @@ llama.cpp/ggml kernels (template-qualified names like `mul_mat_q<(ggml_type)7, 3
 ```
 src/kerncap.{hip,hpp}     HSA tool loaded via LD_PRELOAD (rocprofiler-sdk registration)
 src/replay.cpp             VA-faithful HSA kernel replay binary (kerncap-replay)
+src/kernarg_metadata.*     AMDGPU code-object kernarg metadata parser
 kerncap/                   Python package (CLI, profiler, capturer, source finder,
                            reproducer generator, validator)
 kerncap/templates/         Jinja2 templates for HIP and Triton reproducers

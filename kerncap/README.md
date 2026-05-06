@@ -12,8 +12,8 @@ kerncap profiles a running application, intercepts a target kernel dispatch, cap
 1. Profile          rocprofv3 --kernel-trace --stats → rank kernels by duration
 2. Capture          HIP:    LD_PRELOAD=libkerncap.so → intercept target dispatch,
                             snapshot all tracked device memory + kernarg buffer + HSACO
-                    Triton: Python-level hook on JITFunction.run → capture all tensor,
-                            scalar, and constexpr args; pin autotuner config
+                    Triton: LD_PRELOAD capture with code-object metadata +
+                            compile-shim name mapping
 3. Find source      HIP: __global__ grep + #include tracing
                     Triton: @triton.jit AST match + import tracing (incl. relative imports)
 4. Generate         Jinja2 templates → standalone .hip+Makefile or .py reproducer
@@ -87,6 +87,8 @@ result = kc.extract(
 
 > **Language detection**: kerncap auto-detects whether a kernel is HIP or Triton from `--source-dir` contents. To override, pass `--language hip` or `--language triton` on the CLI (or `language="triton"` in the Python API).
 
+> **Triton backend compatibility**: The `--triton-backend` flag is available for compatibility with the legacy Python capture backend. HSA is the new default, and the Python backend will soon be deprecated.
+
 ### Replay
 
 Replay a captured kernel in isolation.
@@ -132,7 +134,9 @@ result = kc.validate("./isolated/mul_mat_q", hsaco="optimized.hsaco")
 print("Passed:", result.passed)
 ```
 
-> **HIP vs Triton validation**: For HIP kernels, baseline `validate` is a smoke test only. Pass `hsaco` to compare a recompiled variant against the captured baseline. For Triton reproducers, `validate` compares outputs against captured reference data using `np.allclose`.
+> **Validation modes**: For VA-faithful captures, baseline `validate` is a smoke test only until a rebuilt HSACO is available. Pass `hsaco`, or let kerncap auto-detect `candidate.hsaco` / `optimized.hsaco`, to compare captured vs rebuilt execution byte-for-byte.
+
+`kerncap validate <dir>` auto-detects rebuilt HSACOs from the edit loop: `candidate.hsaco` from Triton `python3 reproducer.py`, or `optimized.hsaco` from HIP `make recompile`. In that case validation runs captured vs rebuilt HSACO and reports a byte-exact memory-region summary.
 
 ## Optimization workflow
 
@@ -145,16 +149,25 @@ make run            # replay baseline
 # edit kernel_variant.cpp and/or deps/
 make recompile      # recompile into optimized.hsaco
 make run-variant    # replay variant
-kerncap validate . --hsaco optimized.hsaco  # correctness check
+kerncap validate .   # auto-detects optimized.hsaco for correctness check
 ```
 
 See [full documentation](https://amdresearch.github.io/intellikit/tools/kerncap/) for the complete Python API workflow and details on the generated project layout.
+
+For Triton captures, edit `kernel_variant.py` (or the copied source file), rerun `python3 reproducer.py` to produce `candidate.hsaco`, then run `kerncap validate .`.
+
+## Notes
+
+- Source-not-found warnings now distinguish between a wrong `--source-dir`, a likely Triton kernel routed as HIP, and kernels with no source trail such as Tensile, hand-written assembly, JIT-generated binaries, or vendor HSACO blobs.
+- Captures include module-variable snapshots for constant-memory style launches such as Kokkos `hip_parallel_launch_constant_memory`, and replay restores only module variables belonging to the captured executable.
+- Large device-memory snapshots stream through a bounded staging buffer. Set `KERNCAP_SNAPSHOT_CHUNK_BYTES` to tune the chunk size when debugging very large captures.
 
 ## Project structure
 
 ```
 src/kerncap.{hip,hpp}     HSA tool loaded via LD_PRELOAD (rocprofiler-sdk registration)
 src/replay.cpp             VA-faithful HSA kernel replay binary (kerncap-replay)
+src/kernarg_metadata.*     AMDGPU code-object kernarg metadata parser
 kerncap/                   Python package (CLI, profiler, capturer, source finder,
                            reproducer generator, validator)
 kerncap/templates/         Jinja2 templates for HIP and Triton reproducers
