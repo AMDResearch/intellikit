@@ -88,13 +88,13 @@ def list_devices():
     # listed (with empty marketing name) so new backends are visible the
     # moment their gfx*.py file is added.
     _META = {
-        "gfx90a":  ("AMD Instinct MI200", "CDNA 2"),
-        "gfx942":  ("AMD Instinct MI300", "CDNA 3"),
-        "gfx950":  ("AMD Instinct MI355X", "CDNA 4"),
-        "gfx1030": ("AMD Radeon RX 6000",  "RDNA 2"),
-        "gfx1100": ("AMD Radeon RX 7900",  "RDNA 3"),
-        "gfx1151": ("AMD Strix Halo APU",  "RDNA 3.5"),
-        "gfx1201": ("AMD Radeon RX 9070",  "RDNA 4"),
+        "gfx90a": ("AMD Instinct MI200", "CDNA 2"),
+        "gfx942": ("AMD Instinct MI300", "CDNA 3"),
+        "gfx950": ("AMD Instinct MI355X", "CDNA 4"),
+        "gfx1030": ("AMD Radeon RX 6000", "RDNA 2"),
+        "gfx1100": ("AMD Radeon RX 7900", "RDNA 3"),
+        "gfx1151": ("AMD Strix Halo APU", "RDNA 3.5"),
+        "gfx1201": ("AMD Radeon RX 9070", "RDNA 4"),
     }
 
     from pathlib import Path
