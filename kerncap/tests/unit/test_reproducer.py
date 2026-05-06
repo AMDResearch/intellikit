@@ -305,6 +305,117 @@ class TestHsacoReproducer:
         content = Path(os.path.join(output, "Makefile")).read_text()
         assert "gfx942" in content
 
+    def test_gpu_arch_from_feature_suffixed_isa_name(self, tmp_path):
+        """ISA feature suffixes should not leak into --offload-arch matching."""
+        meta = {
+            "demangled_name": "void k()",
+            "isa_name": "amdgcn-amd-amdhsa--gfx942:sramecc+:xnack-",
+            "grid": [1, 1, 1],
+            "block": [1, 1, 1],
+            "kernarg_size": 0,
+        }
+        cap = _make_capture_dir(tmp_path, metadata_dict=meta)
+        output = str(tmp_path / "repro")
+
+        generate_hsaco_reproducer(cap, output)
+
+        content = Path(os.path.join(output, "Makefile")).read_text()
+        assert "GPU_ARCH ?= gfx942" in content
+        assert "gfx942:sramecc" not in content
+
+    def test_makefile_filters_comma_separated_offload_archs(self, tmp_path):
+        """CMake HIP may emit one comma-separated --offload-arch list."""
+        meta = {
+            "demangled_name": "void k()",
+            "isa_name": "amdgcn-amd-amdhsa--gfx942:sramecc+:xnack-",
+            "grid": [1, 1, 1],
+            "block": [1, 1, 1],
+            "kernarg_size": 0,
+        }
+        cap = _make_capture_dir(tmp_path, metadata_dict=meta)
+        src_root = tmp_path / "src"
+        src_root.mkdir()
+        main_kernel = src_root / "kernel.cu"
+        main_kernel.write_text("__global__ void k() {}\n")
+        ks = KernelSource(
+            language="hip",
+            kernel_name="k",
+            main_file=str(main_kernel),
+            source_files=[str(main_kernel)],
+            compile_command=("clang --offload-arch=gfx942,gfx90a,gfx1201 -c kernel.cu -o kernel.o"),
+            compile_dir=str(src_root),
+        )
+        output = str(tmp_path / "repro")
+
+        generate_hsaco_reproducer(cap, output, kernel_source=ks)
+
+        content = Path(os.path.join(output, "Makefile")).read_text()
+        assert "--offload-arch=gfx942" in content
+        assert "--offload-arch=gfx942,gfx90a,gfx1201" not in content
+        assert "kept=gfx942" in content
+
+    def test_makefile_filters_repeated_offload_arch_flags(self, tmp_path):
+        """Repeated --offload-arch flags should keep only the captured arch."""
+        meta = {
+            "demangled_name": "void k()",
+            "gpu_arch": "gfx942",
+            "grid": [1, 1, 1],
+            "block": [1, 1, 1],
+            "kernarg_size": 0,
+        }
+        cap = _make_capture_dir(tmp_path, metadata_dict=meta)
+        src_root = tmp_path / "src"
+        src_root.mkdir()
+        main_kernel = src_root / "kernel.cu"
+        main_kernel.write_text("__global__ void k() {}\n")
+        ks = KernelSource(
+            language="hip",
+            kernel_name="k",
+            main_file=str(main_kernel),
+            source_files=[str(main_kernel)],
+            compile_command=(
+                "clang --offload-arch gfx90a --offload-arch gfx942 "
+                "--offload-arch gfx1201 -c kernel.cu -o kernel.o"
+            ),
+            compile_dir=str(src_root),
+        )
+        output = str(tmp_path / "repro")
+
+        generate_hsaco_reproducer(cap, output, kernel_source=ks)
+
+        content = Path(os.path.join(output, "Makefile")).read_text()
+        assert "--offload-arch gfx942" in content
+        assert "--offload-arch gfx90a" not in content
+        assert "--offload-arch gfx1201" not in content
+        assert "kept=gfx942" in content
+
+    def test_makefile_rejects_offload_archs_missing_captured_arch(self, tmp_path):
+        """The original safety check should still reject true arch mismatches."""
+        meta = {
+            "demangled_name": "void k()",
+            "gpu_arch": "gfx942",
+            "grid": [1, 1, 1],
+            "block": [1, 1, 1],
+            "kernarg_size": 0,
+        }
+        cap = _make_capture_dir(tmp_path, metadata_dict=meta)
+        src_root = tmp_path / "src"
+        src_root.mkdir()
+        main_kernel = src_root / "kernel.cu"
+        main_kernel.write_text("__global__ void k() {}\n")
+        ks = KernelSource(
+            language="hip",
+            kernel_name="k",
+            main_file=str(main_kernel),
+            source_files=[str(main_kernel)],
+            compile_command="clang --offload-arch=gfx90a,gfx1201 -c kernel.cu -o kernel.o",
+            compile_dir=str(src_root),
+        )
+        output = str(tmp_path / "repro")
+
+        with pytest.raises(RuntimeError, match="Captured GPU arch 'gfx942'"):
+            generate_hsaco_reproducer(cap, output, kernel_source=ks)
+
 
 class TestTritonReproducer:
     """Tests for Triton reproducer generation."""

@@ -20,6 +20,30 @@ from kerncap.source_finder import KernelSource
 logger = logging.getLogger(__name__)
 
 
+def _normalize_gpu_arch(value: str) -> str:
+    """Return the canonical gfx arch from ROCm ISA or offload-arch strings."""
+    if not value:
+        return ""
+    arch = value.strip()
+    if "--" in arch:
+        arch = arch.rsplit("--", 1)[-1]
+    return arch.split(":", 1)[0]
+
+
+def _split_offload_archs(value: str) -> List[str]:
+    """Split compiler offload arch lists and normalize each arch."""
+    return [arch for arch in (_normalize_gpu_arch(part) for part in value.split(",")) if arch]
+
+
+def _derive_gpu_arch(metadata: dict) -> str:
+    """Choose the best captured GPU arch field and normalize it."""
+    for key in ("gpu_arch", "agent_name", "isa_name"):
+        arch = _normalize_gpu_arch(str(metadata.get(key) or ""))
+        if arch:
+            return arch
+    return "gfx90a"
+
+
 # Triton dtype ``str()`` representations as they appear in legacy
 # name_map.json files (captured before the dtype-tagging fix in
 # ``triton_capture_hsa.py``).  ``str(tl.bfloat16)`` is ``"bf16"`` etc;
@@ -33,20 +57,20 @@ _LEGACY_TRITON_DTYPE_STRS = {
     "fp16": "float16",
     "fp32": "float32",
     "fp64": "float64",
-    "i1":   "int1",
-    "i8":   "int8",
-    "i16":  "int16",
-    "i32":  "int32",
-    "i64":  "int64",
-    "u8":   "uint8",
-    "u16":  "uint16",
-    "u32":  "uint32",
-    "u64":  "uint64",
-    "fp8e4nv":   "float8e4nv",
-    "fp8e4b8":   "float8e4b8",
-    "fp8e4b15":  "float8e4b15",
-    "fp8e5":     "float8e5",
-    "fp8e5b16":  "float8e5b16",
+    "i1": "int1",
+    "i8": "int8",
+    "i16": "int16",
+    "i32": "int32",
+    "i64": "int64",
+    "u8": "uint8",
+    "u16": "uint16",
+    "u32": "uint32",
+    "u64": "uint64",
+    "fp8e4nv": "float8e4nv",
+    "fp8e4b8": "float8e4b8",
+    "fp8e4b15": "float8e4b15",
+    "fp8e5": "float8e5",
+    "fp8e5b16": "float8e5b16",
 }
 
 
@@ -140,13 +164,7 @@ def generate_hsaco_reproducer(
         shutil.copytree(capture_dir, capture_dest)
 
     # Derive gpu_arch
-    isa_name = metadata.get("isa_name", "")
-    if isa_name and "--" in isa_name:
-        gpu_arch = isa_name.rsplit("--", 1)[-1]
-    elif isa_name and isa_name.startswith("gfx"):
-        gpu_arch = isa_name
-    else:
-        gpu_arch = metadata.get("gpu_arch", "gfx90a")
+    gpu_arch = _derive_gpu_arch(metadata)
 
     kernel_name = metadata.get("demangled_name", metadata.get("kernel_name", "unknown"))
 
@@ -307,19 +325,21 @@ def _write_replay_makefile(
             # single-arch (came from one specific dispatch on one GPU), so we
             # only need the arch that matches the capture.
             if tok.startswith("--offload-arch="):
-                arch = tok.split("=", 1)[1]
-                original_archs.append(arch)
-                if arch == gpu_arch and kept_arch is None:
-                    new_tokens.append(tok)
-                    kept_arch = arch
+                arch_value = tok.split("=", 1)[1]
+                archs = _split_offload_archs(arch_value)
+                original_archs.extend(archs)
+                if gpu_arch in archs and kept_arch is None:
+                    new_tokens.append(f"--offload-arch={gpu_arch}")
+                    kept_arch = gpu_arch
                 continue
             if tok == "--offload-arch" and i + 1 < len(tokens):
-                arch = tokens[i + 1]
-                original_archs.append(arch)
+                arch_value = tokens[i + 1]
+                archs = _split_offload_archs(arch_value)
+                original_archs.extend(archs)
                 skip_next = True
-                if arch == gpu_arch and kept_arch is None:
-                    new_tokens.extend([tok, arch])
-                    kept_arch = arch
+                if gpu_arch in archs and kept_arch is None:
+                    new_tokens.extend([tok, gpu_arch])
+                    kept_arch = gpu_arch
                 continue
 
             new_tokens.append(tok)
