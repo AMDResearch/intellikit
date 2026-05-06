@@ -73,18 +73,42 @@ def list_profiles():
 
 
 def list_devices():
-    """List supported devices"""
+    """List supported devices.
+
+    Discovers backend modules on disk under ``metrix/backends/gfx*.py`` so
+    the output stays in sync with what's actually installed (instead of a
+    hardcoded list that drifts as new backends are added).
+    """
 
     print("╔════════════════════════════════════════════════════════════════════╗")
     print("║                   SUPPORTED DEVICES                                 ║")
     print("╚════════════════════════════════════════════════════════════════════╝\n")
 
-    devices = [
-        ("gfx90a", "AMD Instinct MI200", "CDNA 2"),
-        ("gfx942", "AMD Instinct MI300", "CDNA 3"),
-    ]
+    # Friendly metadata for known archs.  Backends not in this map are still
+    # listed (with empty marketing name) so new backends are visible the
+    # moment their gfx*.py file is added.
+    _META = {
+        "gfx90a":  ("AMD Instinct MI200", "CDNA 2"),
+        "gfx942":  ("AMD Instinct MI300", "CDNA 3"),
+        "gfx950":  ("AMD Instinct MI355X", "CDNA 4"),
+        "gfx1030": ("AMD Radeon RX 6000",  "RDNA 2"),
+        "gfx1100": ("AMD Radeon RX 7900",  "RDNA 3"),
+        "gfx1151": ("AMD Strix Halo APU",  "RDNA 3.5"),
+        "gfx1201": ("AMD Radeon RX 9070",  "RDNA 4"),
+    }
 
-    for arch, name, generation in devices:
-        print(f"  • {arch:10s}  {name:30s}  ({generation})")
+    from pathlib import Path
+
+    import metrix
+
+    backends_dir = Path(metrix.__file__).parent / "backends"
+    archs = sorted(p.stem for p in backends_dir.glob("gfx*.py"))
+
+    if not archs:
+        print("  (no backend modules found under metrix/backends/)")
+    else:
+        for arch in archs:
+            name, generation = _META.get(arch, ("", "unknown"))
+            print(f"  • {arch:10s}  {name:30s}  ({generation})")
 
     print("\nUse --device <arch> to specify target architecture")
