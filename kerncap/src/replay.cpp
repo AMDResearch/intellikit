@@ -355,17 +355,39 @@ int main(int argc, char** argv) {
     std::cerr << "Stage 2: backing pool found\n";
     std::cerr.flush();
 
-    // Kernarg buffer requires a CPU-writable pool. The coarse-grained
-    // backing_pool selected above works for region backings (populated via
-    // hsa_memory_copy DMA, with CPU access granted via hsa_amd_vmem_set_access)
-    // but a plain memcpy into a coarse-grained allocation faults on RDNA
-    // discrete GPUs where ROCr doesn't pre-map coarse VRAM into the host
-    // process. Use a KERNARG_INIT-flagged pool instead -- guaranteed
-    // CPU-writable and dispatch-readable.
-    hsa_amd_memory_pool_t kernarg_pool{};
-    bool found_kernarg = false;
+    // Kernarg pool placement preference (matches HIP/CLR convention on
+    // production discrete GPUs):
+    //
+    //   Tier 1: GPU-agent KERNARG_INIT pool       -- device-local, CPU-writable,
+    //                                                dispatch-readable. Present on
+    //                                                AIE agents today; ROCr is
+    //                                                expected to expose this for
+    //                                                GPU agents going forward.
+    //   Tier 2: GPU-agent coarse-grain pool       -- HIP's path on current
+    //                                                discrete GPUs. Keeps kernargs
+    //                                                on-device for low dispatch
+    //                                                latency. NOT CPU-writable via
+    //                                                plain memcpy on RDNA dGPUs --
+    //                                                must be populated via
+    //                                                hsa_memory_copy (DMA), like
+    //                                                the backing_pool regions.
+    //   Tier 3: CPU-agent KERNARG_INIT pool       -- historical / safe fallback.
+    //                                                Kernargs live in host-pinned
+    //                                                memory; GPU reads them across
+    //                                                PCIe per dispatch.
+    //
+    // Tier 2 reuses backing_pool: it is the GPU agent's first runtime-allocable
+    // global pool, which on AMD platforms is coarse-grained. Allocation from
+    // backing_pool was already validated above (RUNTIME_ALLOC_ALLOWED), so
+    // tier 2 is essentially always available; tier 3 is reached only if both
+    // GPU paths fail at allocation time.
+    enum class KernargPoolTier {
+        GPU_KERNARG,
+        GPU_COARSE_GRAIN,
+        CPU_KERNARG,
+    };
 
-    auto kernarg_cb = [](hsa_amd_memory_pool_t pool, void* data) {
+    auto kernarg_init_cb = [](hsa_amd_memory_pool_t pool, void* data) {
         auto* ctx = reinterpret_cast<std::pair<hsa_amd_memory_pool_t*, bool*>*>(data);
         hsa_amd_segment_t segment;
         hsa_amd_memory_pool_get_info(pool,
@@ -383,17 +405,42 @@ int main(int argc, char** argv) {
         return HSA_STATUS_SUCCESS;
     };
 
-    std::pair<hsa_amd_memory_pool_t*, bool*> kctx{&kernarg_pool, &found_kernarg};
-    hsa_amd_agent_iterate_memory_pools(g_gpu_agent, kernarg_cb, &kctx);
-    if (!found_kernarg) {
-        hsa_amd_agent_iterate_memory_pools(g_cpu_agent, kernarg_cb, &kctx);
-    }
-    if (!found_kernarg) {
-        std::cerr << "No KERNARG-flagged pool found on GPU or CPU agent\n";
-        return 1;
+    hsa_amd_memory_pool_t gpu_kernarg_pool{};
+    bool has_gpu_kernarg = false;
+    std::pair<hsa_amd_memory_pool_t*, bool*> gpu_kctx{&gpu_kernarg_pool, &has_gpu_kernarg};
+    hsa_amd_agent_iterate_memory_pools(g_gpu_agent, kernarg_init_cb, &gpu_kctx);
+
+    // Look up CPU-agent KERNARG_INIT preemptively so we can fall back at
+    // allocation time without re-iterating.
+    hsa_amd_memory_pool_t cpu_kernarg_pool{};
+    bool has_cpu_kernarg = false;
+    std::pair<hsa_amd_memory_pool_t*, bool*> cpu_kctx{&cpu_kernarg_pool, &has_cpu_kernarg};
+    hsa_amd_agent_iterate_memory_pools(g_cpu_agent, kernarg_init_cb, &cpu_kctx);
+
+    // Pick the initial tier: prefer GPU-kernarg if available, otherwise
+    // GPU-coarse-grain (== backing_pool). CPU-kernarg is reserved as an
+    // allocation-time fallback below.
+    hsa_amd_memory_pool_t kernarg_pool;
+    KernargPoolTier kernarg_tier;
+    if (has_gpu_kernarg) {
+        kernarg_pool = gpu_kernarg_pool;
+        kernarg_tier = KernargPoolTier::GPU_KERNARG;
+    } else {
+        kernarg_pool = backing_pool;
+        kernarg_tier = KernargPoolTier::GPU_COARSE_GRAIN;
     }
 
-    std::cerr << "Stage 2: kernarg pool found\n";
+    auto kernarg_tier_name = [](KernargPoolTier t) -> const char* {
+        switch (t) {
+            case KernargPoolTier::GPU_KERNARG:      return "GPU-kernarg";
+            case KernargPoolTier::GPU_COARSE_GRAIN: return "GPU-coarse-grain";
+            case KernargPoolTier::CPU_KERNARG:      return "CPU-kernarg";
+        }
+        return "unknown";
+    };
+
+    std::cerr << "Stage 2: kernarg pool selected (tier: "
+              << kernarg_tier_name(kernarg_tier) << ")\n";
     std::cerr.flush();
 
     // ==========================================================
@@ -971,18 +1018,39 @@ int main(int argc, char** argv) {
     void* kernarg = nullptr;
     hsa_status_t kernarg_alloc_st = hsa_amd_memory_pool_allocate(
         kernarg_pool, kernarg_size, 0, &kernarg);
+
+    // If the selected GPU tier fails to allocate, fall back to CPU-kernarg.
+    // This is rare in practice (the GPU pool was already validated as
+    // RUNTIME_ALLOC_ALLOWED) but covers exotic configurations such as
+    // out-of-VRAM at replay time.
+    if ((kernarg_alloc_st != HSA_STATUS_SUCCESS || kernarg == nullptr) &&
+        kernarg_tier != KernargPoolTier::CPU_KERNARG &&
+        has_cpu_kernarg) {
+        std::cerr << "Note: kernarg allocation failed on "
+                  << kernarg_tier_name(kernarg_tier)
+                  << " (status=" << kernarg_alloc_st
+                  << "); falling back to CPU-kernarg\n";
+        kernarg = nullptr;
+        kernarg_pool = cpu_kernarg_pool;
+        kernarg_tier = KernargPoolTier::CPU_KERNARG;
+        kernarg_alloc_st = hsa_amd_memory_pool_allocate(
+            kernarg_pool, kernarg_size, 0, &kernarg);
+    }
+
     if (kernarg_alloc_st != HSA_STATUS_SUCCESS || kernarg == nullptr) {
         std::cerr << "Failed to allocate kernarg buffer"
                   << " (size=" << kernarg_size
-                  << ", status=" << kernarg_alloc_st << ")\n";
+                  << ", status=" << kernarg_alloc_st
+                  << ", tier=" << kernarg_tier_name(kernarg_tier) << ")\n";
         return 1;
     }
 
     // Belt-and-suspenders: ensure the GPU agent can read the kernarg buffer.
     // Kernarg-flagged pools are typically already accessible to all execution
     // agents, but on configurations where the pool lives on the CPU agent this
-    // grant guarantees GPU visibility. Failure here is non-fatal -- most often
-    // it means access is already granted.
+    // grant guarantees GPU visibility. For the GPU coarse-grain tier the GPU
+    // already owns the pool so this is effectively a no-op. Failure here is
+    // non-fatal -- most often it means access is already granted.
     hsa_status_t aa_st = hsa_amd_agents_allow_access(
         1, &g_gpu_agent, nullptr, kernarg);
     if (aa_st != HSA_STATUS_SUCCESS) {
@@ -1000,7 +1068,26 @@ int main(int argc, char** argv) {
                   << ") != HSACO kernarg_size (" << kernarg_size
                   << "); kernel ABI may not match captured data\n";
     }
-    memcpy(kernarg, kblob.data(), std::min(kblob.size(), (size_t)kernarg_size));
+
+    // Populate the kernarg buffer. KERNARG_INIT-flagged pools (tiers 1 and 3)
+    // are guaranteed CPU-writable, so a plain memcpy is correct. Tier 2
+    // (GPU coarse-grain) is device VRAM that ROCr does not pre-map into the
+    // host process on RDNA discrete GPUs -- a CPU memcpy there faults. Use
+    // hsa_memory_copy (DMA) for that tier, matching the path that backing_pool
+    // regions already use to populate captured memory.
+    const size_t kernarg_copy_bytes = std::min(kblob.size(), (size_t)kernarg_size);
+    if (kernarg_tier == KernargPoolTier::GPU_COARSE_GRAIN) {
+        hsa_status_t kcp_st = hsa_memory_copy(kernarg, kblob.data(),
+                                              kernarg_copy_bytes);
+        if (kcp_st != HSA_STATUS_SUCCESS) {
+            std::cerr << "hsa_memory_copy for kernarg (tier="
+                      << kernarg_tier_name(kernarg_tier)
+                      << ") failed (status=" << kcp_st << ")\n";
+            return 1;
+        }
+    } else {
+        memcpy(kernarg, kblob.data(), kernarg_copy_bytes);
+    }
 
     result.raw_ns.clear();
     result.raw_ns.reserve(iterations);
