@@ -6,9 +6,10 @@
 #include "kerncap_log.hpp"
 
 #include <amd_comgr/amd_comgr.h>
+#include <nlohmann/json.hpp>
 
+#include <cstdlib>
 #include <cstring>
-#include <sstream>
 #include <unordered_map>
 
 namespace kerncap {
@@ -285,33 +286,31 @@ parse_kernarg_metadata(const void* hsaco, size_t bytes) {
 // Format the parsed table as a JSON string (used by the Python ctypes
 // shim for unit tests).
 static std::string to_json(const std::vector<KernelKernargInfo>& all) {
-    std::ostringstream os;
-    os << "[";
-    for (size_t i = 0; i < all.size(); ++i) {
-        const auto& k = all[i];
-        if (i) os << ",";
-        os << "{\"symbol\":\"" << k.symbol << "\","
-           << "\"name\":\"" << k.name << "\","
-           << "\"kernarg_segment_size\":" << k.kernarg_segment_size << ","
-           << "\"group_segment_fixed_size\":" << k.group_segment_fixed_size << ","
-           << "\"private_segment_fixed_size\":" << k.private_segment_fixed_size << ","
-           << "\"sgpr_count\":" << k.sgpr_count << ","
-           << "\"vgpr_count\":" << k.vgpr_count << ","
-           << "\"args\":[";
-        for (size_t j = 0; j < k.args.size(); ++j) {
-            const auto& a = k.args[j];
-            if (j) os << ",";
-            os << "{\"offset\":" << a.offset << ","
-               << "\"size\":" << a.size << ","
-               << "\"value_kind\":\"" << a.kind_str << "\","
-               << "\"value_type\":\"" << a.value_type << "\","
-               << "\"address_space\":\"" << a.address_space << "\","
-               << "\"name\":\"" << a.name << "\"}";
+    nlohmann::json kernels = nlohmann::json::array();
+    for (const auto& k : all) {
+        nlohmann::json args = nlohmann::json::array();
+        for (const auto& a : k.args) {
+            args.push_back({
+                {"offset", a.offset},
+                {"size", a.size},
+                {"value_kind", a.kind_str},
+                {"value_type", a.value_type},
+                {"address_space", a.address_space},
+                {"name", a.name},
+            });
         }
-        os << "]}";
+        kernels.push_back({
+            {"symbol", k.symbol},
+            {"name", k.name},
+            {"kernarg_segment_size", k.kernarg_segment_size},
+            {"group_segment_fixed_size", k.group_segment_fixed_size},
+            {"private_segment_fixed_size", k.private_segment_fixed_size},
+            {"sgpr_count", k.sgpr_count},
+            {"vgpr_count", k.vgpr_count},
+            {"args", std::move(args)},
+        });
     }
-    os << "]";
-    return os.str();
+    return kernels.dump();
 }
 
 extern "C" {
