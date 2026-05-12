@@ -1,5 +1,5 @@
-find_package(hsa-runtime64 REQUIRED)
-find_package(hip REQUIRED)
+find_package(hsa-runtime64 REQUIRED HINTS ${ROCM_PATH})
+find_package(hip REQUIRED HINTS ${ROCM_PATH})
 find_package(rocprofiler-sdk REQUIRED HINTS ${ROCM_PATH})
 
 # Vendored header-only dependencies
