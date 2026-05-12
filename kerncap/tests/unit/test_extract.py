@@ -148,8 +148,35 @@ class TestGenerateReproducer:
                 [],
             )
 
+    @patch("kerncap.extract._generate_triton_from_hsa")
+    def test_routes_to_triton_hsa_by_default(self, mock_triton_hsa, tmp_path):
+        capture_dir = tmp_path / "capture"
+        capture_dir.mkdir()
+        (capture_dir / "dispatch.json").write_text(
+            json.dumps({"language": "triton", "kernel_name": "kern"})
+        )
+
+        expected = ExtractResult(
+            output_dir=str(tmp_path),
+            capture_dir=str(capture_dir),
+            language="triton",
+        )
+        mock_triton_hsa.return_value = expected
+
+        result = _generate_reproducer(
+            "kern",
+            str(capture_dir),
+            str(tmp_path),
+            "./src",
+            None,
+            [],
+        )
+
+        mock_triton_hsa.assert_called_once()
+        assert result.language == "triton"
+
     @patch("kerncap.extract._generate_triton")
-    def test_routes_to_triton_from_metadata(self, mock_triton, tmp_path):
+    def test_routes_to_triton_python_when_opted_in(self, mock_triton, tmp_path):
         capture_dir = tmp_path / "capture"
         capture_dir.mkdir()
         (capture_dir / "dispatch.json").write_text(
@@ -170,6 +197,7 @@ class TestGenerateReproducer:
             "./src",
             None,
             [],
+            triton_backend="python",
         )
 
         mock_triton.assert_called_once()
@@ -199,15 +227,15 @@ class TestGenerateReproducer:
 
         mock_hsaco.assert_called_once()
 
-    @patch("kerncap.extract._generate_triton")
-    def test_explicit_language_overrides_metadata(self, mock_triton, tmp_path):
+    @patch("kerncap.extract._generate_triton_from_hsa")
+    def test_explicit_language_overrides_metadata(self, mock_triton_hsa, tmp_path):
         capture_dir = tmp_path / "capture"
         capture_dir.mkdir()
         (capture_dir / "dispatch.json").write_text(
             json.dumps({"language": "hip", "kernel_name": "kern"})
         )
 
-        mock_triton.return_value = ExtractResult(
+        mock_triton_hsa.return_value = ExtractResult(
             output_dir=str(tmp_path),
             capture_dir=str(capture_dir),
             language="triton",
@@ -222,7 +250,7 @@ class TestGenerateReproducer:
             [],
         )
 
-        mock_triton.assert_called_once()
+        mock_triton_hsa.assert_called_once()
 
     @patch("kerncap.extract._generate_hsaco")
     def test_reads_metadata_json_fallback(self, mock_hsaco, tmp_path):

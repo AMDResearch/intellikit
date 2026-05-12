@@ -26,6 +26,7 @@
 #include <nlohmann/json.hpp>
 
 #include "kerncap_log.hpp"
+#include "kernarg_metadata.hpp"
 
 #define PUBLIC_API __attribute__((visibility("default")))
 
@@ -176,9 +177,21 @@ private:
     // Snapshot all tracked device memory for VA-faithful replay
     void snapshot_all_tracked_memory(const hsa_kernel_dispatch_packet_t* disp);
 
+    // Snapshot module-scope variables (HSA_SYMBOL_KIND_VARIABLE) from every
+    // observed executable. Required for kernels that read state populated via
+    // hipMemcpyToSymbol / __constant__ / __device__ globals (e.g. Kokkos's
+    // hip_parallel_launch_constant_memory<...> launchers used by LAMMPS).
+    void snapshot_module_variables(const hsa_kernel_dispatch_packet_t* disp);
+
     // Capture kernel dispatch data to the output directory
     void capture_kernel(const hsa_kernel_dispatch_packet_t* disp,
                         const std::string& kernel_name);
+
+    bool should_trace_dispatch(
+        uint64_t queue_id,
+        uint64_t dispatch_seq,
+        uint64_t queue_dispatch_seq,
+        bool is_target) const;
 
     // Fork safety: clear inherited tracking state in the child process
     void reset_inherited_state();
@@ -207,17 +220,53 @@ private:
     std::unordered_set<void*> vmem_tracked_;  // subset of pointer_sizes_ from VMEM APIs
     std::mutex ptr_mutex_;
 
-    // Code object tracking for .hsaco capture
+    // Code object tracking for .hsaco capture.
+    //
+    // The executable bytes are stored exactly once per loaded executable
+    // (in executable_blobs_). kernel_hsaco_ only records which executable
+    // a given kernel_object came from, so N kernel symbols sharing one
+    // executable do NOT each hold a copy of the (potentially many-MB) blob.
+    // This is critical for libraries like rocBLAS/Tensile that pack many
+    // kernels into a single executable.
     std::unordered_map<uint64_t, std::vector<uint8_t>> pending_reader_blobs_;  // reader handle -> blob
     std::unordered_map<uint64_t, std::vector<uint8_t>> executable_blobs_;      // executable handle -> blob
-    std::unordered_map<uint64_t, std::vector<uint8_t>> kernel_hsaco_;          // kernel_object -> blob
+    std::unordered_map<uint64_t, uint64_t> kernel_hsaco_;                      // kernel_object -> executable handle
     std::mutex code_object_mutex_;
+
+    // Kernarg slot tables parsed from each loaded code object's AMDGPU
+    // metadata. Keyed by executable handle (since ``hsa_*_load_agent_code_object``
+    // gives us the executable; the kernel_object -> symbol -> executable
+    // mapping is built lazily and gives us the right entry on dispatch).
+    std::unordered_map<uint64_t, std::vector<KernelKernargInfo>>
+        executable_kernargs_;
+    std::unordered_map<uint64_t, std::string> executable_blob_sha256_;
+
+    // Triton HSA capture mode: name_map.json path (KERNCAP_TRITON_NAME_MAP)
+    // and the rows we have already loaded.  We re-read on mtime change
+    // because libkerncap.so is preloaded *before* the Python wrapper has
+    // had a chance to populate the file.
+    struct TritonNameMapRow {
+        std::string user_name;
+        std::string hsaco_sha256;
+        std::string hsaco_path;
+        nlohmann::json constexpr_values;
+    };
+    std::string triton_name_map_path_;
+    std::vector<TritonNameMapRow> triton_name_map_;
+    int64_t triton_name_map_mtime_ns_ = 0;
+    std::mutex triton_name_map_mutex_;
+
+    void maybe_reload_triton_name_map();
+    std::optional<TritonNameMapRow>
+        lookup_triton_user_name(const std::string& blob_sha256);
 
     // Queue tracking
     std::map<hsa_queue_t*, hsa_agent_t> queue_agents_;
+    std::unordered_map<uint64_t, uint64_t> queue_dispatch_seen_;
 
     // Dispatch counter for the target kernel (for --dispatch filtering)
     uint32_t target_dispatch_count_ = 0;
+    std::atomic<uint64_t> dispatch_seen_count_{0};
 
     // Configuration (read from env vars once)
     std::string target_kernel_;     // KERNCAP_KERNEL
@@ -225,6 +274,11 @@ private:
     std::string output_dir_;        // KERNCAP_OUTPUT
     std::string gpu_arch_;          // e.g. "gfx90a" (queried at init)
     std::atomic<bool> captured_{false};  // true after a successful capture
+    uint64_t trace_dispatch_limit_ = 0;   // KERNCAP_TRACE_DISPATCHES
+    uint64_t trace_dispatch_per_queue_limit_ = 0;  // KERNCAP_TRACE_DISPATCHES_PER_QUEUE
+    bool intercept_first_queue_only_ = false;  // KERNCAP_INTERCEPT_FIRST_QUEUE_ONLY
+    bool bypass_after_capture_ = false;  // KERNCAP_BYPASS_AFTER_CAPTURE
+    bool disable_code_object_hooks_ = false;  // KERNCAP_DISABLE_CODE_OBJECT_HOOKS
 
     // Fork safety (multi-process support)
     pid_t initial_pid_ = 0;              // PID when CaptureState was created

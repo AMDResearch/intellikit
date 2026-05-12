@@ -1,11 +1,15 @@
 find_package(hsa-runtime64 REQUIRED HINTS ${ROCM_PATH})
 find_package(hip REQUIRED HINTS ${ROCM_PATH})
 find_package(rocprofiler-sdk REQUIRED HINTS ${ROCM_PATH})
+find_package(amd_comgr REQUIRED HINTS ${ROCM_PATH})
 
 # Vendored header-only dependencies
 set(VENDOR_DIR "${CMAKE_SOURCE_DIR}/vendor")
 
-add_library(kerncap SHARED kerncap.hip)
+add_library(kerncap SHARED
+    kerncap.hip
+    kernarg_metadata.cpp
+)
 
 set_target_properties(kerncap PROPERTIES
     OUTPUT_NAME "kerncap"
@@ -24,6 +28,7 @@ target_include_directories(kerncap PRIVATE
 target_link_libraries(kerncap PRIVATE
     hsa-runtime64::hsa-runtime64
     rocprofiler-sdk::rocprofiler-sdk
+    amd_comgr
 )
 
 target_compile_definitions(kerncap PRIVATE AMD_INTERNAL_BUILD)

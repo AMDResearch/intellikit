@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
+from kerncap._subprocess import run_streaming
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,12 +78,7 @@ def run_profile(
         ] + cmd
 
         try:
-            proc = subprocess.run(
-                full_cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            proc = run_streaming(full_cmd, timeout=timeout)
         except subprocess.TimeoutExpired:
             raise TimeoutError(f"Application did not complete within {timeout}s")
 

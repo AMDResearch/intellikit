@@ -450,7 +450,7 @@ class TestValidateReplayVariant:
             hsaco="/tmp/variant.hsaco",
         )
         assert not result.passed
-        assert any("Replay failed" in d for d in result.details)
+        assert any("Baseline replay" in d and "failed" in d for d in result.details)
 
 
 class TestCompareReplayOutputs:

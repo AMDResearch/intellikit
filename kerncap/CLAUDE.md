@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is kerncap
 
-kerncap is a kernel extraction and isolation tool for HIP and Triton applications on AMD GPUs. It profiles running applications, intercepts kernel dispatches at the HSA level (for HIP) or Python level (for Triton), captures complete runtime state (grid/block dims, all kernel arguments including device buffers), and generates standalone reproducer projects that can rebuild and replay kernels in isolation.
+kerncap is a kernel extraction and isolation tool for HIP and Triton applications on AMD GPUs. It profiles running applications, intercepts kernel dispatches at the HSA level, captures complete runtime state (grid/block dims, all kernel arguments including device buffers), and generates standalone reproducer projects that can rebuild and replay kernels in isolation.
 
 The extraction workflow: **Profile** → **Capture** → **Find Source** → **Generate** → **Validate**
 
@@ -80,6 +80,9 @@ kerncap validate ./isolated/mul_mat_q --hsaco optimized.hsaco
 # Validate: Triton reproducers (compares outputs with tolerance)
 kerncap validate ./isolated/flash_attn_fwd --tolerance 1e-4 --rtol 1e-3
 
+# Edit loops auto-detect candidate.hsaco / optimized.hsaco
+kerncap validate ./isolated/flash_attn_fwd
+
 # Enable verbose (DEBUG) logging for any command
 kerncap -v extract ...
 ```
@@ -90,13 +93,13 @@ kerncap -v extract ...
 
 - **cli.py**: Click-based CLI with `profile`, `extract`, `validate` commands
 - **profiler.py**: Wrapper around `rocprofv3 --kernel-trace --stats`, parses CSV output
-- **capturer.py**: Orchestrates capture process - dispatches to HIP (via `libkerncap.so`) or Triton (via Python hook)
-- **triton_capture.py**: Generates hook script that monkey-patches `triton.runtime.jit.JITFunction.run` to intercept kernel launches
+- **capturer.py**: Orchestrates capture process - dispatches to HIP via `libkerncap.so` or Triton via `libkerncap.so` plus compile shim
+- **triton_capture_hsa.py**: Triton capture implementation. Runs the workload with `LD_PRELOAD=libkerncap.so` plus a `sitecustomize.py` compile shim that records `name_map.json`, source snapshots, HSACO SHA-256s, constexprs, launch attributes, and tensor layouts for editable Python reproducers. Supports multiprocessing/`torch.compile` workers through the sitecustomize trampoline.
 - **source_finder.py**: Locates kernel source files and translation units
   - **HIP**: Searches for `__global__` declarations, traces local `#include` dependencies recursively, finds the `.cu` translation unit via `compile_commands.json` or reverse-include search
-  - **Triton**: Parses Python AST for `@triton.jit`/`@triton.autotune` decorators, traces imports (including relative imports)
-- **reproducer.py**: Generates standalone reproducer projects with capture data, VFS overlay for recompilation, and Makefile
-- **validator.py**: For VA-faithful (HIP) captures: baseline validation is a smoke test (replay succeeds); with `--hsaco`, runs two replays (captured vs variant) and compares byte-for-byte. For Triton: compares reproducer outputs against captured reference with tolerance
+  - **Triton**: Parses Python AST for `@triton.jit`/`@triton.autotune` decorators, traces imports (including relative imports), and can use compile-shim source snapshots when `--source-dir` is missing or points at temporary Inductor paths
+- **reproducer.py**: Generates standalone reproducer projects with capture data, VFS overlay for HIP recompilation, editable Triton Python reproducers, and Makefile targets where applicable
+- **validator.py**: For VA-faithful captures: baseline validation is a smoke test (replay succeeds); with `--hsaco`, or auto-detected `candidate.hsaco` / `optimized.hsaco`, runs two replays (captured vs variant) and compares byte-for-byte. CLI output ends with `Result: PASS/FAIL (...)`; per-region PASS lines require `validate -v` unless validation fails.
 
 ### HIP Interception Library (`src/`)
 
@@ -104,7 +107,9 @@ kerncap -v extract ...
   - Hooks `hsa_queue_create` to install packet intercept callback (same pattern as rocscope/Accordo)
   - Hooks `hsa_amd_memory_pool_allocate` to track device buffer sizes
   - On target kernel dispatch: interposes completion signal, waits for kernel finish, walks kernarg buffer
-  - Snapshots all tracked device memory regions to disk for VA-faithful replay
+  - Parses AMDGPU code-object kernarg metadata for assembly-origin and Triton kernels
+  - Snapshots all tracked device memory regions to disk for VA-faithful replay using chunked host staging (`KERNCAP_SNAPSHOT_CHUNK_BYTES`)
+  - Snapshots HSACO module variables, including constant-memory style launches such as Kokkos `hip_parallel_launch_constant_memory`
   - Writes captured state to JSON + binary dumps on disk
 - **kerncap.hpp**: C++ declarations
 - **kerncap_log.hpp**: Logging macros
@@ -115,18 +120,25 @@ Built with CMake + HIP language support. Requires ROCm 7.0+ (HSA headers and roc
 
 **Triton autotuner reproducibility**: Triton's `@triton.autotune` selects configs by benchmarking, but different tile sizes change floating-point accumulation order, causing large numerical differences in FP16. The capturer records the winning config and the reproducer pins it exactly by calling `kernel.fn[grid](**config)` directly, bypassing autotuner re-execution.
 
+**Triton edit loop**: Edit `kernel_variant.py` (or the copied source file), run `python3 reproducer.py` to re-JIT and write `candidate.hsaco`, then run `kerncap validate <dir>`. The validator auto-detects `candidate.hsaco` and performs byte-exact captured-vs-rebuilt replay comparison.
+
 **HIP argument capture**: kerncap performs a full device memory snapshot at capture time, copying all tracked GPU allocations to disk. Embedded device pointers are inherently captured as part of the full memory snapshot — no DWARF metadata or pointer chasing needed.
+
+**Module variables / constant memory**: Kernels launched through module variables, including Kokkos `hip_parallel_launch_constant_memory`, require more than ordinary allocation snapshots. Kerncap writes `module_variables.json` plus blobs and replay restores variables for the captured executable SHA-256 only.
 
 **Translation unit discovery**: For HIP kernels, the source finder locates the `.cu` translation unit that actually compiles the kernel (not just the `.cuh` header where it's defined). It searches `compile_commands.json` for entries whose source includes the kernel header, and for templated kernels with multiple instantiation files (e.g., llama.cpp's `mmq-instance-*.cu`), uses the mangled name from `dispatch.json` to select the correct one. The reproducer copies the main translation unit as `kernel_variant.cpp` and all traced `#include` dependencies into `deps/`, then generates a Clang Virtual File System (`vfs.yaml`) overlay that maps every local copy over its original path during a hijacked recompile, ensuring 100% flag and dependency fidelity. Edits to `kernel_variant.cpp` or any file in `deps/` take effect on `make recompile`.
 
 **Source finding depth**: HIP `#include` tracing goes 5 levels deep by default (local includes only; system includes like `<hip/hip_runtime.h>` are assumed present in ROCm). Triton import tracing follows the full transitive closure of `ImportFrom` nodes.
 
+**Source-not-found classification**: Source lookup failures are classified. If the captured HSACO has DWARF source paths, suggest a better `--source-dir`; if a matching `@triton.jit` function exists but the capture was routed as HIP, suggest `--language triton`; otherwise explain that the code object likely has no source trail (Tensile, hand-written assembly, JIT-generated binaries, or third-party HSACO blobs).
+
 ## Validation Targets
 
 The integration tests verify kerncap against:
-- **Triton**: Flash Attention forward kernel from ROCm/flash-attention (Triton backend) in `rocm/pytorch` container
+- **Triton**: Triton capture/reproducer path using a fixture HSACO and integration coverage in `test_triton_hsa_capture.py`
 - **HIP**: Composable Kernel GEMM XDL FP16 from ROCm/composable_kernel in `rocm/composable_kernel:ck_pytorch` container
 - **HIP (embedded pointers)**: Batched vector scale kernel in local ROCm environment, testing T** (double-pointer) arguments via VA-faithful replay
+- **HIP (module variables)**: Constant-memory/Kokkos-style module variable snapshot and restore coverage
 
 ## Common Issues
 
