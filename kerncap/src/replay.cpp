@@ -449,7 +449,17 @@ int main(int argc, char** argv) {
         access[0].permissions = HSA_ACCESS_PERMISSION_RW;
         access[1].agent_handle = g_cpu_agent;
         access[1].permissions = HSA_ACCESS_PERMISSION_RW;
-        hsa_amd_vmem_set_access(reserved, r.aligned_size, access, 2);
+        hsa_status_t set_access_status =
+            hsa_amd_vmem_set_access(reserved, r.aligned_size, access, 2);
+        if (set_access_status != HSA_STATUS_SUCCESS) {
+            std::cerr << "vmem_set_access failed for region 0x"
+                      << std::hex << r.base << std::dec
+                      << " while enabling GPU+CPU RW access (status="
+                      << static_cast<int>(set_access_status)
+                      << "). Ensure a valid CPU agent is available for host-side "
+                      << "access to mapped replay memory.\n";
+            return 1;
+        }
 
         std::stringstream fname;
         fname << capture_dir << "/memory/region_"
@@ -959,10 +969,14 @@ int main(int argc, char** argv) {
     };
 
     void* kernarg = nullptr;
-    hsa_amd_memory_pool_allocate(kernarg_pool,
-                                 kernarg_size,
-                                 0,
-                                 &kernarg);
+    hsa_status_t kernarg_alloc_st = hsa_amd_memory_pool_allocate(
+        kernarg_pool, kernarg_size, 0, &kernarg);
+    if (kernarg_alloc_st != HSA_STATUS_SUCCESS || kernarg == nullptr) {
+        std::cerr << "Failed to allocate kernarg buffer"
+                  << " (size=" << kernarg_size
+                  << ", status=" << kernarg_alloc_st << ")\n";
+        return 1;
+    }
 
     // Belt-and-suspenders: ensure the GPU agent can read the kernarg buffer.
     // Kernarg-flagged pools are typically already accessible to all execution
