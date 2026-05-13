@@ -3,7 +3,18 @@
 
 """System information modules."""
 
-from .amd_smi import AmdSmi, DriverInformationResult
+from .amd_smi import (
+    AmdSmi,
+    DriverInformationResult,
+    FirmwareEntry,
+    GpuBadPageInfo,
+    GpuFirmwareInfo,
+    GpuInfo,
+    GpuMetrics,
+    GpuProcessInfo,
+    GpuStaticInfo,
+    ProcessEntry,
+)
 from .rocminfo import AgentInfo, DeviceType, Rocminfo, RocminfoResult
 
 __all__ = [
@@ -11,6 +22,14 @@ __all__ = [
     "AmdSmi",
     "DeviceType",
     "DriverInformationResult",
+    "FirmwareEntry",
+    "GpuBadPageInfo",
+    "GpuFirmwareInfo",
+    "GpuInfo",
+    "GpuMetrics",
+    "GpuProcessInfo",
+    "GpuStaticInfo",
+    "ProcessEntry",
     "Rocminfo",
     "RocminfoResult",
 ]
