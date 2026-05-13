@@ -6,11 +6,20 @@
 from ._version import __version__
 from .compile import HipCompiler, HipCompilerResult
 from .doc import HipDocs
-from .sysinfo import AgentInfo, DeviceType, Rocminfo, RocminfoResult
+from .sysinfo import (
+    AgentInfo,
+    AmdSmi,
+    DeviceType,
+    DriverInformationResult,
+    Rocminfo,
+    RocminfoResult,
+)
 
 __all__ = [
     "AgentInfo",
+    "AmdSmi",
     "DeviceType",
+    "DriverInformationResult",
     "HipCompiler",
     "HipCompilerResult",
     "HipDocs",

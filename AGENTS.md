@@ -17,7 +17,7 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 | **linex** | Source-line profiling | Map cycle-level timing and stall analysis to source code lines (MCP-only) |
 | **metrix** | Hardware counter metrics | Profile GPU kernels with human-readable performance insights (CLI + MCP) |
 | **nexus** | HSA packet interception | Capture GPU kernel launches and memory operations (MCP-only) |
-| **rocm_mcp** | ROCm MCP servers | LLM-accessible HIP compilation, docs, and system info |
+| **rocm_mcp** | ROCm MCP servers | LLM-accessible HIP compilation, docs, system info, and GPU management (amd-smi) |
 | **uprof_mcp** | uProf MCP server | LLM-accessible AMD uProf CPU profiling |
 
 ## Build Commands
@@ -145,7 +145,7 @@ def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
 All current MCP server implementations use `FastMCP`, and all tool packages now declare `fastmcp>=2.0.0` directly.
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
-- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `amd-smi-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
 - `accordo` and `kerncap` both include lightweight pytest MCP entrypoint tests that stub `FastMCP` and verify CLI transport mapping (`stdio` vs `streamable-http`) without needing GPU or ROCm runtime access
 
 ### Nexus C++ Integration
@@ -247,6 +247,7 @@ metrix-mcp = "metrix.mcp.server:main"
 nexus-mcp = "nexus.mcp.server:main"
 hip-compiler-mcp = "rocm_mcp.compile.hip_compiler_mcp:main"
 hip-docs-mcp = "rocm_mcp.doc.hip_docs_mcp:main"
+amd-smi-mcp = "rocm_mcp.sysinfo.amd_smi_mcp:main"
 rocminfo-mcp = "rocm_mcp.sysinfo.rocminfo_mcp:main"
 uprof-profiler-mcp = "uprof_mcp.uprof_profiler_mcp:main"
 ```
@@ -274,6 +275,7 @@ Repo-local default HTTP paths:
 | `uprof-profiler-mcp` | `/uprof_mcp` |
 | `hip-compiler-mcp` | `/rocm_mcp/hip_compiler` |
 | `hip-docs-mcp` | `/rocm_mcp/hip_docs` |
+| `amd-smi-mcp` | `/rocm_mcp/amd_smi` |
 | `rocminfo-mcp` | `/rocm_mcp/rocminfo` |
 
 ### Testing MCP Servers Locally
@@ -293,7 +295,8 @@ accordo-mcp --transport http --port 8002
 kerncap-mcp --transport http --port 8003
 linex-mcp --transport http --port 8004
 hip-compiler-mcp --transport http --port 8005
-uprof-profiler-mcp --transport http --port 8006
+amd-smi-mcp --transport http --port 8006
+uprof-profiler-mcp --transport http --port 8007
 
 # Or from the package directory with uv
 cd metrix && uv run metrix-mcp
@@ -318,6 +321,10 @@ Add to your Claude Desktop or other MCP client config:
     "hip-compiler-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "hip-compiler-mcp"]
+    },
+    "amd-smi-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "amd-smi-mcp"]
     },
     "uprof-profiler-mcp": {
       "command": "uv",

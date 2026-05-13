@@ -3,6 +3,14 @@
 
 """System information modules."""
 
+from .amd_smi import AmdSmi, DriverInformationResult
 from .rocminfo import AgentInfo, DeviceType, Rocminfo, RocminfoResult
 
-__all__ = ["AgentInfo", "DeviceType", "Rocminfo", "RocminfoResult"]
+__all__ = [
+    "AgentInfo",
+    "AmdSmi",
+    "DeviceType",
+    "DriverInformationResult",
+    "Rocminfo",
+    "RocminfoResult",
+]
