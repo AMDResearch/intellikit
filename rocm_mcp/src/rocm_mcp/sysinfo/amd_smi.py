@@ -252,20 +252,30 @@ class AmdSmi:
             msg = f"Exception during amd-smi shutdown: {e}"
             self.logger.exception(msg)
 
-    def _get_handles(self) -> list[tuple[int, Any]]:
-        """Get all GPU processor handles with their zero-based indices.
+    def _get_handles(self, gpu_index: int | None = None) -> list[tuple[int, Any]]:
+        """Get GPU processor handles with their zero-based indices.
+
+        Args:
+            gpu_index (int | None): If specified, return only the handle for that index.
+                If None, return all handles.
 
         Returns:
             list[tuple[int, Any]]: List of (gpu_index, handle) tuples.
 
         Raises:
             RuntimeError: If no GPU processors are found.
+            IndexError: If gpu_index is out of bounds.
         """
         handles = amdsmi.amdsmi_get_processor_handles()
         if not handles:
             msg = "No GPU processors found"
             self.logger.error(msg)
             raise RuntimeError(msg)
+        if gpu_index is not None:
+            if gpu_index < 0 or gpu_index >= len(handles):
+                msg = f"GPU index {gpu_index} out of range (0-{len(handles) - 1})"
+                raise IndexError(msg)
+            return [(gpu_index, handles[gpu_index])]
         return list(enumerate(handles))
 
     def _safe_query(self, func: Any, *args: Any, default: Any = None) -> Any:  # noqa: ANN401
@@ -323,16 +333,21 @@ class AmdSmi:
             results.append(GpuInfo(gpu_index=idx, bdf=bdf, uuid=uuid))
         return results
 
-    def get_gpu_static_info(self) -> list[GpuStaticInfo]:
-        """Get static hardware properties for all GPUs.
+    def get_gpu_static_info(self, gpu_index: int | None = None) -> list[GpuStaticInfo]:
+        """Get static hardware properties for GPUs.
+
+        Args:
+            gpu_index (int | None): If specified, return info only for that GPU.
+                If None, return info for all GPUs.
 
         Returns:
             list[GpuStaticInfo]: List of static GPU info.
 
         Raises:
             RuntimeError: If no GPU processors are found.
+            IndexError: If gpu_index is out of bounds.
         """
-        handles = self._get_handles()
+        handles = self._get_handles(gpu_index)
         results = []
         for idx, handle in handles:
             bdf = self._safe_query(amdsmi.amdsmi_get_gpu_device_bdf, handle, default="N/A")
@@ -345,36 +360,43 @@ class AmdSmi:
             if hasattr(vram_type_val, "name"):
                 vram_type_val = vram_type_val.name
 
-            results.append(GpuStaticInfo(
-                gpu_index=idx,
-                bdf=bdf,
-                market_name=asic.get("market_name", "N/A"),
-                vendor_id=str(asic.get("vendor_id", "N/A")),
-                device_id=str(asic.get("device_id", "N/A")),
-                rev_id=str(asic.get("rev_id", "N/A")),
-                asic_serial=str(asic.get("asic_serial", "N/A")),
-                num_compute_units=asic.get("num_compute_units", 0),
-                vram_type=str(vram_type_val),
-                vram_vendor=vram.get("vram_vendor", "N/A"),
-                vram_size_mb=vram.get("vram_size", 0),
-                model_name=board.get("product_name", "N/A"),
-                power_cap_w=pcap.get("power_cap", 0),
-                default_power_cap_w=pcap.get("default_power_cap", 0),
-                min_power_cap_w=pcap.get("min_power_cap", 0),
-                max_power_cap_w=pcap.get("max_power_cap", 0),
-            ))
+            results.append(
+                GpuStaticInfo(
+                    gpu_index=idx,
+                    bdf=bdf,
+                    market_name=asic.get("market_name", "N/A"),
+                    vendor_id=str(asic.get("vendor_id", "N/A")),
+                    device_id=str(asic.get("device_id", "N/A")),
+                    rev_id=str(asic.get("rev_id", "N/A")),
+                    asic_serial=str(asic.get("asic_serial", "N/A")),
+                    num_compute_units=asic.get("num_compute_units", 0),
+                    vram_type=str(vram_type_val),
+                    vram_vendor=vram.get("vram_vendor", "N/A"),
+                    vram_size_mb=vram.get("vram_size", 0),
+                    model_name=board.get("product_name", "N/A"),
+                    power_cap_w=pcap.get("power_cap", 0),
+                    default_power_cap_w=pcap.get("default_power_cap", 0),
+                    min_power_cap_w=pcap.get("min_power_cap", 0),
+                    max_power_cap_w=pcap.get("max_power_cap", 0),
+                )
+            )
         return results
 
-    def get_gpu_metrics(self) -> list[GpuMetrics]:
-        """Get real-time performance metrics for all GPUs.
+    def get_gpu_metrics(self, gpu_index: int | None = None) -> list[GpuMetrics]:
+        """Get real-time performance metrics for GPUs.
+
+        Args:
+            gpu_index (int | None): If specified, return metrics only for that GPU.
+                If None, return metrics for all GPUs.
 
         Returns:
             list[GpuMetrics]: List of GPU metrics.
 
         Raises:
             RuntimeError: If no GPU processors are found.
+            IndexError: If gpu_index is out of bounds.
         """
-        handles = self._get_handles()
+        handles = self._get_handles(gpu_index)
         results = []
         for idx, handle in handles:
             bdf = self._safe_query(amdsmi.amdsmi_get_gpu_device_bdf, handle, default="N/A")
@@ -383,26 +405,35 @@ class AmdSmi:
             vram_usage = self._safe_query(amdsmi.amdsmi_get_gpu_vram_usage, handle, default={})
 
             gfx_clk = self._safe_query(
-                amdsmi.amdsmi_get_clock_info, handle, amdsmi.AmdSmiClkType.GFX, default={},
+                amdsmi.amdsmi_get_clock_info,
+                handle,
+                amdsmi.AmdSmiClkType.GFX,
+                default={},
             )
             mem_clk = self._safe_query(
-                amdsmi.amdsmi_get_clock_info, handle, amdsmi.AmdSmiClkType.MEM, default={},
+                amdsmi.amdsmi_get_clock_info,
+                handle,
+                amdsmi.AmdSmiClkType.MEM,
+                default={},
             )
 
             temp_edge = self._safe_query(
-                amdsmi.amdsmi_get_temp_metric, handle,
+                amdsmi.amdsmi_get_temp_metric,
+                handle,
                 amdsmi.AmdSmiTemperatureType.EDGE,
                 amdsmi.AmdSmiTemperatureMetric.CURRENT,
                 default=0,
             )
             temp_hotspot = self._safe_query(
-                amdsmi.amdsmi_get_temp_metric, handle,
+                amdsmi.amdsmi_get_temp_metric,
+                handle,
                 amdsmi.AmdSmiTemperatureType.HOTSPOT,
                 amdsmi.AmdSmiTemperatureMetric.CURRENT,
                 default=0,
             )
             temp_vram = self._safe_query(
-                amdsmi.amdsmi_get_temp_metric, handle,
+                amdsmi.amdsmi_get_temp_metric,
+                handle,
                 amdsmi.AmdSmiTemperatureType.VRAM,
                 amdsmi.AmdSmiTemperatureMetric.CURRENT,
                 default=0,
@@ -413,38 +444,45 @@ class AmdSmi:
                     return 0
                 return int(val)
 
-            results.append(GpuMetrics(
-                gpu_index=idx,
-                bdf=bdf,
-                gfx_activity_pct=_int(activity.get("gfx_activity", 0)),
-                umc_activity_pct=_int(activity.get("umc_activity", 0)),
-                mm_activity_pct=_int(activity.get("mm_activity", 0)),
-                temp_edge_c=_int(temp_edge),
-                temp_hotspot_c=_int(temp_hotspot),
-                temp_vram_c=_int(temp_vram),
-                current_power_w=_int(power.get("current_socket_power", 0)),
-                gfx_voltage_mv=_int(power.get("gfx_voltage", 0)),
-                soc_voltage_mv=_int(power.get("soc_voltage", 0)),
-                mem_voltage_mv=_int(power.get("mem_voltage", 0)),
-                gfx_clock_mhz=_int(gfx_clk.get("clk", 0)),
-                gfx_max_clock_mhz=_int(gfx_clk.get("max_clk", 0)),
-                mem_clock_mhz=_int(mem_clk.get("clk", 0)),
-                mem_max_clock_mhz=_int(mem_clk.get("max_clk", 0)),
-                vram_used_mb=_int(vram_usage.get("vram_used", 0)),
-                vram_total_mb=_int(vram_usage.get("vram_total", 0)),
-            ))
+            results.append(
+                GpuMetrics(
+                    gpu_index=idx,
+                    bdf=bdf,
+                    gfx_activity_pct=_int(activity.get("gfx_activity", 0)),
+                    umc_activity_pct=_int(activity.get("umc_activity", 0)),
+                    mm_activity_pct=_int(activity.get("mm_activity", 0)),
+                    temp_edge_c=_int(temp_edge),
+                    temp_hotspot_c=_int(temp_hotspot),
+                    temp_vram_c=_int(temp_vram),
+                    current_power_w=_int(power.get("current_socket_power", 0)),
+                    gfx_voltage_mv=_int(power.get("gfx_voltage", 0)),
+                    soc_voltage_mv=_int(power.get("soc_voltage", 0)),
+                    mem_voltage_mv=_int(power.get("mem_voltage", 0)),
+                    gfx_clock_mhz=_int(gfx_clk.get("clk", 0)),
+                    gfx_max_clock_mhz=_int(gfx_clk.get("max_clk", 0)),
+                    mem_clock_mhz=_int(mem_clk.get("clk", 0)),
+                    mem_max_clock_mhz=_int(mem_clk.get("max_clk", 0)),
+                    vram_used_mb=_int(vram_usage.get("vram_used", 0)),
+                    vram_total_mb=_int(vram_usage.get("vram_total", 0)),
+                )
+            )
         return results
 
-    def get_gpu_firmware_info(self) -> list[GpuFirmwareInfo]:
-        """Get firmware version information for all GPUs.
+    def get_gpu_firmware_info(self, gpu_index: int | None = None) -> list[GpuFirmwareInfo]:
+        """Get firmware version information for GPUs.
+
+        Args:
+            gpu_index (int | None): If specified, return info only for that GPU.
+                If None, return info for all GPUs.
 
         Returns:
             list[GpuFirmwareInfo]: List of GPU firmware info.
 
         Raises:
             RuntimeError: If no GPU processors are found.
+            IndexError: If gpu_index is out of bounds.
         """
-        handles = self._get_handles()
+        handles = self._get_handles(gpu_index)
         results = []
         for idx, handle in handles:
             bdf = self._safe_query(amdsmi.amdsmi_get_gpu_device_bdf, handle, default="N/A")
@@ -459,27 +497,34 @@ class AmdSmi:
                 for fw in fw_info.get("fw_list", [])
             ]
 
-            results.append(GpuFirmwareInfo(
-                gpu_index=idx,
-                bdf=bdf,
-                vbios_name=vbios.get("name", "N/A"),
-                vbios_version=vbios.get("version", "N/A"),
-                vbios_build_date=vbios.get("build_date", "N/A"),
-                vbios_part_number=vbios.get("part_number", "N/A"),
-                firmware_list=fw_entries,
-            ))
+            results.append(
+                GpuFirmwareInfo(
+                    gpu_index=idx,
+                    bdf=bdf,
+                    vbios_name=vbios.get("name", "N/A"),
+                    vbios_version=vbios.get("version", "N/A"),
+                    vbios_build_date=vbios.get("build_date", "N/A"),
+                    vbios_part_number=vbios.get("part_number", "N/A"),
+                    firmware_list=fw_entries,
+                )
+            )
         return results
 
-    def get_gpu_process_info(self) -> list[GpuProcessInfo]:
-        """Get process information for all GPUs.
+    def get_gpu_process_info(self, gpu_index: int | None = None) -> list[GpuProcessInfo]:
+        """Get process information for GPUs.
+
+        Args:
+            gpu_index (int | None): If specified, return info only for that GPU.
+                If None, return info for all GPUs.
 
         Returns:
             list[GpuProcessInfo]: List of per-GPU process info.
 
         Raises:
             RuntimeError: If no GPU processors are found.
+            IndexError: If gpu_index is out of bounds.
         """
-        handles = self._get_handles()
+        handles = self._get_handles(gpu_index)
         results = []
         for idx, handle in handles:
             bdf = self._safe_query(amdsmi.amdsmi_get_gpu_device_bdf, handle, default="N/A")
@@ -489,37 +534,46 @@ class AmdSmi:
             for proc in proc_list:
                 mem_usage = proc.get("memory_usage", {})
                 vram_mem = mem_usage.get("vram_mem", 0) if isinstance(mem_usage, dict) else 0
-                entries.append(ProcessEntry(
-                    pid=proc.get("pid", 0),
-                    name=proc.get("name", "N/A"),
-                    vram_usage_mb=vram_mem // (1024 * 1024) if isinstance(vram_mem, int) else 0,
-                ))
+                entries.append(
+                    ProcessEntry(
+                        pid=proc.get("pid", 0),
+                        name=proc.get("name", "N/A"),
+                        vram_usage_mb=vram_mem // (1024 * 1024) if isinstance(vram_mem, int) else 0,
+                    )
+                )
 
             results.append(GpuProcessInfo(gpu_index=idx, bdf=bdf, processes=entries))
         return results
 
-    def get_gpu_bad_page_info(self) -> list[GpuBadPageInfo]:
-        """Get bad page and ECC error information for all GPUs.
+    def get_gpu_bad_page_info(self, gpu_index: int | None = None) -> list[GpuBadPageInfo]:
+        """Get bad page and ECC error information for GPUs.
+
+        Args:
+            gpu_index (int | None): If specified, return info only for that GPU.
+                If None, return info for all GPUs.
 
         Returns:
             list[GpuBadPageInfo]: List of per-GPU bad page and ECC info.
 
         Raises:
             RuntimeError: If no GPU processors are found.
+            IndexError: If gpu_index is out of bounds.
         """
-        handles = self._get_handles()
+        handles = self._get_handles(gpu_index)
         results = []
         for idx, handle in handles:
             bdf = self._safe_query(amdsmi.amdsmi_get_gpu_device_bdf, handle, default="N/A")
             ecc = self._safe_query(amdsmi.amdsmi_get_gpu_total_ecc_count, handle, default={})
             bad_pages = self._safe_query(amdsmi.amdsmi_get_gpu_bad_page_info, handle, default=[])
 
-            results.append(GpuBadPageInfo(
-                gpu_index=idx,
-                bdf=bdf,
-                correctable_ecc_count=ecc.get("correctable_count", 0),
-                uncorrectable_ecc_count=ecc.get("uncorrectable_count", 0),
-                deferred_ecc_count=ecc.get("deferred_count", 0),
-                bad_page_count=len(bad_pages),
-            ))
+            results.append(
+                GpuBadPageInfo(
+                    gpu_index=idx,
+                    bdf=bdf,
+                    correctable_ecc_count=ecc.get("correctable_count", 0),
+                    uncorrectable_ecc_count=ecc.get("uncorrectable_count", 0),
+                    deferred_ecc_count=ecc.get("deferred_count", 0),
+                    bad_page_count=len(bad_pages),
+                )
+            )
         return results

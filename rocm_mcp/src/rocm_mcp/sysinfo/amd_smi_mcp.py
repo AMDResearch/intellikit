@@ -54,24 +54,27 @@ async def list_gpus(ctx: Annotated[Context, Field(description="MCP context.")]) 
         await ctx.error(msg)
         return msg
     else:
-        lines = [
-            f"GPU {gpu.gpu_index}:\n"
-            f"  BDF: {gpu.bdf}\n"
-            f"  UUID: {gpu.uuid}"
-            for gpu in gpus
-        ]
+        lines = [f"GPU {gpu.gpu_index}:\n  BDF: {gpu.bdf}\n  UUID: {gpu.uuid}" for gpu in gpus]
         return "\n".join(lines)
 
 
 @mcp.tool()
-async def get_gpu_static_info(ctx: Annotated[Context, Field(description="MCP context.")]) -> str:
-    """Get static hardware properties for all AMD GPUs.
+async def get_gpu_static_info(
+    ctx: Annotated[Context, Field(description="MCP context.")],
+    gpu_index: Annotated[
+        int | None,
+        Field(description="Zero-based GPU index. If None, returns info for all GPUs."),
+    ] = None,
+) -> str:
+    """Get static hardware properties for AMD GPUs.
 
     Returns:
         str: Market name, VRAM, compute units, power caps, and other hardware details.
     """
     try:
-        infos = amd_smi.get_gpu_static_info()
+        infos = amd_smi.get_gpu_static_info(gpu_index)
+    except IndexError as e:
+        return f"Error: {e!s}"
     except Exception as e:
         msg = f"Failed to get GPU static info: {e!s}"
         await ctx.error(msg)
@@ -94,14 +97,22 @@ async def get_gpu_static_info(ctx: Annotated[Context, Field(description="MCP con
 
 
 @mcp.tool()
-async def get_gpu_metrics(ctx: Annotated[Context, Field(description="MCP context.")]) -> str:
-    """Get real-time performance metrics for all AMD GPUs.
+async def get_gpu_metrics(
+    ctx: Annotated[Context, Field(description="MCP context.")],
+    gpu_index: Annotated[
+        int | None,
+        Field(description="Zero-based GPU index. If None, returns metrics for all GPUs."),
+    ] = None,
+) -> str:
+    """Get real-time performance metrics for AMD GPUs.
 
     Returns:
         str: Activity, temperature, power, clock, and VRAM usage for each GPU.
     """
     try:
-        metrics_list = amd_smi.get_gpu_metrics()
+        metrics_list = amd_smi.get_gpu_metrics(gpu_index)
+    except IndexError as e:
+        return f"Error: {e!s}"
     except Exception as e:
         msg = f"Failed to get GPU metrics: {e!s}"
         await ctx.error(msg)
@@ -125,14 +136,22 @@ async def get_gpu_metrics(ctx: Annotated[Context, Field(description="MCP context
 
 
 @mcp.tool()
-async def get_gpu_firmware_info(ctx: Annotated[Context, Field(description="MCP context.")]) -> str:
-    """Get firmware version information for all AMD GPUs.
+async def get_gpu_firmware_info(
+    ctx: Annotated[Context, Field(description="MCP context.")],
+    gpu_index: Annotated[
+        int | None,
+        Field(description="Zero-based GPU index. If None, returns info for all GPUs."),
+    ] = None,
+) -> str:
+    """Get firmware version information for AMD GPUs.
 
     Returns:
         str: VBIOS info and firmware block versions for each GPU.
     """
     try:
-        fw_list = amd_smi.get_gpu_firmware_info()
+        fw_list = amd_smi.get_gpu_firmware_info(gpu_index)
+    except IndexError as e:
+        return f"Error: {e!s}"
     except Exception as e:
         msg = f"Failed to get GPU firmware info: {e!s}"
         await ctx.error(msg)
@@ -152,14 +171,22 @@ async def get_gpu_firmware_info(ctx: Annotated[Context, Field(description="MCP c
 
 
 @mcp.tool()
-async def get_gpu_process_info(ctx: Annotated[Context, Field(description="MCP context.")]) -> str:
+async def get_gpu_process_info(
+    ctx: Annotated[Context, Field(description="MCP context.")],
+    gpu_index: Annotated[
+        int | None,
+        Field(description="Zero-based GPU index. If None, returns info for all GPUs."),
+    ] = None,
+) -> str:
     """Get information about processes using AMD GPUs.
 
     Returns:
         str: PID, name, and VRAM usage for processes on each GPU.
     """
     try:
-        proc_list = amd_smi.get_gpu_process_info()
+        proc_list = amd_smi.get_gpu_process_info(gpu_index)
+    except IndexError as e:
+        return f"Error: {e!s}"
     except Exception as e:
         msg = f"Failed to get GPU process info: {e!s}"
         await ctx.error(msg)
@@ -169,8 +196,7 @@ async def get_gpu_process_info(ctx: Annotated[Context, Field(description="MCP co
         for gpu in proc_list:
             if gpu.processes:
                 proc_lines = [
-                    f"    PID {p.pid} ({p.name}): {p.vram_usage_mb} MB VRAM"
-                    for p in gpu.processes
+                    f"    PID {p.pid} ({p.name}): {p.vram_usage_mb} MB VRAM" for p in gpu.processes
                 ]
                 proc_block = "\n".join(proc_lines)
             else:
@@ -180,14 +206,22 @@ async def get_gpu_process_info(ctx: Annotated[Context, Field(description="MCP co
 
 
 @mcp.tool()
-async def get_gpu_bad_pages(ctx: Annotated[Context, Field(description="MCP context.")]) -> str:
-    """Get bad page and ECC error information for all AMD GPUs.
+async def get_gpu_bad_pages(
+    ctx: Annotated[Context, Field(description="MCP context.")],
+    gpu_index: Annotated[
+        int | None,
+        Field(description="Zero-based GPU index. If None, returns info for all GPUs."),
+    ] = None,
+) -> str:
+    """Get bad page and ECC error information for AMD GPUs.
 
     Returns:
         str: ECC error counts and retired page count for each GPU.
     """
     try:
-        bp_list = amd_smi.get_gpu_bad_page_info()
+        bp_list = amd_smi.get_gpu_bad_page_info(gpu_index)
+    except IndexError as e:
+        return f"Error: {e!s}"
     except Exception as e:
         msg = f"Failed to get GPU bad page info: {e!s}"
         await ctx.error(msg)
