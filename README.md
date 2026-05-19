@@ -12,7 +12,7 @@
 
 </div>
 
-IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
+IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, **amd-smi**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
 
 ---
 
@@ -26,7 +26,7 @@ Rough workflow: **isolate** a kernel → **profile** it (counters and/or source 
 | **[Metrix](metrix/)** | **Profile** — **human-readable** metrics from hardware counters (bandwidth, cache, etc.). | [README](metrix/README.md) · [examples](metrix/examples/) |
 | **[Linex](linex/)** | **Profile** — **source-line** timing and stalls (compile with `-g` for file:line mapping). | [README](linex/README.md) · [examples](linex/examples/) |
 | **[Nexus](nexus/)** | **Inspect** — from **HSA packets**, see what ran: source and assembly. | [README](nexus/README.md) · [examples](nexus/examples/) |
-| **[rocm_mcp](rocm_mcp/)** | **MCP** — HIP compile, HIP docs, **rocminfo**, and related servers for agents. | [README](rocm_mcp/README.md) · [examples](rocm_mcp/examples/) |
+| **[rocm_mcp](rocm_mcp/)** | **MCP** — HIP compile, HIP docs, **rocminfo**, **amd-smi**, and related servers for agents. | [README](rocm_mcp/README.md) · [examples](rocm_mcp/examples/) |
 | **[uprof_mcp](uprof_mcp/)** | **CPU** — MCP bridge to **AMD uProf** for host-side hotspots. | [README](uprof_mcp/README.md) · [examples](uprof_mcp/examples/) |
 | **[Accordo](accordo/)** | **Validate** — prove an optimized kernel still matches a reference. | [README](accordo/README.md) · [examples](accordo/examples/) |
 
@@ -105,6 +105,10 @@ With **uv** and a clone of this repo, you can point an MCP client at each packag
     "hip-compiler-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "hip-compiler-mcp"]
+    },
+    "amd-smi-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "amd-smi-mcp"]
     }
   }
 }
