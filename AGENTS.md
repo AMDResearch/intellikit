@@ -181,15 +181,15 @@ Not all tools follow the same directory structure:
 
 | Tool | Layout | Package Location | C++ Source | Tests | Skills | CLI |
 |------|--------|------------------|------------|-------|--------|-----|
-| **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skill/` | Yes |
-| **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skill/` | No |
+| **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skills/metrix-profiling/` | Yes |
+| **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skills/linex-profiling/` | No |
 | **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A | No |
 | **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | none yet | N/A | No |
-| **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` | Yes |
-| **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skill/` | Yes |
-| **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` | No |
+| **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skills/accordo-validation/` | Yes |
+| **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skills/test-kerncap/` | Yes |
+| **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skills/nexus-trace/` | No |
 
-This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skill/` directory containing `SKILL.md` files for AI agent integration.
+This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skills/<skill-name>/SKILL.md` directory for AI agent integration; each tool also doubles as a Claude Code plugin (see "Claude Code marketplace" below).
 
 ## Dependency Management
 
@@ -440,15 +440,15 @@ cd nexus && pytest -v
 
 ### Working with Agent Skills
 
-Each main tool (except rocm_mcp and uprof_mcp) has a `skill/` directory with `SKILL.md` files for AI agent integration:
+Each main tool (except rocm_mcp and uprof_mcp) has a `skills/<skill-name>/SKILL.md` for AI agent integration:
 
 ```bash
 # Skills are located at:
-accordo/skill/SKILL.md
-kerncap/skill/SKILL.md
-linex/skill/SKILL.md
-metrix/skill/SKILL.md
-nexus/skill/SKILL.md
+accordo/skills/accordo-validation/SKILL.md
+kerncap/skills/test-kerncap/SKILL.md
+linex/skills/linex-profiling/SKILL.md
+metrix/skills/metrix-profiling/SKILL.md
+nexus/skills/nexus-trace/SKILL.md
 
 # Install skills for AI agents using the install script
 ./install/skills/install.sh                    # local: ./.agents/skills/
@@ -456,6 +456,19 @@ nexus/skill/SKILL.md
 ./install/skills/install.sh --target claude --global  # global: ~/.claude/skills/
 ./install/skills/install.sh --target github     # local: ./.github/agents/skills/ (added in commit 7f8f7ad)
 ```
+
+### Claude Code marketplace
+
+This repo is also a Claude Code plugin marketplace. The root `.claude-plugin/marketplace.json` exposes each tool as a plugin that bundles its skill (if any) and its MCP server(s):
+
+```bash
+# Add the marketplace, then install whichever plugins you need
+/plugin marketplace add AMDResearch/intellikit
+/plugin install metrix@intellikit
+/plugin install rocm-mcp@intellikit
+```
+
+Per-plugin manifests live at `<tool>/.claude-plugin/plugin.json` and `<tool>/.mcp.json`. The MCP servers are launched via `uv --directory ${CLAUDE_PLUGIN_ROOT} run <script>`, so users need `uv` plus the tool's native dependencies (ROCm, hipcc, LLVM, etc.) installed.
 
 ## Key Design Principles for AI Agents
 

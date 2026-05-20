@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "linex": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "run",
+        "linex-mcp"
+      ]
+    }
+  }
+}

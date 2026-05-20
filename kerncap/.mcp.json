@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "kerncap": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "run",
+        "kerncap-mcp"
+      ]
+    }
+  }
+}

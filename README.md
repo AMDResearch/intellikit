@@ -50,6 +50,16 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 
 **Clone?** Use `./install/tools/install.sh` and `./install/skills/install.sh`. **Pipe from curl?** Put flags after `bash -s --` (example: `… | bash -s -- --tools metrix,linex`). **`--help`** on either script lists the rest.
 
+**Claude Code users** — this repo is also a [Claude Code plugin marketplace](https://docs.claude.com/en/docs/claude-code/plugins). Each tool ships as a plugin that bundles its skill (if any) and its MCP server(s):
+
+```bash
+# Inside Claude Code
+/plugin marketplace add AMDResearch/intellikit
+/plugin install metrix@intellikit     # or kerncap, linex, nexus, accordo, rocm-mcp, uprof-mcp
+```
+
+MCP servers launch via `uv run` from the plugin directory, so you'll need [`uv`](https://docs.astral.sh/uv/) plus each tool's native dependencies (ROCm, hipcc, LLVM, uProf, …) installed on the host.
+
 ---
 
 ## Requirements

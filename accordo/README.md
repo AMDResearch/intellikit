@@ -67,7 +67,7 @@ for opt_binary in ["./opt_v1", "./opt_v2", "./opt_v3"]:
 
 The `accordo` entry point exposes JSON on stdout (logging on stderr). Subcommands:
 
-```
+```shell
 accordo validate \
   --kernel-name NAME \
   --ref-binary PATH_TO_EXECUTABLE \
@@ -91,6 +91,7 @@ The CLI passes each flag as a **single executable path** (no embedded spaces or 
 ### `Accordo(binary, kernel_name, **options)`
 
 **Parameters:**
+
 - `binary` (str | list): Binary path to extract kernel signature from
 - `kernel_name` (str): Name of the kernel to validate
 - `kernel_args` (list[tuple] | None): Manual kernel args as `[(name, type), ...]`. Auto-extracted if None.
@@ -100,12 +101,14 @@ The CLI passes each flag as a **single executable path** (no embedded spaces or 
 - `log_level` (str): Logging level (default: `"WARNING"`)
 
 **Methods:**
+
 - `capture_snapshot(binary, timeout_seconds=30, dispatch_id=None)` -> `Snapshot`
 - `compare_snapshots(reference, optimized, tolerance=None, *, atol=1e-08, rtol=1e-05, equal_nan=False)` -> `ValidationResult`
 
 ### `Snapshot`
 
 **Attributes:**
+
 - `arrays` (list[np.ndarray]): Captured output arrays (first dispatch)
 - `dispatch_arrays` (list[list[np.ndarray]] | None): Per-dispatch output arrays
 - `execution_time_ms` (float): Execution time
@@ -114,12 +117,14 @@ The CLI passes each flag as a **single executable path** (no embedded spaces or 
 ### `ValidationResult`
 
 **Attributes:**
+
 - `is_valid` (bool): Whether validation passed
 - `num_arrays_validated` (int): Total arrays checked
 - `num_mismatches` (int): Failed comparisons
 - `mismatches` (list[ArrayMismatch]): Detailed mismatch info
 
 **Methods:**
+
 - `summary()` -> `str`: Human-readable validation summary
 
 ## Requirements
@@ -131,8 +136,25 @@ The CLI passes each flag as a **single executable path** (no embedded spaces or 
 ## Examples
 
 See `examples/` directory for complete examples:
+
 - `01_reduction/` - Basic reduction kernel validation
 - `02_template_kernel/` - Template kernel validation
+
+## Use as a Claude Code plugin
+
+Accordo ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). It bundles the `accordo-validation` skill and an `accordo` MCP server.
+
+```bash
+# In Claude Code
+/plugin marketplace add AMDResearch/intellikit
+/plugin install accordo@intellikit
+```
+
+Host requirements when installed as a plugin:
+
+- [`uv`](https://docs.astral.sh/uv/) on `PATH` (the MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run accordo-mcp`)
+- ROCm toolchain (`hipcc`, `cmake`, `libdwarf-dev`, `libzstd-dev`) so the underlying `accordo` package and its kernelDB dependency can build on first invocation
+- An AMD GPU at runtime if you want validation that actually executes kernels
 
 ## License
 

@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "hip-compiler": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "run",
+        "hip-compiler-mcp"
+      ]
+    },
+    "hip-docs": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "run",
+        "hip-docs-mcp"
+      ]
+    },
+    "amd-smi": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "run",
+        "amd-smi-mcp"
+      ]
+    },
+    "rocminfo": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "run",
+        "rocminfo-mcp"
+      ]
+    }
+  }
+}

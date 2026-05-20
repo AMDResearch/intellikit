@@ -74,3 +74,21 @@ This project uses `uv` for dependency management.
    ```bash
    pytest
    ```
+
+## Use as a Claude Code plugin
+
+`rocm-mcp` ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). The plugin registers all four MCP servers (`hip-compiler`, `hip-docs`, `amd-smi`, `rocminfo`) in a single install — no skill bundled.
+
+```bash
+# In Claude Code
+/plugin marketplace add AMDResearch/intellikit
+/plugin install rocm-mcp@intellikit
+```
+
+Host requirements when installed as a plugin:
+
+- [`uv`](https://docs.astral.sh/uv/) on `PATH` (each MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run <name>-mcp`)
+- ROCm with the `amdsmi` Python bindings installable from the ROCm tree (for `amd-smi`), `rocminfo` on `PATH` (for `rocminfo`), and `hipcc` on `PATH` (for `hip-compiler`)
+- Network access (for `hip-docs`, which scrapes the official HIP reference)
+
+If you don't need all four, disable individual servers by editing the installed `.mcp.json`, or use the `claude plugin` CLI to remove the plugin and install only what you need from upstream.

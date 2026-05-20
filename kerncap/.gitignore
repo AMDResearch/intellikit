@@ -82,6 +82,11 @@ profile_*.csv
 
 # ...but track test fixtures
 !tests/unit/fixtures/*.json
+
+# ...and track plugin manifests
+!.mcp.json
+!.claude-plugin/
+!.claude-plugin/*.json
 !tests/unit/fixtures/*.bin
 *.hip.capture/
 *.triton.capture/
