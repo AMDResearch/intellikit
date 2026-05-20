@@ -32,6 +32,9 @@ vector_add_template
 # Apptainer images
 *.sif
 
-
 # Resources
 resources/
+
+# Agents
+.claude
+.codex
