@@ -188,19 +188,7 @@ Profiled 1 dispatch(es)/kernel(s)
 
 ## Use as a Claude Code plugin
 
-Metrix ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). It bundles the `metrix-profiling` skill and a `metrix` MCP server.
-
-```bash
-# In Claude Code
-/plugin marketplace add AMDResearch/intellikit
-/plugin install metrix@intellikit
-```
-
-Host requirements when installed as a plugin:
-
-- [`uv`](https://docs.astral.sh/uv/) on `PATH` (the MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run metrix-mcp`)
-- ROCm with `rocprofv3` available on `PATH`
-- An AMD GPU at runtime (architecture is auto-detected)
+Metrix ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.
 
 ## License
 

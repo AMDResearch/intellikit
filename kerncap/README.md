@@ -177,16 +177,4 @@ tests/                     Unit + integration tests (see tests/README.md)
 
 ## Use as a Claude Code plugin
 
-kerncap ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). It bundles the `test-kerncap` skill and a `kerncap` MCP server.
-
-```bash
-# In Claude Code
-/plugin marketplace add AMDResearch/intellikit
-/plugin install kerncap@intellikit
-```
-
-Host requirements when installed as a plugin:
-
-- [`uv`](https://docs.astral.sh/uv/) on `PATH` (the MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run kerncap-mcp`)
-- ROCm 7.0+ with `hipcc`, `cmake`, and HSA headers — the package builds `libkerncap.so` from `src/` on first invocation via scikit-build-core
-- An AMD GPU at runtime for actual kernel capture and replay
+kerncap ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.

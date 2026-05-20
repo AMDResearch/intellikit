@@ -180,19 +180,7 @@ cat result.json
 
 ## Use as a Claude Code plugin
 
-Nexus ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). It bundles the `nexus-trace` skill and a `nexus` MCP server.
-
-```bash
-# In Claude Code
-/plugin marketplace add AMDResearch/intellikit
-/plugin install nexus@intellikit
-```
-
-Host requirements when installed as a plugin:
-
-* [`uv`](https://docs.astral.sh/uv/) on `PATH` (the MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run nexus-mcp`)
-* ROCm with HSA runtime, plus LLVM from ROCm (`LLVM_INSTALL_DIR=/opt/rocm/llvm`) — the package builds C++ sources from `csrc/` on first invocation
-* An AMD GPU at runtime to intercept real HSA packets
+Nexus ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.
 
 ## License
 

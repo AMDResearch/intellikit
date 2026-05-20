@@ -126,19 +126,7 @@ See `examples/01_simple_sqtt/example.py` for a complete working example.
 
 ## Use as a Claude Code plugin
 
-Linex ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). It bundles the `linex-profiling` skill and a `linex` MCP server.
-
-```bash
-# In Claude Code
-/plugin marketplace add AMDResearch/intellikit
-/plugin install linex@intellikit
-```
-
-Host requirements when installed as a plugin:
-
-- [`uv`](https://docs.astral.sh/uv/) on `PATH` (the MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run linex-mcp`)
-- ROCm 7.0+ with `rocprofv3` available on `PATH`
-- An AMD GPU at runtime for source-line profiling
+Linex ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.
 
 ## License
 

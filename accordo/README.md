@@ -142,19 +142,7 @@ See `examples/` directory for complete examples:
 
 ## Use as a Claude Code plugin
 
-Accordo ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). It bundles the `accordo-validation` skill and an `accordo` MCP server.
-
-```bash
-# In Claude Code
-/plugin marketplace add AMDResearch/intellikit
-/plugin install accordo@intellikit
-```
-
-Host requirements when installed as a plugin:
-
-- [`uv`](https://docs.astral.sh/uv/) on `PATH` (the MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run accordo-mcp`)
-- ROCm toolchain (`hipcc`, `cmake`, `libdwarf-dev`, `libzstd-dev`) so the underlying `accordo` package and its kernelDB dependency can build on first invocation
-- An AMD GPU at runtime if you want validation that actually executes kernels
+Accordo ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.
 
 ## License
 

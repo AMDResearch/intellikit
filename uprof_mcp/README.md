@@ -129,16 +129,4 @@ profiler = UProfProfiler(logger=None)
 
 ## Use as a Claude Code plugin
 
-`uprof-mcp` ships as a plugin in the [IntelliKit marketplace](../README.md#quick-start). It registers a single `uprof-profiler` MCP server — no skill bundled.
-
-```bash
-# In Claude Code
-/plugin marketplace add AMDResearch/intellikit
-/plugin install uprof-mcp@intellikit
-```
-
-Host requirements when installed as a plugin:
-
-- [`uv`](https://docs.astral.sh/uv/) on `PATH` (the MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run uprof-profiler-mcp`)
-- AMD uProf installed on x86 with `AMDuProfCLI` on `PATH` (see the uProf docs for download/install)
-- An x86 host — uProf is CPU-focused and not portable to ARM
+`uprof-mcp` ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.
