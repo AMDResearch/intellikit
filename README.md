@@ -74,7 +74,7 @@ This repo doubles as a [Claude Code plugin marketplace](https://docs.claude.com/
 | `rocm-mcp` | `hip-compiler`, `hip-docs`, `amd-smi`, `rocminfo` MCPs (no skill) | `uv`; ROCm with `amdsmi` Python bindings (`amd-smi`), `rocminfo` on `PATH`, `hipcc` on `PATH`; network access for `hip-docs` |
 | `uprof-mcp` | `uprof-profiler` MCP (no skill) | `uv`; AMD uProf on **x86** with `AMDuProfCLI` on `PATH` |
 
-All plugins require [`uv`](https://docs.astral.sh/uv/) on `PATH` — each MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run <name>-mcp`. To drop individual MCPs from a multi-server plugin (e.g. keep only `rocminfo` from `rocm-mcp`), edit the installed plugin's `.mcp.json`.
+All plugins require [`uv`](https://docs.astral.sh/uv/) on `PATH` — each MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run <script>` (e.g. `metrix-mcp`, `hip-compiler-mcp`). To drop individual MCPs from a multi-server plugin (e.g. keep only `rocminfo` from `rocm-mcp`), edit the installed plugin's `.mcp.json`.
 
 ---
 
