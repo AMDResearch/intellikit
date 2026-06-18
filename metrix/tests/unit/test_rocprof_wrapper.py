@@ -59,6 +59,21 @@ class TestROCProfV3Wrapper:
             assert "TCC_MISS_sum" in content
             assert "SQ_WAVES" in content
 
+    def test_create_input_yaml_kernel_iteration_range(self, wrapper):
+        """kernel_iteration_range is written into the rocprofv3 jobs section."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            counters = ["TCC_HIT_sum"]
+            input_file = wrapper._create_input_yaml(
+                counters,
+                tmppath,
+                kernel_filter="^my_kernel",
+                kernel_iteration_range="[10,10]",
+            )
+            text = input_file.read_text()
+            assert "kernel_iteration_range" in text
+            assert "[10,10]" in text.replace(" ", "")
+
     def test_parse_csv_row(self, wrapper):
         """CSV row parsing works correctly"""
         # Mock CSV row

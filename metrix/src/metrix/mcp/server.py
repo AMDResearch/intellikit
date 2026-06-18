@@ -5,6 +5,7 @@
 """MCP Server for Metrix - Human-Readable GPU Metrics."""
 
 import argparse
+from typing import List, Optional
 
 from fastmcp import FastMCP
 
@@ -14,7 +15,13 @@ mcp = FastMCP("IntelliKit Metrix")
 
 
 @mcp.tool()
-def profile_metrics(command: str, metrics: list[str] = None) -> dict:
+def profile_metrics(
+    command: str,
+    metrics: Optional[List[str]] = None,
+    kernel_filter: Optional[str] = None,
+    kernel_iteration_range: Optional[str] = None,
+    num_replays: int = 1,
+) -> dict:
     """
     Profile GPU application and collect hardware performance metrics.
 
@@ -25,6 +32,9 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     Args:
         command: Command to profile (e.g., './app')
         metrics: List of metrics to collect (default: common metrics)
+        kernel_filter: Optional regex; only matching kernels are profiled
+        kernel_iteration_range: Optional jobs[].kernel_iteration_range string (rocprofv3 --input YAML)
+        num_replays: Number of full-app profiling passes (-n)
 
     Returns:
         Dictionary with kernels list containing metrics and durations
@@ -35,7 +45,13 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     if metrics is None:
         metrics = ["memory.hbm_bandwidth_utilization"]
 
-    results_obj = profiler.profile(command, metrics=metrics)
+    results_obj = profiler.profile(
+        command,
+        metrics=metrics,
+        kernel_filter=kernel_filter,
+        kernel_iteration_range=kernel_iteration_range,
+        num_replays=num_replays,
+    )
 
     results = {"kernels": []}
 

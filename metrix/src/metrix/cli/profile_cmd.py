@@ -84,10 +84,26 @@ def profile_command(args):
         logger.info(f"Replays: {args.num_replays}")
     if args.kernel:
         logger.info(f"Filter: {args.kernel}")
+    kernel_iteration = getattr(args, "kernel_iteration", None)
+    kernel_iteration_range = getattr(args, "kernel_iteration_range", None)
+    resolved_iteration_range = None
+    if kernel_iteration is not None:
+        resolved_iteration_range = f"[{kernel_iteration},{kernel_iteration}]"
+    elif kernel_iteration_range:
+        resolved_iteration_range = kernel_iteration_range.strip()
+    if resolved_iteration_range:
+        logger.info(
+            f"Kernel iteration range (jobs[].kernel_iteration_range): {resolved_iteration_range}"
+        )
     logger.info(f"{'=' * 80}")
 
     # Build kernel filter (regular expression, passed through to profiler)
     kernel_filter = args.kernel if args.kernel else None
+    if resolved_iteration_range and not kernel_filter:
+        logger.warning(
+            "Without --kernel, rocprofv3 counts launches separately per kernel name; "
+            "use --kernel to target one kernel when using iteration ranges."
+        )
 
     # Profile using backend (handles multi-replay & aggregation internally!)
     try:
@@ -100,6 +116,8 @@ def profile_command(args):
             num_replays=args.num_replays,
             aggregate_by_kernel=args.aggregate,
             kernel_filter=kernel_filter,
+            timeout_seconds=getattr(args, "timeout", 0),
+            kernel_iteration_range=resolved_iteration_range,
         )
     except Exception as e:
         logger.error(f"Profiling failed: {e}")
