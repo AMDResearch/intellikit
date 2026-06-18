@@ -15,10 +15,10 @@ Prerequisites:
   - AMD GPU (MI300+ recommended)
   - kerncap installed: pip install -e kerncap/
 
-Usage:
-  python examples/extract_and_replay.py
-  python examples/extract_and_replay.py --kernel histogram_atomic
-  python examples/extract_and_replay.py --kernel vector_add --iterations 50
+Usage (from `kerncap/` package root):
+  python3 examples/01_extract_and_replay/extract_and_replay.py
+  python3 examples/01_extract_and_replay/extract_and_replay.py --kernel histogram_atomic
+  python3 examples/01_extract_and_replay/extract_and_replay.py --kernel vector_add --iterations 50
 """
 
 import argparse
