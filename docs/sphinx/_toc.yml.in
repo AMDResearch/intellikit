@@ -4,43 +4,43 @@ root: index
 subtrees:
 
 - entries:
-  - file: index.rst
+  - file: index.mdx
     title: What is IntelliKit?
 
 - caption: Install
   entries:
-  - file: getting-started\installation.md
+  - file: getting-started\installation.mdx
     title: Install IntelliKit
 
 - caption: Tools
   entries:
-  - file: tools\kerncap.md
+  - file: tools\kerncap.mdx
     title: Kerncap
-  - file: tools\metrix.md
+  - file: tools\metrix.mdx
     title: Metrix
-  - file: tools\linex.md
+  - file: tools\linex.mdx
     title: Linex
-  - file: tools\nexus.md
+  - file: tools\nexus.mdx
     title: Nexus
-  - file: accordo.md
+  - file: accordo.mdx
     title: Accordo
-  - file: tools\rocm-mcp.md
+  - file: tools\rocm-mcp.mdx
     title: ROCm MCP
-  - file: tools\uprof-mcp.md
+  - file: tools\uprof-mcp.mdx
     title: uProf MCP
 
 - caption: How to
   entries:
-  - file: how-to\mcp-setup.md
+  - file: how-to\mcp-setup.mdx
     title: Set up MCP
-  - file: how-to\skills-setup.md
+  - file: how-to\skills-setup.mdx
     title: Set up skills
-  - file: how-to\workflow.md
+  - file: how-to\workflow.mdx
     title: Run IntelliKit end-to-end
 
 - caption: About
   entries:
-  - file: contributing.md
+  - file: contributing.mdx
     title: Contributing
   - file: license.md
     title: License
