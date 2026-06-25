@@ -52,5 +52,8 @@ intellikit/
 
 ## Bugs and ideas
 
-**Issues**: [github.com/AMDResearch/intellikit/issues](https://github.com/AMDResearch/intellikit/issues)
+- **Issues**: [github.com/AMDResearch/intellikit/issues](https://github.com/AMDResearch/intellikit/issues)
 
+## License
+
+[MIT](https://github.com/AMDResearch/intellikit/blob/main/LICENSE) — Copyright 2025-2026 Advanced Micro Devices, Inc.
