@@ -1,7 +1,4 @@
----
-title: ROCm MCP
-description: Model Context Protocol servers for the AMD ROCm ecosystem
----
+# ROCm MCP
 
 A collection of Model Context Protocol (MCP) servers for interacting with the AMD ROCm ecosystem. Provides tools for LLMs to compile HIP code, access documentation, and query system information.
 
@@ -71,4 +68,4 @@ uv run ./examples/hip_compiler.py
 pytest
 ```
 
-See the [MCP Setup guide](/intellikit/guides/mcp-setup/) for a complete multi-server configuration.
+See the [MCP Setup guide](../how-to/mcp-setup.md) for a complete multi-server configuration.

@@ -1,12 +1,6 @@
----
-title: Kerncap
-description: Kernel extraction and isolation tool for HIP and Triton applications on AMD GPUs
----
+# Kerncap
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-
-Kerncap profiles a running application, intercepts a target kernel dispatch, captures its complete runtime state (full device memory snapshot, kernarg buffer, HSACO), and generates a standalone reproducer that can replay
-the kernel in isolation using VA-faithful HSA dispatch.
+Kerncap profiles a running application, intercepts a target kernel dispatch, captures its complete runtime state (full device memory snapshot, kernarg buffer, HSACO), and generates a standalone reproducer that can replay the kernel in isolation using VA-faithful HSA dispatch.
 
 ## How it works
 
@@ -42,70 +36,68 @@ Each operation is available as both a Python API and a CLI command.
 
 Rank kernels by total GPU execution time.
 
-<Tabs syncKey="interface">
-  <TabItem label="Python API">
-    ```python
-    from kerncap import Kerncap
+**Python API:**
 
-    kc = Kerncap()
-    profile = kc.profile(["./my_app", "--args"])
-    for kernel in profile[:5]:
-        print(f"{kernel.name}: {kernel.total_duration_ns / 1e6:.1f} ms ({kernel.percentage:.1f}%)")
-    ```
-  </TabItem>
-  <TabItem label="CLI">
-    ```bash
-    # Profile and print top kernels
-    kerncap profile -- ./my_app --args
+```python
+from kerncap import Kerncap
 
-    # Save profile to JSON
-    kerncap profile --output profile.json -- ./my_app
-    ```
-  </TabItem>
-</Tabs>
+kc = Kerncap()
+profile = kc.profile(["./my_app", "--args"])
+for kernel in profile[:5]:
+    print(f"{kernel.name}: {kernel.total_duration_ns / 1e6:.1f} ms ({kernel.percentage:.1f}%)")
+```
+
+**CLI:**
+
+```bash
+# Profile and print top kernels
+kerncap profile -- ./my_app --args
+
+# Save profile to JSON
+kerncap profile --output profile.json -- ./my_app
+```
 
 ### Extract
 
 Capture a kernel's full runtime state and generate a standalone reproducer.
 
-<Tabs syncKey="interface">
-  <TabItem label="Python API">
-    ```python
-    # HIP kernel with source (enables recompile workflow)
-    result = kc.extract(
-        kernel_name="mul_mat_q",
-        cmd=["./llama-bench", "-m", "model.gguf", "-p", "512"],
-        source_dir="./ggml/src",
-        output="./isolated/mul_mat_q",
-        defines=["GGML_USE_HIP", "GGML_CUDA_FA_ALL_QUANTS"],
-    )
-    print(f"Output: {result.output_dir}  has_source: {result.has_source}")
+**Python API:**
 
-    # Triton kernel — language auto-detected from source
-    result = kc.extract(
-        kernel_name="flash_attn_fwd",
-        cmd=["python", "train.py", "--batch-size", "64"],
-        source_dir="./flash_attn",
-        output="./isolated/flash_attn_fwd",
-    )
-    ```
-  </TabItem>
-  <TabItem label="CLI">
-    ```bash
-    # HIP with source
-    kerncap extract mul_mat_q --cmd "..." --source-dir ./ggml/src -D GGML_USE_HIP
+```python
+# HIP kernel with source (enables recompile workflow)
+result = kc.extract(
+    kernel_name="mul_mat_q",
+    cmd=["./llama-bench", "-m", "model.gguf", "-p", "512"],
+    source_dir="./ggml/src",
+    output="./isolated/mul_mat_q",
+    defines=["GGML_USE_HIP", "GGML_CUDA_FA_ALL_QUANTS"],
+)
+print(f"Output: {result.output_dir}  has_source: {result.has_source}")
 
-    # Triton
-    kerncap extract flash_attn_fwd --cmd "..." --source-dir ./flash_attn
+# Triton kernel — language auto-detected from source
+result = kc.extract(
+    kernel_name="flash_attn_fwd",
+    cmd=["python", "train.py", "--batch-size", "64"],
+    source_dir="./flash_attn",
+    output="./isolated/flash_attn_fwd",
+)
+```
 
-    # Capture-only (no source)
-    kerncap extract mul_mat_q --cmd "..."
+**CLI:**
 
-    # Specific dispatch
-    kerncap extract gemm_kernel --cmd "..." --dispatch 2
-    ```
-  </TabItem>
-</Tabs>
+```bash
+# HIP with source
+kerncap extract mul_mat_q --cmd "..." --source-dir ./ggml/src -D GGML_USE_HIP
+
+# Triton
+kerncap extract flash_attn_fwd --cmd "..." --source-dir ./flash_attn
+
+# Capture-only (no source)
+kerncap extract mul_mat_q --cmd "..."
+
+# Specific dispatch
+kerncap extract gemm_kernel --cmd "..." --dispatch 2
+```
 
 > **Language detection**: Kerncap auto-detects whether a kernel is HIP or Triton from `--source-dir` contents. To override, pass `--language hip` or `--language triton` on the CLI (or `language="triton"` in the Python API).
 
@@ -115,32 +107,31 @@ Capture a kernel's full runtime state and generate a standalone reproducer.
 
 Replay a captured kernel in isolation.
 
-<Tabs syncKey="interface">
-  <TabItem label="Python API">
-    ```python
-    # Replay with captured HSACO
-    baseline = kc.replay("./isolated/mul_mat_q")
-    print(f"Baseline: {baseline.timing_us:.1f} us")
+**Python API:**
 
-    # Replay with a variant HSACO and compare
-    variant = kc.replay("./isolated/mul_mat_q", hsaco="./isolated/mul_mat_q/optimized.hsaco")
-    print(f"Variant:  {variant.timing_us:.1f} us")
-    print(f"Speedup:  {baseline.timing_us / variant.timing_us:.2f}x")
-    ```
-  </TabItem>
-  <TabItem label="CLI">
-    ```bash
-    # Replay with captured HSACO
-    kerncap replay ./isolated/mul_mat_q
+```python
+# Replay with captured HSACO
+baseline = kc.replay("./isolated/mul_mat_q")
+print(f"Baseline: {baseline.timing_us:.1f} us")
 
-    # Replay with a variant HSACO
-    kerncap replay ./isolated/mul_mat_q --hsaco optimized.hsaco
+# Replay with a variant HSACO and compare
+variant = kc.replay("./isolated/mul_mat_q", hsaco="./isolated/mul_mat_q/optimized.hsaco")
+print(f"Variant:  {variant.timing_us:.1f} us")
+print(f"Speedup:  {baseline.timing_us / variant.timing_us:.2f}x")
+```
 
-    # Benchmark over multiple iterations
-    kerncap replay ./isolated/mul_mat_q --iterations 100
-    ```
-  </TabItem>
-</Tabs>
+**CLI:**
+
+```bash
+# Replay with captured HSACO
+kerncap replay ./isolated/mul_mat_q
+
+# Replay with a variant HSACO
+kerncap replay ./isolated/mul_mat_q --hsaco optimized.hsaco
+
+# Benchmark over multiple iterations
+kerncap replay ./isolated/mul_mat_q --iterations 100
+```
 
 > **HIP launch mode**: If replay conflicts with `rocprofv3` (e.g. when profiling the reproducer itself), pass `--hip-launch` to use the HIP runtime launch path instead of the default HSA dispatch.
 
@@ -148,42 +139,41 @@ Replay a captured kernel in isolation.
 
 Check correctness of a reproducer or variant HSACO.
 
-<Tabs syncKey="interface">
-  <TabItem label="Python API">
-    ```python
-    # Smoke test — confirm baseline replays without error
-    result = kc.validate("./isolated/mul_mat_q")
-    print("Passed:", result.passed)
+**Python API:**
 
-    # Correctness check — compare recompiled variant against captured baseline
-    result = kc.validate("./isolated/mul_mat_q", hsaco="./isolated/mul_mat_q/optimized.hsaco")
-    print("Passed:", result.passed)
+```python
+# Smoke test — confirm baseline replays without error
+result = kc.validate("./isolated/mul_mat_q")
+print("Passed:", result.passed)
 
-    # Triton — compare against captured reference with tolerance
-    result = kc.validate("./isolated/flash_attn_fwd", tolerance=1e-3, rtol=1e-2)
-    print("Passed:", result.passed)
+# Correctness check — compare recompiled variant against captured baseline
+result = kc.validate("./isolated/mul_mat_q", hsaco="./isolated/mul_mat_q/optimized.hsaco")
+print("Passed:", result.passed)
 
-    # Edit loops auto-detect candidate.hsaco / optimized.hsaco
-    result = kc.validate("./isolated/flash_attn_fwd")
-    print("Passed:", result.passed)
-    ```
-  </TabItem>
-  <TabItem label="CLI">
-    ```bash
-    # Smoke test — confirm baseline replays without error
-    kerncap validate ./isolated/mul_mat_q
+# Triton — compare against captured reference with tolerance
+result = kc.validate("./isolated/flash_attn_fwd", tolerance=1e-3, rtol=1e-2)
+print("Passed:", result.passed)
 
-    # Correctness check — compare variant against captured baseline
-    kerncap validate ./isolated/mul_mat_q --hsaco optimized.hsaco
+# Edit loops auto-detect candidate.hsaco / optimized.hsaco
+result = kc.validate("./isolated/flash_attn_fwd")
+print("Passed:", result.passed)
+```
 
-    # Triton — compare with relaxed tolerance
-    kerncap validate ./isolated/flash_attn_fwd --tolerance 1e-3 --rtol 1e-2
+**CLI:**
 
-    # Edit loops auto-detect candidate.hsaco / optimized.hsaco
-    kerncap validate ./isolated/flash_attn_fwd
-    ```
-  </TabItem>
-</Tabs>
+```bash
+# Smoke test — confirm baseline replays without error
+kerncap validate ./isolated/mul_mat_q
+
+# Correctness check — compare variant against captured baseline
+kerncap validate ./isolated/mul_mat_q --hsaco optimized.hsaco
+
+# Triton — compare with relaxed tolerance
+kerncap validate ./isolated/flash_attn_fwd --tolerance 1e-3 --rtol 1e-2
+
+# Edit loops auto-detect candidate.hsaco / optimized.hsaco
+kerncap validate ./isolated/flash_attn_fwd
+```
 
 > **Validation modes**: For VA-faithful captures, baseline `validate` is a smoke test only until a rebuilt HSACO is available. Pass `hsaco`, or let kerncap auto-detect `candidate.hsaco` / `optimized.hsaco`, to compare captured vs rebuilt execution byte-for-byte.
 
@@ -260,46 +250,45 @@ python3 reproducer.py     # re-JITs through Triton and writes candidate.hsaco
 kerncap validate .        # auto-detects candidate.hsaco
 ```
 
-<Tabs syncKey="interface">
-  <TabItem label="Python API">
-    ```python
-    import subprocess, os
-    from kerncap import Kerncap
+**Python API:**
 
-    kc = Kerncap()
+```python
+import subprocess, os
+from kerncap import Kerncap
 
-    # 1. Extract (once)
-    result = kc.extract("mul_mat_q", cmd=[...], source_dir="./ggml/src", output="./isolated/mul_mat_q")
-    reproducer_dir = result.output_dir
+kc = Kerncap()
 
-    # 2. Edit kernel_variant.cpp or files in deps/ (do not change the kernel signature)
+# 1. Extract (once)
+result = kc.extract("mul_mat_q", cmd=[...], source_dir="./ggml/src", output="./isolated/mul_mat_q")
+reproducer_dir = result.output_dir
 
-    # 3. Recompile — single kernel, no application rebuild
-    subprocess.run(["make", "recompile"], cwd=reproducer_dir, check=True)
+# 2. Edit kernel_variant.cpp or files in deps/ (do not change the kernel signature)
 
-    # 4. Compare baseline vs variant
-    baseline = kc.replay(reproducer_dir)
-    variant  = kc.replay(reproducer_dir, hsaco=os.path.join(reproducer_dir, "optimized.hsaco"))
-    print(f"Baseline: {baseline.timing_us:.1f} us  Variant: {variant.timing_us:.1f} us")
-    print(f"Speedup: {baseline.timing_us / variant.timing_us:.2f}x")
+# 3. Recompile — single kernel, no application rebuild
+subprocess.run(["make", "recompile"], cwd=reproducer_dir, check=True)
 
-    # 5. Validate correctness
-    result = kc.validate(reproducer_dir, hsaco=os.path.join(reproducer_dir, "optimized.hsaco"))
-    print("Passed:", result.passed)
-    ```
-  </TabItem>
-  <TabItem label="CLI">
-    ```bash
-    cd ./isolated/mul_mat_q
+# 4. Compare baseline vs variant
+baseline = kc.replay(reproducer_dir)
+variant  = kc.replay(reproducer_dir, hsaco=os.path.join(reproducer_dir, "optimized.hsaco"))
+print(f"Baseline: {baseline.timing_us:.1f} us  Variant: {variant.timing_us:.1f} us")
+print(f"Speedup: {baseline.timing_us / variant.timing_us:.2f}x")
 
-    make run            # replay baseline
-    # edit kernel_variant.cpp and/or deps/
-    make recompile      # recompile into optimized.hsaco
-    make run-variant    # replay variant
-    kerncap validate .   # auto-detects optimized.hsaco for correctness check
-    ```
-  </TabItem>
-</Tabs>
+# 5. Validate correctness
+result = kc.validate(reproducer_dir, hsaco=os.path.join(reproducer_dir, "optimized.hsaco"))
+print("Passed:", result.passed)
+```
+
+**CLI:**
+
+```bash
+cd ./isolated/mul_mat_q
+
+make run            # replay baseline
+# edit kernel_variant.cpp and/or deps/
+make recompile      # recompile into optimized.hsaco
+make run-variant    # replay variant
+kerncap validate .   # auto-detects optimized.hsaco for correctness check
+```
 
 ## AI-assisted optimization
 

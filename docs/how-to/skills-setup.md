@@ -1,7 +1,4 @@
----
-title: Skills Setup
-description: Install IntelliKit agent skills for Cursor, Claude Code, Codex, and GitHub Copilot
----
+# Skills Setup
 
 IntelliKit ships `SKILL.md` playbooks for five tools: Metrix, Accordo, Nexus, Linex, and Kerncap. These give AI coding assistants step-by-step instructions for profiling, inspecting, and validating GPU kernels.
 

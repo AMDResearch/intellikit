@@ -1,7 +1,4 @@
----
-title: Quick Start
-description: Your first profiling session with IntelliKit
----
+# Quick Start
 
 This walkthrough profiles a GPU application with Metrix to get human-readable performance metrics.
 
@@ -63,9 +60,9 @@ CACHE PERFORMANCE:
 
 ## Next steps
 
-- **Dive deeper into profiling** — see [Metrix](/intellikit/tools/metrix/) for all available metrics
-- **Map performance to source lines** — see [Linex](/intellikit/tools/linex/) for source-level profiling
-- **Extract and isolate a kernel** — see [Kerncap](/intellikit/tools/kerncap/) for standalone reproducers
-- **Inspect GPU execution** — see [Nexus](/intellikit/tools/nexus/) for HSA packet tracing
-- **Validate optimizations** — see [Accordo](/intellikit/tools/accordo/) for correctness checking
-- **Set up MCP servers** — see [MCP Setup](/intellikit/guides/mcp-setup/) for LLM integration
+- **Dive deeper into profiling** — see [Metrix](../tools/metrix.md) for all available metrics
+- **Map performance to source lines** — see [Linex](../tools/linex.md) for source-level profiling
+- **Extract and isolate a kernel** — see [Kerncap](../tools/kerncap.md) for standalone reproducers
+- **Inspect GPU execution** — see [Nexus](../tools/nexus.md) for HSA packet tracing
+- **Validate optimizations** — see [Accordo](../tools/accordo.md) for correctness checking
+- **Set up MCP servers** — see [MCP Setup](../how-to/mcp-setup.md) for LLM integration
