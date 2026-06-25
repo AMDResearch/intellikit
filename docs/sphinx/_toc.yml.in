@@ -3,10 +3,6 @@ defaults:
 root: index
 subtrees:
 
-- entries:
-  - file: index
-    title: What is IntelliKit?
-
 - caption: Install
   entries:
   - file: getting-started/installation
