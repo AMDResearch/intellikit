@@ -197,7 +197,7 @@ Locates the kernel's source so the reproducer can compile (HIP) or import (Trito
 
 **HIP**: Searches the source tree for `__global__` declarations matching the demangled kernel name, then traces local `#include "..."` directives recursively (depth 5) to collect all required headers. For projects built with CMake, kerncap uses `compile_commands.json` to find the translation unit and extract the exact compiler flags needed for the `make recompile` target.
 
-> **Note**: `compile_commands.json` is **optional** — the capture/replay/validate workflow works without it. However, the `make recompile` target (for editing and rebuilding kernels) requires it. Generate it by adding `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` when configuring your CMake project. If missing, you'll see: *"No compile command found (compile_commands.json missing or has no entry for this file). The 'make recompile' target will not be available."* — basic validation still works, but you won't be able to test kernel modifications.
+> `compile_commands.json` is **optional** — the capture/replay/validate workflow works without it. However, the `make recompile` target (for editing and rebuilding kernels) requires it. Generate it by adding `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` when configuring your CMake project. If missing, you'll see: *"No compile command found (compile_commands.json missing or has no entry for this file). The 'make recompile' target will not be available."* — basic validation still works, but you won't be able to test kernel modifications.
 
 **Triton**: Parses Python files under `--source-dir` with the `ast` module, matching `@triton.jit`/`@triton.autotune` decorators. `ImportFrom` nodes (including relative imports) are traced to resolve the full dependency set. Kerncap can also fall back to the source snapshots written by the compile shim when `--source-dir` was omitted or the original file came from a temporary `torch.compile`/Inductor path.
 
@@ -345,4 +345,4 @@ tests/                     Unit + integration tests
 
 ## Related links
 
-- [*Kerncap: Automated Kernel Extraction and Isolation for AMD GPUs*](https://arxiv.org/abs/2605.03208) (arXiv)
+- [Kerncap: Automated Kernel Extraction and Isolation for AMD GPUs](https://arxiv.org/abs/2605.03208) (arXiv)
