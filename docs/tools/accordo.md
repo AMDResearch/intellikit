@@ -1,9 +1,4 @@
----
-title: Accordo
-description: Automated GPU kernel validation — prove your optimized kernel is still correct
----
-
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+# Accordo
 
 Accordo automatically validates GPU kernel correctness by capturing and comparing kernel outputs from reference and optimized implementations.
 
@@ -28,37 +23,36 @@ pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=acco
 
 ## Quick start
 
-<Tabs syncKey="interface">
-  <TabItem label="Python API">
-    ```python
-    from accordo import Accordo
+### Python API
 
-    # Create validator for a specific kernel
-    validator = Accordo(binary="./app_ref", kernel_name="reduce_sum")
+```python
+from accordo import Accordo
 
-    # Capture snapshots from reference and optimized binaries
-    ref = validator.capture_snapshot(binary="./app_ref")
-    opt = validator.capture_snapshot(binary="./app_opt")
+# Create validator for a specific kernel
+validator = Accordo(binary="./app_ref", kernel_name="reduce_sum")
 
-    # Compare with allclose-style controls
-    result = validator.compare_snapshots(ref, opt, atol=1e-6, rtol=1e-5)
+# Capture snapshots from reference and optimized binaries
+ref = validator.capture_snapshot(binary="./app_ref")
+opt = validator.capture_snapshot(binary="./app_opt")
 
-    if result.is_valid:
-        print(f"PASS: {result.num_arrays_validated} arrays matched")
-    else:
-        print(result.summary())
-    ```
-  </TabItem>
-  <TabItem label="CLI">
-    ```bash
-    accordo validate \
-      --kernel-name reduce_sum \
-      --ref-binary ./app_ref \
-      --opt-binary ./app_opt \
-      --atol 1e-6 --rtol 1e-5
-    ```
-  </TabItem>
-</Tabs>
+# Compare with allclose-style controls
+result = validator.compare_snapshots(ref, opt, atol=1e-6, rtol=1e-5)
+
+if result.is_valid:
+    print(f"PASS: {result.num_arrays_validated} arrays matched")
+else:
+    print(result.summary())
+```
+
+### CLI
+
+```bash
+accordo validate \
+  --kernel-name reduce_sum \
+  --ref-binary ./app_ref \
+  --opt-binary ./app_opt \
+  --atol 1e-6 --rtol 1e-5
+```
 
 ### Testing multiple optimizations
 

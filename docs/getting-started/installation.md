@@ -1,7 +1,4 @@
----
-title: Installation
-description: Install IntelliKit tools and agent skills
----
+# Installation
 
 ## Quick install
 

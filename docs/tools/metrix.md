@@ -1,9 +1,4 @@
----
-title: Metrix
-description: "GPU Profiling. Decoded. Clean, human-readable metrics for AMD GPUs."
----
-
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+# Metrix
 
 Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
 
@@ -25,40 +20,39 @@ pip install -e .
 
 ## Quick start
 
-<Tabs syncKey="interface">
-  <TabItem label="CLI">
-    ```bash
-    # Profile with all metrics (architecture auto-detected)
-    metrix ./my_app
+### CLI
 
-    # Time only (fast)
-    metrix --time-only -n 10 ./my_app
+```bash
+# Profile with all metrics (architecture auto-detected)
+metrix ./my_app
 
-    # Filter kernels by name
-    metrix --kernel matmul ./my_app
+# Time only (fast)
+metrix --time-only -n 10 ./my_app
 
-    # Custom metrics
-    metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
+# Filter kernels by name
+metrix --kernel matmul ./my_app
 
-    # Save to JSON
-    metrix -o results.json ./my_app
-    ```
-  </TabItem>
-  <TabItem label="Python API">
-    ```python
-    from metrix import Metrix
+# Custom metrics
+metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
 
-    # Architecture is auto-detected
-    profiler = Metrix()
-    results = profiler.profile("./my_app", num_replays=5)
+# Save to JSON
+metrix -o results.json ./my_app
+```
 
-    for kernel in results.kernels:
-        print(f"{kernel.name}: {kernel.duration_us.avg:.2f} us")
-        for metric, stats in kernel.metrics.items():
-            print(f"  {metric}: {stats.avg:.2f}")
-    ```
-  </TabItem>
-</Tabs>
+### Python API
+
+```python
+from metrix import Metrix
+
+# Architecture is auto-detected
+profiler = Metrix()
+results = profiler.profile("./my_app", num_replays=5)
+
+for kernel in results.kernels:
+    print(f"{kernel.name}: {kernel.duration_us.avg:.2f} us")
+    for metric, stats in kernel.metrics.items():
+        print(f"  {metric}: {stats.avg:.2f}")
+```
 
 ## Available metrics
 

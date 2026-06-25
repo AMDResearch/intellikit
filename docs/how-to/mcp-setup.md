@@ -1,13 +1,10 @@
----
-title: MCP Setup
-description: Configure IntelliKit's Model Context Protocol servers for LLM agents
----
+# MCP Setup
 
 IntelliKit provides several MCP servers that let LLM agents compile HIP code, profile applications, access documentation, and query GPU hardware. This guide shows how to configure them.
 
 ## Prerequisites
 
-- IntelliKit installed (see [Installation](/intellikit/getting-started/installation/))
+- IntelliKit installed (see [Installation](../getting-started/installation.md))
 - `uv` (recommended) or `pip`
 - ROCm for GPU-related servers
 - AMD uProf for `uprof-profiler-mcp`
@@ -90,4 +87,4 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 
 Target options: `--target cursor` | `claude` | `codex` | `agents` | `github`
 
-See the [Installation page](/intellikit/getting-started/installation/) for more details on the skills script.
+See the [Installation page](../getting-started/installation.md) for more details on the skills script.

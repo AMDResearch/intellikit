@@ -1,7 +1,4 @@
----
-title: Contributing
-description: How to contribute to IntelliKit
----
+# Contributing
 
 We welcome issues and pull requests on [GitHub](https://github.com/AMDResearch/IntelliKit).
 

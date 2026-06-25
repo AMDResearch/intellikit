@@ -1,7 +1,4 @@
----
-title: Linex
-description: Source-level GPU performance profiling for AMD ROCm
----
+# Linex
 
 Map GPU performance metrics to your source code lines.
 

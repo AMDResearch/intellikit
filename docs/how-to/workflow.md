@@ -1,7 +1,4 @@
----
-title: End-to-End Workflow
-description: "Profile, inspect, and validate: a complete GPU optimization workflow"
----
+# End-to-End Workflow
 
 This guide walks through the full IntelliKit workflow: profiling a GPU application, inspecting execution, optimizing a kernel, and validating correctness.
 
