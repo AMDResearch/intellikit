@@ -1,10 +1,12 @@
-# Profile a GPU Application with Metrix
+# Profile a GPU application with Metrix
 
-This walkthrough profiles a GPU application with Metrix to get human-readable performance metrics.
+This topic explains how to use Metrix to profile a GPU application and generate human-readable performance metrics.
 
 ## Profile your application
 
 ### CLI
+
+Use the CLI to quickly profile your application and gather performance metrics.
 
 ```bash
 # Profile with all metrics (GPU architecture auto-detected)
@@ -21,6 +23,8 @@ metrix --metrics memory.hbm_bandwidth_utilization,memory.l2_hit_rate ./my_app
 ```
 
 ### Python API
+
+Access more advanced profiling features via the Python API.
 
 ```python
 from metrix import Metrix
@@ -60,9 +64,9 @@ CACHE PERFORMANCE:
 
 ## Next steps
 
-- **Dive deeper into profiling** — see [Metrix](../tools/metrix.md) for all available metrics
-- **Map performance to source lines** — see [Linex](../tools/linex.md) for source-level profiling
-- **Extract and isolate a kernel** — see [Kerncap](../tools/kerncap.md) for standalone reproducers
-- **Inspect GPU execution** — see [Nexus](../tools/nexus.md) for HSA packet tracing
-- **Validate optimizations** — see [Accordo](../tools/accordo.md) for correctness checking
-- **Set up MCP servers** — see [MCP Setup](../how-to/mcp-setup.md) for LLM integration
+- **Dive deeper into profiling:** see [Metrix](../tools/metrix.md) for a full list of available metrics
+- **Map performance to source lines:** see [Linex](../tools/linex.md) for source-level profiling
+- **Extract and isolate a kernel:** see [Kerncap](../tools/kerncap.md) for standalone reproducers
+- **Inspect GPU execution:** see [Nexus](../tools/nexus.md) for HSA packet tracing
+- **Validate optimizations:** see [Accordo](../tools/accordo.md) for correctness checking
+- **Set up MCP servers:** see [MCP Setup](../how-to/mcp-setup.md) for LLM integration

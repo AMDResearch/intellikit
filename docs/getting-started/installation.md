@@ -1,33 +1,22 @@
-# Installation
+# Install IntelliKit
 
-## Quick install
-
-Install all tools from Git via `pip`:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
-```
-
-Install agent skills (for Cursor, Claude, Codex):
-
-```bash
-curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
-```
+This topic describes how to install IntelliKit.
 
 ## Requirements
 
 | Requirement | Notes |
 |-------------|--------|
-| Python | 3.10 or newer |
-| ROCm | 6.0+ for GPU packages (7.0+ for Kerncap and Linex); skip if you only use host-side tools like `uprof_mcp` |
-| GPU | MI300+ for the full GPU experience; some tools vary — see each tool's page |
-| uProf | AMD uProf on x86 for `uprof_mcp` only |
-| cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** (C++ build via KernelDB). See below. |
+| Python | 3.10 or later. |
+| ROCm | 6.0 or later for GPU packages (7.0 or later for Kerncap and Linex). Can skip if using host-side tools like `uprof_mcp`. |
+| GPU | MI300+ recommended for full GPU functionality. Specific tool requirements may vary; check each tool's page for details. |
+| uProf | AMD uProf on x86; required for `uprof_mcp` only. |
+| cmake, libdwarf-dev, libzstd-dev | Required for Accordo and Nexus (C++ build via KernelDB). See the following section for details. |
 
-### System dependencies for accordo and nexus
+### System dependencies for Accordo and Nexus
 
-Accordo and nexus include C++ components (via KernelDB) that are compiled during `pip install`.
-These system packages must be present **before** installing:
+Accordo and Nexus use C++ components from KernelDB, which are compiled during `pip install`.
+
+To install the system dependencies for Accordo and Nexus:
 
 ```bash
 # Debian / Ubuntu
@@ -37,12 +26,26 @@ sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
 sudo dnf install -y cmake libdwarf-devel libzstd-devel
 ```
 
-The install script (`install/tools/install.sh`) will warn if these are missing. The
-[IntelliKit Docker image](https://github.com/AMDResearch/intellikit/blob/main/docker/Dockerfile) includes them already.
+If these packages are missing, the installation script (`install/tools/install.sh`) will display a warning. For convenience, the
+[IntelliKit Docker image](https://github.com/AMDResearch/intellikit/blob/main/docker/Dockerfile) already includes these dependencies.
 
-## Individual packages
+## Quick install
 
-Install a single package from Git:
+You can quickly install all IntelliKit tools directly from Git using `pip`:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
+```
+
+To set up agent skills (compatible with Cursor, Claude, and Codex):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
+```
+
+## Install individual packages
+
+To install a single IntelliKit package from Git:
 
 ```bash
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"
@@ -50,6 +53,8 @@ pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metr
 ```
 
 ## Editable install (development)
+
+For development purposes, you can install packages in "editable" mode:
 
 ```bash
 git clone https://github.com/AMDResearch/intellikit.git
@@ -63,14 +68,16 @@ pip install -e ./linex
 
 ### Tools script (`install/tools/install.sh`)
 
-- Default `pip3`; the script checks that pip's Python is 3.10+ before installing.
-- Subset only: `--tools metrix,linex,nexus`
-- Custom pip: `--pip-cmd pip3.12` or `--pip-cmd "python3.12 -m pip"`
-- Branch/tag: `--ref my-branch`
-- Different repo: `--repo-url https://github.com/you/fork.git`
-- Preview: `--dry-run`
+The tools installation script provides flexible options to customize the process:
 
-Pipe flags after `bash -s --`:
+- Default `pip3`: the script checks that `pip`'s Python is 3.10+ before installing
+- Install subset only: `--tools metrix,linex,nexus`
+- Custom `pip`: `--pip-cmd pip3.12` or `--pip-cmd "python3.12 -m pip"`
+- Branch/tag: `--ref my-branch`
+- Custom Git repo: `--repo-url https://github.com/you/fork.git`
+- Preview changes: `--dry-run`
+
+For example, to install a subset of tools, you can pipe flags after `bash -s --`:
 
 ```bash
 curl -sSL .../install/tools/install.sh | bash -s -- --tools metrix,linex
@@ -78,6 +85,8 @@ curl -sSL .../install/tools/install.sh | bash -s -- --tools metrix,linex
 
 ### Skills script (`install/skills/install.sh`)
 
-- `--target cursor` | `claude` | `codex` | `agents` | `github` — where skills are written
-- `--global` — e.g. `~/.cursor/skills/` for Cursor
-- `--dry-run`
+The skills installation script offers options for customizing skill deployment:
+
+- Target location: `--target cursor` | `claude` | `codex` | `agents` | `github`: where skills should be deployed
+- Global installation: `--global`. For example, `~/.cursor/skills/` for Cursor
+- Preview changes: `--dry-run`
