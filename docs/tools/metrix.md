@@ -1,21 +1,21 @@
 # Metrix
 
-Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
+Metrix translates raw hardware counters into clean, human-readable metrics for AMD GPUs.
 
-## Why Metrix?
+## Features
 
-- **Clean Python API** with modern design
-- **Human-readable metrics** instead of raw counters
-- **Unit tested** and reliable
-- **20 metrics** across memory, cache, compute, and GPU utilization (availability varies by GPU architecture)
-- **Multi-run profiling**: automatic aggregation with min/max/avg statistics
-- **Kernel filtering**: efficient regex filtering at rocprofv3 level
-- **Multiple output formats**: text, JSON, CSV
+- Modern Python API
+- Human-readable metrics instead of raw counters
+- Unit tested and reliable
+- 20 metrics across memory, cache, compute, and GPU utilization (availability varies by GPU architecture)
+- Multi-run profiling supporting automatic aggregation with min/max/avg statistics
+- Kernel filtering with efficient regex filtering at the `rocprofv3` level
+- Multiple output formats, including text, JSON, and CSV
 
 ## Requirements
 
 - Python 3.9+
-- ROCm 6.x with rocprofv3
+- ROCm 6.x with `rocprofv3`
 - pandas >= 1.5.0
 
 ## Installation

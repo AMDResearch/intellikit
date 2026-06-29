@@ -1,10 +1,10 @@
 # Nexus
 
-Nexus intercepts Heterogeneous System Architecture (HSA) packets, extracts the source code from them, and outputs assembly and HIP code in a structured format.
+Nexus intercepts Heterogeneous System Architecture (HSA) packets, extracts source code, and outputs both assembly and HIP code in an structured format.
 
 ## Installation
 
-Nexus compiles a native C++ library during installation. You need `cmake`, `libdwarf-dev`, and `libzstd-dev` first:
+Nexus compiles a native C++ library during installation. Ensure `cmake`, `libdwarf-dev`, and `libzstd-dev` are installed beforehand:
 
 ```bash
 # System prerequisites (Debian/Ubuntu)
@@ -84,12 +84,12 @@ hipcc vector_add.hip -g -o vector_add   # -g needed for source line mapping
 
 | Variable | Description |
 |----------|-------------|
-| `NEXUS_LOG_LEVEL` | Verbosity level (0 = none, 1 = info, 2 = warning, 3 = error, 4 = detail) |
-| `NEXUS_OUTPUT_FILE` | Path to the JSON output file |
-| `NEXUS_EXTRA_SEARCH_PREFIX` | Additional search directories for HIP files. Supports wildcards, colon-separated. |
-| `TRITON_DISABLE_LINE_INFO` | Set to `0` to enable line info in Triton kernels (auto-set by Python API) |
+| `NEXUS_LOG_LEVEL` | Controls log verbosity (`0` = none, `1` = info, `2` = warning, `3` = error, `4` = detail) |
+| `NEXUS_OUTPUT_FILE` | File path for Nexus JSON output |
+| `NEXUS_EXTRA_SEARCH_PREFIX` | Additional search directories for HIP files. Supports wildcards, colon-separated paths |
+| `TRITON_DISABLE_LINE_INFO` | Set to `0` to enable line information in Triton kernels. Automatically managed by the Python API |
 
-Without `-g` you still get assembly and HIP source in the trace; only the mapping to original source line numbers may be missing.
+Without the `-g` flag, you still get assembly and HIP source in the trace. However, the mapping to original source line numbers will be unavailable.
 
 ## Output format
 
@@ -118,8 +118,8 @@ Nexus produces a JSON file with kernel data:
 ```
 
 Each kernel entry contains:
-- **assembly** — ISA instructions extracted from the code object
-- **hip** — corresponding HIP source lines (when available)
-- **files** — source file paths for each instruction
-- **lines** — source line numbers for each instruction
-- **signature** — the full kernel signature
+- **assembly:** ISA instructions extracted from the code object
+- **hip:** corresponding HIP source lines (when available)
+- **files:** source file paths for each instruction
+- **lines:** source line numbers for each instruction
+- **signature:** the full kernel signature

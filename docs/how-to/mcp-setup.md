@@ -1,4 +1,4 @@
-# MCP Setup
+# Set up MCP
 
 IntelliKit provides several MCP servers, which allow LLM agents to compile HIP code, profile applications, access documentation, and query GPU hardware. This topic explains how to configure these servers.
 

@@ -5,9 +5,9 @@ Accordo automatically validates GPU kernel correctness by capturing and comparin
 ## Features
 
 - **Automatic kernel extraction**: Uses KernelDB to extract kernel signatures from binaries
-- **Snapshot-based validation**: Capture once, compare against multiple optimizations
-- **Configurable tolerance**: Set precision requirements for floating-point comparisons (`atol`, `rtol`, `equal_nan`)
-- **Performance tracking**: Measure and compare execution times
+- **Snapshot-based validation**: Captures kernel outputs once and validate against multiple optimizations
+- **Configurable tolerance**: Sets precision requirements for floating-point comparisons (`atol`, `rtol`, `equal_nan`)
+- **Performance tracking**: Measures and compares execution times
 
 ## Requirements
 
@@ -17,7 +17,7 @@ Accordo automatically validates GPU kernel correctness by capturing and comparin
 
 ## Installation
 
-Accordo compiles C++ code (via KernelDB) during installation. You need `cmake`, `libdwarf-dev`, and `libzstd-dev` first:
+Accordo compiles C++ code (via KernelDB) during installation. Ensure `cmake`, `libdwarf-dev`, and `libzstd-dev` are pre-installed:
 
 ```bash
 # System prerequisites (Debian/Ubuntu)

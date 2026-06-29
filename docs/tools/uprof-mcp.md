@@ -1,6 +1,6 @@
 # uProf MCP
 
-A Model Context Protocol (MCP) server for profiling x86 CPU applications using AMD uProf. Enables LLMs to analyze CPU performance hotspots through the AMD uProf profiler.
+uProf MCP is a Model Context Protocol (MCP) server for using AMD uProf to profile x86 CPU applications. It enables LLMs to analyze CPU performance hotspots through the AMD uProf profiler.
 
 ## Features
 
@@ -12,7 +12,7 @@ A Model Context Protocol (MCP) server for profiling x86 CPU applications using A
 ## Requirements
 
 - Python >= 3.10
-- AMD uProf installed
+- AMD uProf
 - x86 CPU architecture
 
 ## Installation
@@ -40,7 +40,7 @@ Add the following to your MCP client configuration:
 }
 ```
 
-Adjust `/path/to/uprof_mcp` to where you have cloned or installed the package.
+Replace `/path/to/uprof_mcp` with the actual path where you have cloned or installed the package.
 
 ## Python API (non-agentic)
 
@@ -86,10 +86,16 @@ profiler = UProfProfiler(logger=None)
 **Methods:**
 
 - `find_hotspots(output_dir, executable, executable_args)` → `UProfProfilerResult`
-  - `output_dir` (str | Path) — directory to store results
-  - `executable` (str | Path) — path to executable
-  - `executable_args` (list[str] | None) — arguments for the executable
-  - Returns `UProfProfilerResult` with `report_path` attribute
+
+  **Parameters:**
+
+  - `output_dir` (str | Path): directory to store results
+  - `executable` (str | Path): path to executable
+  - `executable_args` (list[str] | None): arguments for the executable
+
+  **Returns:**
+  
+  - `UProfProfilerResult` with a `report_path` attribute
 
 ## Development
 
