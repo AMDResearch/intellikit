@@ -70,12 +70,12 @@ pip install -e ./linex
 
 The tools installation script provides flexible options to customize the process:
 
-- Default `pip3`: the script checks that `pip`'s Python is 3.10+ before installing
-- Install subset only: `--tools metrix,linex,nexus`
-- Custom `pip`: `--pip-cmd pip3.12` or `--pip-cmd "python3.12 -m pip"`
-- Branch/tag: `--ref my-branch`
-- Custom Git repo: `--repo-url https://github.com/you/fork.git`
-- Preview changes: `--dry-run`
+- **Default** `pip3`: the script checks that `pip`'s Python is 3.10+ before installing
+- **Install subset only**: `--tools metrix,linex,nexus`
+- **Custom** `pip`: `--pip-cmd pip3.12` or `--pip-cmd "python3.12 -m pip"`
+- **Branch/tag**: `--ref my-branch`
+- **Custom Git repo**: `--repo-url https://github.com/you/fork.git`
+- **Preview changes**: `--dry-run`
 
 For example, to install a subset of tools, you can pipe flags after `bash -s --`:
 
@@ -87,6 +87,6 @@ curl -sSL .../install/tools/install.sh | bash -s -- --tools metrix,linex
 
 The skills installation script offers options for customizing skill deployment:
 
-- Target location: `--target cursor` | `claude` | `codex` | `agents` | `github`: where skills should be deployed
-- Global installation: `--global`. For example, `~/.cursor/skills/` for Cursor
-- Preview changes: `--dry-run`
+- **Target location**: `--target cursor` | `claude` | `codex` | `agents` | `github`specifies where skills should be deployed
+- **Global installation**: `--global`. For example, `~/.cursor/skills/` for Cursor
+- **Preview changes**: `--dry-run`
