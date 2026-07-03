@@ -4,7 +4,7 @@ IntelliKit provides several MCP servers, which allow LLM agents to compile HIP c
 
 ## Prerequisites
 
-- [IntelliKit](..\getting-started\installation.md)
+- [IntelliKit installation](../getting-started/installation.md)
 - `uv` (recommended) or `pip`
 - [ROCm](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/) for GPU-related MCP servers
 - AMD uProf for `uprof-profiler-mcp`
