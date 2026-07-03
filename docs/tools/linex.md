@@ -4,7 +4,7 @@ Linex maps GPU performance metrics directly to the corresponding lines of your s
 
 ## Requirements
 
-- Python >= 3.8
+- Python >= 3.10
 - ROCm 7.0+ with `rocprofv3`
 
 ## Installation

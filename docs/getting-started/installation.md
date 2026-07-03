@@ -7,8 +7,8 @@ This topic describes how to install IntelliKit.
 | Requirement | Notes |
 |-------------|--------|
 | Python | 3.10 or later. |
-| ROCm | 6.0 or later for GPU packages (7.0 or later for Kerncap and Linex). Can skip if using host-side tools like `uprof_mcp`. |
-| GPU | MI300+ recommended for full GPU functionality. Specific tool requirements may vary; check each tool's page for details. |
+| ROCm | 7.0 or later for GPU packages. Can skip if using host-side tools like `uprof_mcp`. |
+| GPU | Both Instinct and RDNA GPUs are supported. Instinct MI300+ recommended for full GPU functionality. Specific tool requirements may vary; check each tool's page for details. |
 | uProf | AMD uProf on x86; required for `uprof_mcp` only. |
 | cmake, libdwarf-dev, libzstd-dev | Required for Accordo and Nexus (C++ build via KernelDB). See the following section for details. |
 
@@ -31,7 +31,7 @@ If these packages are missing, the installation script (`install/tools/install.s
 
 ## Quick install
 
-You can quickly install all IntelliKit tools directly from Git using `pip`:
+You can quickly install all IntelliKit tools directly from Git:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
@@ -87,6 +87,6 @@ curl -sSL .../install/tools/install.sh | bash -s -- --tools metrix,linex
 
 The skills installation script offers options for customizing skill deployment:
 
-- **Target location**: `--target cursor` | `claude` | `codex` | `agents` | `github`specifies where skills should be deployed
+- **Target location**: `--target cursor` | `claude` | `codex` | `agents` | `github` specifies where skills should be deployed
 - **Global installation**: `--global`. For example, `~/.cursor/skills/` for Cursor
 - **Preview changes**: `--dry-run`

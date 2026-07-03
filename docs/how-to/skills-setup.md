@@ -23,7 +23,7 @@ A skill is a markdown file (`SKILL.md`) that teaches an AI agent how to use a to
 
 ## Quick install
 
-Run the following command to installs all five skills into `.agents/skills/` in the current directory (the default target):
+Run the following command to install all five skills into `.agents/skills/` in the current directory (the default target):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash

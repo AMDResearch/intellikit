@@ -2,6 +2,8 @@
 
 IntelliKit is a collection of Python tools to help you analyze and improve the performance of AMD hardware. It works with ROCm to turn data like hardware counters and traces into easy-to-use Python APIs. For host-side CPU hotspot analysis, the toolkit includes `uprof_mcp`, which integrates AMD uProf. Additionally, IntelliKit supports LLM-style workflows by providing MCP servers and agent skills, enabling you to use installable `SKILL.md` playbooks with platforms such as Cursor, Claude, Codex, and GitHub Copilot.
 
+The following table lists all IntelliKit tools, their roles, and functionalities:
+
 | Tool | Role | Description |
 |------|------|-------------|
 | **[Kerncap](tools/kerncap.md)** | Isolate | Captures kernel dispatches and builds standalone reproducers for HIP and Triton code.|
@@ -11,3 +13,5 @@ IntelliKit is a collection of Python tools to help you analyze and improve the p
 | **[Accordo](tools/accordo.md)** | Validate | Confirms that optimized kernels produce the same results as their reference implementations.|
 | **[ROCm MCP](tools/rocm-mcp.md)** | MCP | Provides HIP compiler, documentation, and rocminfo servers for LLM agents.|
 | **[uProf MCP](tools/uprof-mcp.md)** | CPU | Bridges AMD uProf for host-side CPU hotspot analysis.|
+
+For more information about using IntelliKit tools in an end-to-end workflow, see [Using IntelliKit end to end](how-to/workflow.md).

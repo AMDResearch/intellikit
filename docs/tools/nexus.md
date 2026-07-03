@@ -1,6 +1,6 @@
 # Nexus
 
-Nexus intercepts Heterogeneous System Architecture (HSA) packets, extracts source code, and outputs both assembly and HIP code in an structured format.
+Nexus intercepts GPU AQL (Architected Queuing Language) packets within the Heterogeneous System Architecture (HSA), extracts source code, and outputs both assembly and HIP code in a structured format.
 
 ## Installation
 

@@ -18,9 +18,18 @@ Kerncap profiles a running application, intercepts a target kernel dispatch, cap
 
 ## Installation
 
-Kerncap builds `libkerncap.so` from source against the host ROCm 7.0+ environment. It requires `hipcc`, `cmake`, HSA headers, and `rocprofiler-sdk`, which are included in standard ROCm images.
+### Prerequisites
 
-Install Kerncap using the following methods:
+Kerncap builds `libkerncap.so` from source against the host ROCm 7.0+ environment. The following components are included in standard ROCm images:
+
+- `hipcc`
+- `cmake`
+- HSA headers
+- `rocprofiler-sdk` 
+
+### Quick install
+
+Run the following commands from the `kerncap` directory:
 
 ```bash
 # From local source
@@ -32,7 +41,7 @@ pip install -e .[dev]
 
 ## Usage
 
-Kerncap provides a versatile interface where each operation is accessible through a Python API and a CLI command.
+Kerncap provides a versatile interface for profiling, extracting, replaying, and validating GPU kernels. These operations are accessible through both a Python API and CLI commands.
 
 ### Profile
 

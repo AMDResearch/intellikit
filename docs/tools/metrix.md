@@ -14,11 +14,13 @@ Metrix translates raw hardware counters into clean, human-readable metrics for A
 
 ## Requirements
 
-- Python 3.9+
+- Python >= 3.10
 - ROCm 6.x with `rocprofv3`
 - pandas >= 1.5.0
 
 ## Installation
+
+Run the following commands from the `metrix` directory:
 
 ```bash
 pip install -e .

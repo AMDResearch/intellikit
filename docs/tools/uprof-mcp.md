@@ -17,6 +17,8 @@ uProf MCP is a Model Context Protocol (MCP) server for using AMD uProf to profil
 
 ## Installation
 
+Run the following commands from the `uprof_mcp` directory:
+
 ```bash
 # Using uv (recommended)
 uv pip install .
@@ -64,6 +66,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
 ```
 
 ## LangChain example
+
+Run the following commands from the `uprof_mcp` directory:
 
 ```bash
 # Agentic mode (with LLM)

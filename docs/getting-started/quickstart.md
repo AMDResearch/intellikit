@@ -2,9 +2,7 @@
 
 This topic explains how to use Metrix to profile a GPU application and generate human-readable performance metrics.
 
-## Profile your application
-
-### CLI
+## CLI
 
 Use the CLI to quickly profile your application and gather performance metrics.
 
@@ -22,7 +20,7 @@ metrix --kernel matmul ./my_app
 metrix --metrics memory.hbm_bandwidth_utilization,memory.l2_hit_rate ./my_app
 ```
 
-### Python API
+## Python API
 
 Access more advanced profiling features via the Python API.
 

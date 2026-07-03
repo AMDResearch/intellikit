@@ -11,7 +11,7 @@ Accordo automatically validates GPU kernel correctness by capturing and comparin
 
 ## Requirements
 
-- Python >= 3.8
+- Python >= 3.10
 - ROCm toolchain
 - KernelDB (automatically installed)
 
