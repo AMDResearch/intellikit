@@ -11,7 +11,7 @@ uProf MCP is a Model Context Protocol (MCP) server for using AMD uProf to profil
 
 ## Requirements
 
-- Python >= 3.10
+- Python 3.10+
 - AMD uProf
 - x86 CPU architecture
 
