@@ -7,7 +7,7 @@ formats: [pdf]
 
 python:
   install:
-    - requirements: docs/sphinx/requirements.txt
+    - requirements: docs/src/content/docs/sphinx/requirements.txt
 
 build:
   os: ubuntu-22.04
