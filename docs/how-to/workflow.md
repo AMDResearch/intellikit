@@ -72,6 +72,10 @@ for line in profiler.source_lines[:5]:
 
 Use Kerncap to extract the kernel into a standalone reproducer, then iterate on it.
 
+```{note}
+This step requires `compile_commands.json` from your project's CMake build. Generate it by configuring CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`. Without it, `make recompile` is unavailable. See [Kerncap reference](../tools/kerncap.md) for details.
+```
+
 ```python
 from kerncap import Kerncap
 import subprocess, os
@@ -113,9 +117,9 @@ else:
     print(result.summary())
 ```
 
-## Complete example
+## End-to-end workflow 
 
-The following example brings all steps together to profile, inspect, and validate a GPU kernel optimization:
+Here is a complete IntelliKit workflow for profiling, inspecting, and validating your GPU kernel optimizations with Metrix, Nexus, and Accordo:
 
 ```python
 from metrix import Metrix

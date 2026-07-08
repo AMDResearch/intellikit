@@ -23,7 +23,7 @@ Accordo provides the following capabilities.
 Accordo requires the following.
 
 - Python >= 3.10
-- ROCm toolchain
+- ROCm >= 7.0
 - KernelDB (automatically installed)
 
 ## Installation

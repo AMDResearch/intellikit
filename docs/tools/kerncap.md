@@ -123,7 +123,7 @@ kerncap extract gemm_kernel --cmd "..." --dispatch 2
 
 **Language detection**: Kerncap auto-detects whether a kernel is HIP or Triton from `--source-dir` contents. To override, use `--language hip` or `--language triton` in the CLI or provide `language="triton"` in the Python API.
 
-**Triton backend compatibility**: The `--triton-backend` flag is available for compatibility with the legacy Python capture backend. HSA is the new default, and the Python backend will soon be deprecated.
+**Triton backend compatibility**: The `--triton-backend` flag is available for compatibility with the legacy Python capture backend. HSA is the new default.
 
 ### Replay
 

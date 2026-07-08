@@ -66,7 +66,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
   | bash -s -- --target claude
 ```
 
-Skills land in `.claude/skills/{tool}/SKILL.md`.
+Skills are installed in `.claude/skills/{tool}/SKILL.md`.
 
 ### Codex
 

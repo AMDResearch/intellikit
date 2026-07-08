@@ -13,13 +13,13 @@ This topic describes how to install IntelliKit.
 
 IntelliKit requires the following software and hardware.
 
-| Requirement | Notes |
-|-------------|--------|
-| Python | 3.10 or later. |
-| ROCm | 7.0 or later for GPU packages. Can skip if using host-side tools like `uprof_mcp`. |
-| GPU | Both AMD Instinct™ and RDNA GPUs are supported. AMD Instinct™ MI300+ recommended for full GPU functionality. Specific tool requirements might vary; check each tool's page for details. |
-| uProf | AMD uProf on x86; required for `uprof_mcp` only. |
-| cmake, libdwarf-dev, libzstd-dev | Required for Accordo and Nexus (C++ build through KernelDB). See the following section for details. |
+| Requirement | Required by | Notes |
+|-------------|-------------|-------|
+| Python | All tools | 3.10 or later. |
+| ROCm 7.0+ | Metrix, Linex, Nexus, Accordo, Kerncap, ROCm MCP | Required for GPU profiling and kernel analysis. Not needed for host-only tools. |
+| GPU | Metrix, Linex, Nexus, Accordo, Kerncap, ROCm MCP | Both Instinct and RDNA GPUs are supported. Instinct MI300+ recommended for full GPU functionality. |
+| uProf | `uprof_mcp` only | AMD uProf on x86. |
+| cmake, libdwarf-dev, libzstd-dev | Accordo, Nexus | Required for C++ build via KernelDB. See the following section for details. |
 
 ### System dependencies for Accordo and Nexus
 
@@ -35,7 +35,7 @@ sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
 sudo dnf install -y cmake libdwarf-devel libzstd-devel
 ```
 
-If these packages are missing, the installation script (`install/tools/install.sh`) will display a warning. For convenience, the
+If these packages are missing, the installation script (`install/tools/install.sh`) will exit with an error listing the missing packages. For convenience, the
 [IntelliKit Docker image](https://github.com/AMDResearch/intellikit/blob/main/docker/Dockerfile) already includes these dependencies.
 
 ## Quick install
