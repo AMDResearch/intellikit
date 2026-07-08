@@ -9,6 +9,7 @@ build/
 *.txt
 *.hipfb
 !CMakeLists.txt
+!docs/src/content/docs/sphinx/*.txt
 
 # Python
 */__pycache__/
