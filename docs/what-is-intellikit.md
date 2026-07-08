@@ -1,11 +1,11 @@
 ---
+title: What is IntelliKit?
+description: A Python toolkit for AMD GPU profiling, kernel isolation, source-line analysis, and optimization validation.
 myst:
     html_meta:
         "description": "Learn what IntelliKit is: a Python toolkit for AMD GPU profiling, kernel isolation, source-line analysis, and optimization validation using ROCm."
         "keywords": "IntelliKit, AMD GPU, ROCm, HIP, GPU profiling, Metrix, Kerncap, Linex, Nexus, Accordo, MCP"
 ---
-
-# What is IntelliKit?
 
 IntelliKit is a collection of Python tools to help you analyze and improve the performance of AMD hardware. It works with ROCm to turn data like hardware counters and traces into easy-to-use Python APIs. For host-side CPU hotspot analysis, the toolkit includes `uprof_mcp`, which integrates AMD uProf. Additionally, IntelliKit supports LLM-style workflows by providing MCP servers and agent skills, enabling you to use installable `SKILL.md` playbooks with platforms such as Cursor, Claude, Codex, and GitHub Copilot.
 
