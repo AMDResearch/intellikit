@@ -1,11 +1,11 @@
 ---
+title: Kerncap
+description: Extract and isolate GPU kernels from HIP and Triton applications on AMD GPUs.
 myst:
     html_meta:
         "description": "Kerncap extracts and isolates GPU kernels from HIP and Triton applications on AMD GPUs. Profile, capture, replay, and validate kernels with a standalone reproducer."
         "keywords": "Kerncap, GPU kernel, AMD GPU, ROCm, HIP, Triton, kernel isolation, reproducer, HSACO"
 ---
-
-# Kerncap (IntelliKit)
 
 Kerncap profiles a running application, intercepts a target kernel dispatch, captures its complete runtime state (full device memory snapshot, kernarg buffer, and HSA Code Object (HSACO)), and generates a standalone reproducer that can replay the kernel in isolation using virtual address (VA)-faithful HSA dispatch.
 

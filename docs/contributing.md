@@ -1,11 +1,11 @@
 ---
+title: Contributing
+description: Learn how to contribute to IntelliKit.
 myst:
     html_meta:
         "description": "Learn how to contribute to IntelliKit: clone the repository, install packages in editable mode, run tests, and report bugs on the issue tracker."
         "keywords": "IntelliKit, contributing, open source, AMD, GitHub, Python, tests, pull request"
 ---
-
-# Contributing
 
 To report issues and submit pull requests, visit the [GitHub repository](https://github.com/AMDResearch/intellikit).
 

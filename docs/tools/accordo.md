@@ -1,11 +1,11 @@
 ---
+title: Accordo
+description: Validate GPU kernel correctness by comparing reference and optimized implementations.
 myst:
     html_meta:
         "description": "Accordo validates GPU kernel correctness by capturing and comparing outputs from reference and optimized implementations on AMD GPUs with configurable tolerance."
         "keywords": "Accordo, AMD GPU, ROCm, kernel validation, correctness, optimization, HIP, KernelDB"
 ---
-
-# Accordo (IntelliKit)
 
 Accordo automatically validates GPU kernel correctness by capturing and comparing kernel outputs from reference and optimized implementations.
 

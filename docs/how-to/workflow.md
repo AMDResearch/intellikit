@@ -1,11 +1,11 @@
 ---
+title: Use IntelliKit end to end
+description: Walk through the full IntelliKit workflow.
 myst:
     html_meta:
         "description": "Walk through the full IntelliKit workflow: profile a GPU application, inspect execution, optimize a kernel, and validate correctness using Metrix, Nexus, Linex, Kerncap, and Accordo."
         "keywords": "IntelliKit, GPU workflow, ROCm, HIP, Metrix, Nexus, Linex, Kerncap, Accordo, kernel optimization"
 ---
-
-# Use IntelliKit end to end
 
 This topic explains the full IntelliKit workflow: profiling a GPU application, inspecting execution, optimizing a kernel, and validating correctness.
 

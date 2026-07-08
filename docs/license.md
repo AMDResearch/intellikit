@@ -1,4 +1,7 @@
-# License
+---
+title: License
+description: IntelliKit license information.
+---
 
 MIT License
 

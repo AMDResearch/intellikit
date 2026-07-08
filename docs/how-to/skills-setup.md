@@ -1,11 +1,11 @@
 ---
+title: Set up skills in IntelliKit
+description: Install IntelliKit SKILL.md playbooks for AI coding assistants.
 myst:
     html_meta:
         "description": "Install IntelliKit SKILL.md playbooks for AI coding assistants like Cursor, Claude Code, Codex, and GitHub Copilot to profile, inspect, and validate GPU kernels."
         "keywords": "IntelliKit, skills, SKILL.md, AI agent, Cursor, Claude, Codex, GitHub Copilot, GPU, ROCm"
 ---
-
-# Set up skills in IntelliKit
 
 IntelliKit ships `SKILL.md` playbooks for five tools: Metrix, Accordo, Nexus, Linex, and Kerncap. These playbooks provide AI coding assistants with step-by-step instructions for profiling, inspecting, and validating GPU kernels.
 

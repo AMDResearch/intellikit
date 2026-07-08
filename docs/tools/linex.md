@@ -1,11 +1,11 @@
 ---
+title: Linex
+description: Map GPU performance metrics to HIP source code lines on AMD GPUs.
 myst:
     html_meta:
         "description": "Linex maps GPU performance metrics to your HIP source code lines, identifying hotspots, stall cycles, and idle execution on AMD GPUs with ROCm."
         "keywords": "Linex, AMD GPU, ROCm, source-line profiling, GPU hotspot, stall cycles, HIP, instruction analysis"
 ---
-
-# Linex (IntelliKit)
 
 Linex maps GPU performance metrics directly to the corresponding lines of your source code.
 

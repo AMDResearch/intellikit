@@ -1,11 +1,11 @@
 ---
+title: Set up MCP in IntelliKit
+description: Configure IntelliKit MCP servers for LLM agents.
 myst:
     html_meta:
         "description": "Configure IntelliKit MCP servers for LLM agents to compile HIP code, profile applications, access documentation, and query GPU hardware with ROCm."
         "keywords": "IntelliKit, MCP, Model Context Protocol, LLM, AI agent, HIP, ROCm, GPU, uProf, metrix-mcp"
 ---
-
-# Set up MCP in IntelliKit
 
 IntelliKit provides several MCP servers, which allow LLM agents to compile HIP code, profile applications, access documentation, and query GPU hardware. This topic explains how to configure these servers.
 

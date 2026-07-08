@@ -1,11 +1,11 @@
 ---
+title: Install IntelliKit
+description: Install IntelliKit tools and agent skills from Git or using pip.
 myst:
     html_meta:
         "description": "Install IntelliKit tools and agent skills from Git or using pip. Covers system requirements, quick install, individual packages, and install script options."
         "keywords": "IntelliKit, install, ROCm, AMD Instinct, GPU, pip, uv, Python, Kerncap, Metrix, Linex, Nexus, Accordo"
 ---
-
-# Install IntelliKit
 
 This topic describes how to install IntelliKit.
 

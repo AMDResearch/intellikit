@@ -1,11 +1,11 @@
 ---
+title: Profile a GPU application with Metrix in IntelliKit
+description: Profile a GPU application with IntelliKit Metrix using the CLI or Python API.
 myst:
     html_meta:
         "description": "Profile a GPU application with IntelliKit Metrix using the CLI or Python API. Collect hardware counters and human-readable performance metrics on AMD GPUs."
         "keywords": "IntelliKit, Metrix, GPU profiling, AMD GPU, ROCm, HIP, hardware counters, bandwidth, cache"
 ---
-
-# Profile a GPU application with Metrix in IntelliKit
 
 This topic explains how to use Metrix to profile a GPU application and generate human-readable performance metrics.
 

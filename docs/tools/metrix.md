@@ -1,11 +1,11 @@
 ---
+title: Metrix
+description: Human-readable metrics from AMD GPU hardware counters.
 myst:
     html_meta:
         "description": "Metrix translates raw AMD GPU hardware counters into human-readable metrics including HBM bandwidth, cache hit rates, compute throughput, and memory coalescing."
         "keywords": "Metrix, AMD GPU, ROCm, GPU metrics, hardware counters, HBM bandwidth, cache, profiling"
 ---
-
-# Metrix (IntelliKit)
 
 Metrix translates raw hardware counters into clean, human-readable metrics for AMD GPUs.
 

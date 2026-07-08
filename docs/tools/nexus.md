@@ -1,11 +1,11 @@
 ---
+title: Nexus
+description: Intercept HSA packets to extract GPU kernel assembly and HIP source on AMD GPUs.
 myst:
     html_meta:
         "description": "Nexus intercepts HSA packets to extract GPU kernel assembly and HIP source from AMD GPU applications, enabling detailed GPU execution inspection with ROCm."
         "keywords": "Nexus, AMD GPU, ROCm, HSA, AQL, GPU assembly, HIP source, kernel inspection"
 ---
-
-# Nexus (IntelliKit)
 
 Nexus intercepts GPU AQL (Architected Queuing Language) packets within the Heterogeneous System Architecture (HSA), extracts source code, and outputs both assembly and HIP code in a structured format.
 
