@@ -44,5 +44,5 @@ subtrees:
   entries:
   - file: contributing
     title: Contributing
-  - file: License
+  - file: license
     title: License
