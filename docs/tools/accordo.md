@@ -117,7 +117,7 @@ The following describes the Accordo Python API classes and methods.
 - `kernel_name` (str): name of the kernel to validate
 - `kernel_args` (list[tuple] | None): manual kernel arguments such as `[(name, type), ...]`. Auto-extracted if set to `None`.
 - `working_directory` (str) — working directory (default: `"."`)
-- `force_rebuild` (bool) — force rebuild even if the library exists (default: `False`)
+- `force_rebuild` (bool): force rebuild even if the library exists (default: `False`)
 - `parallel_jobs` (int) — number of parallel build jobs (default: `16`)
 - `log_level` (str) — logging level (default: `"WARNING"`)
 
