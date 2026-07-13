@@ -29,7 +29,7 @@ copyright = "Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved
 
 external_toc_path = "./sphinx/_toc.yml"
 
-# Add more addtional package accordingly
+# Add more additional package accordingly
 extensions = [
     "rocm_docs",
 ]
