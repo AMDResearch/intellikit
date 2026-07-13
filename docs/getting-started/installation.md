@@ -31,7 +31,7 @@ To install the system dependencies for Accordo and Nexus:
 # Debian / Ubuntu
 sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
 
-# Fedora / RHEL
+# Fedora or RHEL
 sudo dnf install -y cmake libdwarf-devel libzstd-devel
 ```
 
