@@ -28,7 +28,7 @@ Accordo and Nexus use C++ components from KernelDB, which are compiled during `p
 To install the system dependencies for Accordo and Nexus:
 
 ```bash
-# Debian / Ubuntu
+# Debian or Ubuntu
 sudo apt-get update && sudo apt-get install -y cmake libdwarf-dev libzstd-dev
 
 # Fedora or RHEL
