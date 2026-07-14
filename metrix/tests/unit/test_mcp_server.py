@@ -81,9 +81,10 @@ class TestListAvailableMetrics:
             for m in cat_metrics:
                 assert m in flat
 
-    def test_metric_count_at_least_catalog_size(self):
-        """list_available_metrics should return at least as many metrics as the catalog"""
+    def test_returned_metrics_are_known(self):
+        """All returned metrics should be recognized by the catalog or follow the naming convention"""
         result = list_available_metrics()
-        # Backend may have YAML-defined metrics beyond the Python catalog,
-        # but should never return fewer than the catalog
-        assert len(result["metrics"]) >= len(METRIC_CATALOG)
+        for metric in result["metrics"]:
+            assert "." in metric, f"Metric {metric} missing category prefix"
+            category = metric.split(".", 1)[0]
+            assert category in ("compute", "memory"), f"Unknown category in {metric}"
