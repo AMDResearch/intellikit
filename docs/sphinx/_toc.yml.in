@@ -6,6 +6,10 @@ subtrees:
 - entries:
   - file: what-is-intellikit
     title: What is IntelliKit?
+  - file: release-notes
+    title: Release notes
+  - file: compatibility-matrix
+    title: Compatibility matrix
 
 - caption: Install
   entries:
