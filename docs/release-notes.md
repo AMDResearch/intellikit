@@ -11,6 +11,6 @@ Initial release of IntelliKit, a modular toolkit for GPU kernel development, pro
 - **Nexus** — kernel disassembly, register pressure analysis, and dispatch inspection via KernelDB.
 - **Accordo** — side-by-side correctness validation across dtypes and tolerances.
 - **Kerncap** — GPU kernel dispatch capture and standalone reproducer generation.
-- **MCP Servers** — structured tool interface for LLM agents (metrix-mcp, kerncap-mcp, hip-compiler, amd-smi).
+- **MCP Servers** — every tool ships with its own MCP server for structured LLM agent integration.
+- **Tool Skills** — every tool ships with an installable SKILL.md playbook.
 - **uProf MCP** — host-side CPU hotspot analysis via AMD uProf.
-- **Agent Skills** — installable SKILL.md playbooks for each tool.
