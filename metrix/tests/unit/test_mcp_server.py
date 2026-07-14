@@ -16,6 +16,7 @@ def _has_gpu_backend():
     """Check if we can instantiate the Metrix backend (requires hipcc/ROCm)."""
     try:
         from metrix import Metrix
+
         Metrix()
         return True
     except (RuntimeError, Exception):
@@ -29,6 +30,7 @@ class TestListAvailableMetrics:
     def test_returns_only_profileable_metrics(self):
         """Every metric returned by list_available_metrics must be profileable by the backend"""
         from metrix import Metrix
+
         profiler = Metrix()
         backend_metrics = set(profiler.list_metrics())
         result = list_available_metrics()
