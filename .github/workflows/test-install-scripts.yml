@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
+name: Test Install Scripts
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test-install-scripts:
+    name: Test Install Scripts
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test tools install script
+        run: |
+          bash install/tools/install.sh --help
+          bash install/tools/install.sh --dry-run
+          bash install/tools/install.sh --dry-run --pip-cmd "python3 -m pip" --repo-url https://github.com/AMDResearch/intellikit.git --ref main
+          bash install/tools/install.sh --unknown-option 2>&1 && exit 1 || true
+
+      - name: Test skills install script
+        run: |
+          bash install/skills/install.sh --help
+          bash install/skills/install.sh --dry-run
+          bash install/skills/install.sh --dry-run --target codex
+          bash install/skills/install.sh --dry-run --target cursor
+          bash install/skills/install.sh --dry-run --target claude
+          bash install/skills/install.sh --dry-run --global
+          bash install/skills/install.sh --target invalid 2>&1 && exit 1 || true
