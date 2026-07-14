@@ -54,8 +54,8 @@ async def compile_hip_source_file(
 
     try:
         if output_file is None:
-            with tempfile.TemporaryDirectory(delete=False) as tmpdir:
-                output_file = Path(tmpdir) / source_file.stem
+            tmpdir = tempfile.mkdtemp()
+            output_file = Path(tmpdir) / source_file.stem
     except Exception as e:
         msg = f"Failed to create output file: {e!s}"
         await ctx.error(msg)
@@ -108,12 +108,12 @@ async def compile_hip_source_string(
         executable.
     """
     try:
-        with tempfile.TemporaryDirectory(delete=False) as tmpdir:
-            source_file = Path(tmpdir) / "hip_source.cpp"
-            if output_file is None:
-                output_file = Path(tmpdir) / "hip_exe"
-            with source_file.open("w") as f:
-                f.write(source)
+        tmpdir = tempfile.mkdtemp()
+        source_file = Path(tmpdir) / "hip_source.cpp"
+        if output_file is None:
+            output_file = Path(tmpdir) / "hip_exe"
+        with source_file.open("w") as f:
+            f.write(source)
     except Exception as e:
         msg = f"Failed to create temporary source file: {e!s}"
         await ctx.error(msg)
