@@ -1,0 +1,10 @@
+{
+  "name": "rocm-mcp",
+  "description": "MCP servers for the AMD ROCm ecosystem: hipcc compile, HIP docs, rocminfo, and amd-smi.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Yiannis Papadopoulos",
+    "email": "ypapadop@amd.com"
+  },
+  "homepage": "https://github.com/AMDResearch/intellikit/tree/main/rocm_mcp"
+}

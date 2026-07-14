@@ -7,12 +7,14 @@ Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
 ## Why Metrix?
 
 Existing GPU profilers have challenges:
+
 - Cryptic hardware counters everywhere
 - No clear interpretation
 - Inconsistent software quality
 - Limited testing
 
 **Metrix** takes a different approach:
+
 - **Clean Python API** with modern design
 - **Human-readable metrics** instead of raw counters
 - **Unit tested** and reliable
@@ -64,6 +66,7 @@ for kernel in results.kernels:
 ## Available Metrics
 
 ### Compute
+
 - `compute.gpu_utilization` - GPU utilization (%). *gfx1201/gfx1151 only.*
 - `compute.total_flops` - Total floating-point operations performed
 - `compute.hbm_gflops` - Compute throughput (GFLOP/s)
@@ -72,6 +75,7 @@ for kernel in results.kernels:
 - `compute.l1_arithmetic_intensity` - Ratio of FLOPs to L1 bytes (FLOPs/Byte)
 
 ### Memory Bandwidth
+
 - `memory.hbm_read_bandwidth` - HBM read bandwidth (GB/s)
 - `memory.hbm_write_bandwidth` - HBM write bandwidth (GB/s)
 - `memory.hbm_bandwidth_utilization` - % of peak HBM bandwidth
@@ -80,26 +84,30 @@ for kernel in results.kernels:
 - `memory.bytes_transferred_l1` - Total bytes through L1 cache
 
 ### Cache Performance
+
 - `memory.l1_hit_rate` - L1 cache hit rate (%)
 - `memory.l2_hit_rate` - L2 cache hit rate (%)
 - `memory.l2_bandwidth` - L2 cache bandwidth (GB/s)
 
 ### Memory Access Patterns
+
 - `memory.coalescing_efficiency` - Memory coalescing efficiency (%)
 - `memory.global_load_efficiency` - Global load efficiency (%)
 - `memory.global_store_efficiency` - Global store efficiency (%)
 
 ### Local Data Share
+
 - `memory.lds_bank_conflicts` - LDS bank conflicts per access
 
 ### Atomic Operations
+
 - `memory.atomic_latency` - Atomic operation latency (cycles)
 
 ## CLI Options
 
 Profiling uses the `profile` subcommand (or omit `profile` when the first argument is your app or a flag — Metrix inserts `profile` for you).
 
-```
+```shell
 metrix [--version] <command> ...
 
 metrix profile [options] <target>
@@ -177,6 +185,10 @@ LOCAL DATA SHARE (LDS):
 Profiled 1 dispatch(es)/kernel(s)
 ================================================================================
 ```
+
+## Use as a Claude Code plugin
+
+Metrix ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.
 
 ## License
 

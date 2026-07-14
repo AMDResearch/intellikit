@@ -27,6 +27,7 @@ for line in profiler.source_lines[:5]:
 ## What You Get
 
 **Instruction-level metrics mapped to source lines:**
+
 - `latency_cycles` - Total GPU cycles
 - `stall_cycles` - Cycles waiting (memory, dependencies)
 - `idle_cycles` - Unused execution slots
@@ -61,9 +62,11 @@ profiler = Linex(
 ```
 
 **Methods:**
+
 - `profile(command, kernel_filter=None)` - Run profiling
 
 **Properties:**
+
 - `source_lines` - List[SourceLine] sorted by total_cycles
 - `instructions` - List[InstructionData]
 
@@ -103,7 +106,7 @@ inst.stall_percent         # Convenience: stall_cycles / latency_cycles * 100
 ```python
 # Find memory-bound lines
 memory_bound = [
-    l for l in profiler.source_lines 
+    l for l in profiler.source_lines
     if l.stall_percent > 50
 ]
 
@@ -120,6 +123,10 @@ for line in profiler.source_lines[:1]:
 ```
 
 See `examples/01_simple_sqtt/example.py` for a complete working example.
+
+## Use as a Claude Code plugin
+
+Linex ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.
 
 ## License
 

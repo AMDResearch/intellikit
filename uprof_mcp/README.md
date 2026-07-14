@@ -126,3 +126,7 @@ profiler = UProfProfiler(logger=None)
     - `executable` (str | Path): Path to executable
     - `executable_args` (list[str] | None): Arguments for the executable
   - Returns: `UProfProfilerResult` with `report_path` attribute
+
+## Use as a Claude Code plugin
+
+`uprof-mcp` ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.

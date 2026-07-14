@@ -10,7 +10,14 @@ set -e
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh"
 # Env default (--base-url overrides); use args when piping to bash so overrides apply
 BASE_URL="${INTELLIKIT_RAW_URL:-https://raw.githubusercontent.com/AMDResearch/intellikit/main}"
-TOOLS=(metrix accordo nexus linex kerncap)
+# Each entry is "<tool>:<skill-name>" matching the layout <tool>/skills/<skill-name>/SKILL.md.
+TOOLS=(
+  metrix:metrix-profiling
+  accordo:accordo-validation
+  nexus:nexus-trace
+  linex:linex-profiling
+  kerncap:test-kerncap
+)
 DRY_RUN=false
 GLOBAL=false
 TARGET="agents"
@@ -96,9 +103,11 @@ if [[ "$DRY_RUN" != true ]]; then
   mkdir -p "$SKILLS_ROOT"
 fi
 
-for tool in "${TOOLS[@]}"; do
-  url="${BASE_URL}/${tool}/skill/SKILL.md"
-  dest_dir="${SKILLS_ROOT}/${tool}"
+for entry in "${TOOLS[@]}"; do
+  tool="${entry%%:*}"
+  skill="${entry##*:}"
+  url="${BASE_URL}/${tool}/skills/${skill}/SKILL.md"
+  dest_dir="${SKILLS_ROOT}/${skill}"
   dest_file="${dest_dir}/SKILL.md"
 
   if [[ "$DRY_RUN" == true ]]; then
@@ -118,7 +127,8 @@ done
 if [[ "$DRY_RUN" != true ]]; then
   echo ""
   echo "IntelliKit skills are in ${SKILLS_ROOT}:"
-  for tool in "${TOOLS[@]}"; do
-    echo "  ${SKILLS_ROOT}/${tool}/SKILL.md"
+  for entry in "${TOOLS[@]}"; do
+    skill="${entry##*:}"
+    echo "  ${SKILLS_ROOT}/${skill}/SKILL.md"
   done
 fi

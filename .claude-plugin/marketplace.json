@@ -1,0 +1,149 @@
+{
+  "name": "intellikit",
+  "owner": {
+    "name": "AMD Research",
+    "url": "https://github.com/AMDResearch"
+  },
+  "metadata": {
+    "description": "IntelliKit plugins: AMD GPU/CPU performance, validation, and tracing tools for Claude Code.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "accordo",
+      "source": "./accordo",
+      "description": "Validate GPU kernel correctness by comparing reference and optimized outputs. Bundles the accordo-validation skill and the accordo MCP server.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Muhammad Awad",
+        "email": "muhaawad@amd.com"
+      },
+      "homepage": "https://github.com/AMDResearch/intellikit/tree/main/accordo",
+      "category": "testing",
+      "tags": [
+        "gpu",
+        "rocm",
+        "validation",
+        "correctness"
+      ],
+      "strict": false
+    },
+    {
+      "name": "kerncap",
+      "source": "./kerncap",
+      "description": "Extract a GPU kernel from a HIP or Triton application into a standalone reproducer. Bundles the test-kerncap skill and the kerncap MCP server.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Cole Ramos",
+        "email": "Cole.Ramos@amd.com"
+      },
+      "homepage": "https://github.com/AMDResearch/intellikit/tree/main/kerncap",
+      "category": "performance",
+      "tags": [
+        "gpu",
+        "rocm",
+        "hip",
+        "triton",
+        "kernel-extraction"
+      ],
+      "strict": false
+    },
+    {
+      "name": "linex",
+      "source": "./linex",
+      "description": "Profile GPU kernels at source-line granularity with cycle-level timing and stall analysis. Bundles the linex-profiling skill and the linex MCP server.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Muhammad Awad",
+        "email": "muhaawad@amd.com"
+      },
+      "homepage": "https://github.com/AMDResearch/intellikit/tree/main/linex",
+      "category": "performance",
+      "tags": [
+        "gpu",
+        "rocm",
+        "profiling",
+        "source-line"
+      ],
+      "strict": false
+    },
+    {
+      "name": "metrix",
+      "source": "./metrix",
+      "description": "Profile AMD GPU kernels and get human-readable metrics (bandwidth, cache, coalescing, FLOPS). Bundles the metrix-profiling skill and the metrix MCP server.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Muhammad Awad",
+        "email": "muhaawad@amd.com"
+      },
+      "homepage": "https://github.com/AMDResearch/intellikit/tree/main/metrix",
+      "category": "performance",
+      "tags": [
+        "gpu",
+        "rocm",
+        "profiling",
+        "metrics"
+      ],
+      "strict": false
+    },
+    {
+      "name": "nexus",
+      "source": "./nexus",
+      "description": "Extract GPU kernel assembly and HIP source from HSA packet traces. Bundles the nexus-trace skill and the nexus MCP server.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Muhammad Awad",
+        "email": "muhaawad@amd.com"
+      },
+      "homepage": "https://github.com/AMDResearch/intellikit/tree/main/nexus",
+      "category": "performance",
+      "tags": [
+        "gpu",
+        "rocm",
+        "hsa",
+        "trace",
+        "assembly"
+      ],
+      "strict": false
+    },
+    {
+      "name": "rocm-mcp",
+      "source": "./rocm_mcp",
+      "description": "MCP servers for the AMD ROCm ecosystem: hipcc compile, HIP docs, rocminfo, and amd-smi.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Yiannis Papadopoulos",
+        "email": "ypapadop@amd.com"
+      },
+      "homepage": "https://github.com/AMDResearch/intellikit/tree/main/rocm_mcp",
+      "category": "development",
+      "tags": [
+        "gpu",
+        "rocm",
+        "hip",
+        "compiler",
+        "docs",
+        "amd-smi"
+      ],
+      "strict": false
+    },
+    {
+      "name": "uprof-mcp",
+      "source": "./uprof_mcp",
+      "description": "MCP server for profiling CPU code via AMD uProf.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Yiannis Papadopoulos",
+        "email": "ypapadop@amd.com"
+      },
+      "homepage": "https://github.com/AMDResearch/intellikit/tree/main/uprof_mcp",
+      "category": "performance",
+      "tags": [
+        "cpu",
+        "uprof",
+        "profiling"
+      ],
+      "strict": false
+    }
+  ]
+}

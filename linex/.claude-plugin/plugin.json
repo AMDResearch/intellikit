@@ -1,0 +1,10 @@
+{
+  "name": "linex",
+  "description": "Profile GPU kernels at source-line granularity with cycle-level timing and stall analysis. Bundles the linex-profiling skill and the linex MCP server.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Muhammad Awad",
+    "email": "muhaawad@amd.com"
+  },
+  "homepage": "https://github.com/AMDResearch/intellikit/tree/main/linex"
+}

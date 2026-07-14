@@ -74,3 +74,7 @@ This project uses `uv` for dependency management.
    ```bash
    pytest
    ```
+
+## Use as a Claude Code plugin
+
+`rocm-mcp` ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.

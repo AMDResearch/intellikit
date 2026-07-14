@@ -1,0 +1,10 @@
+{
+  "name": "metrix",
+  "description": "Profile AMD GPU kernels and get human-readable metrics (bandwidth, cache, coalescing, FLOPS). Bundles the metrix-profiling skill and the metrix MCP server.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Muhammad Awad",
+    "email": "muhaawad@amd.com"
+  },
+  "homepage": "https://github.com/AMDResearch/intellikit/tree/main/metrix"
+}

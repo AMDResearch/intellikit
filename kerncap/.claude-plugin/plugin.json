@@ -1,0 +1,10 @@
+{
+  "name": "kerncap",
+  "description": "Extract a GPU kernel from a HIP or Triton application into a standalone reproducer. Bundles the test-kerncap skill and the kerncap MCP server.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Cole Ramos",
+    "email": "Cole.Ramos@amd.com"
+  },
+  "homepage": "https://github.com/AMDResearch/intellikit/tree/main/kerncap"
+}

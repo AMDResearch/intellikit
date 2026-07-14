@@ -8,7 +8,7 @@ kerncap profiles a running application, intercepts a target kernel dispatch, cap
 
 ## How it works
 
-```
+```text
 1. Profile          rocprofv3 --kernel-trace --stats → rank kernels by duration
 2. Capture          HIP:    LD_PRELOAD=libkerncap.so → intercept target dispatch,
                             snapshot all tracked device memory + kernarg buffer + HSACO
@@ -164,7 +164,7 @@ For Triton captures, edit `kernel_variant.py` (or the copied source file), rerun
 
 ## Project structure
 
-```
+```text
 src/kerncap.{hip,hpp}     HSA tool loaded via LD_PRELOAD (rocprofiler-sdk registration)
 src/replay.cpp             VA-faithful HSA kernel replay binary (kerncap-replay)
 src/kernarg_metadata.*     AMDGPU code-object kernarg metadata parser
@@ -174,3 +174,7 @@ kerncap/templates/         Jinja2 templates for HIP and Triton reproducers
 vendor/                    Vendored nlohmann/json headers
 tests/                     Unit + integration tests (see tests/README.md)
 ```
+
+## Use as a Claude Code plugin
+
+kerncap ships as a plugin in the IntelliKit marketplace — see the [Claude Code marketplace](../README.md#claude-code-marketplace) section in the root README for install instructions and host requirements.

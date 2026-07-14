@@ -9,6 +9,9 @@ build-backend = "scikit_build_core.build"
 name = "kerncap"
 dynamic = ["version"]
 description = "Kernel extraction and isolation tool for HIP and Triton applications on AMD GPUs"
+authors = [
+    { name = "Cole Ramos", email = "Cole.Ramos@amd.com" },
+]
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

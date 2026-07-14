@@ -1,0 +1,10 @@
+{
+  "name": "nexus",
+  "description": "Extract GPU kernel assembly and HIP source from HSA packet traces. Bundles the nexus-trace skill and the nexus MCP server.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Muhammad Awad",
+    "email": "muhaawad@amd.com"
+  },
+  "homepage": "https://github.com/AMDResearch/intellikit/tree/main/nexus"
+}

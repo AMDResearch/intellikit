@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "uprof-profiler": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "run",
+        "uprof-profiler-mcp"
+      ]
+    }
+  }
+}

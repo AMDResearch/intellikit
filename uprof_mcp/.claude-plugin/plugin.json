@@ -1,0 +1,10 @@
+{
+  "name": "uprof-mcp",
+  "description": "MCP server for profiling CPU code via AMD uProf.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Yiannis Papadopoulos",
+    "email": "ypapadop@amd.com"
+  },
+  "homepage": "https://github.com/AMDResearch/intellikit/tree/main/uprof_mcp"
+}

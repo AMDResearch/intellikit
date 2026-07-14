@@ -50,6 +50,32 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 
 **Clone?** Use `./install/tools/install.sh` and `./install/skills/install.sh`. **Pipe from curl?** Put flags after `bash -s --` (example: `… | bash -s -- --tools metrix,linex`). **`--help`** on either script lists the rest.
 
+**Claude Code users** — see the [Claude Code marketplace](#claude-code-marketplace) section below to install IntelliKit tools as plugins.
+
+---
+
+## Claude Code marketplace
+
+This repo doubles as a [Claude Code plugin marketplace](https://docs.claude.com/en/docs/claude-code/plugins). Add the marketplace once, then install whichever plugins you want:
+
+```bash
+# Inside Claude Code
+/plugin marketplace add AMDResearch/intellikit
+/plugin install <plugin>@intellikit
+```
+
+| Plugin | Components | Host requirements |
+|--------|------------|-------------------|
+| `kerncap` | `test-kerncap` skill + `kerncap` MCP | `uv`; ROCm 7.0+ with `hipcc`, `cmake`, HSA headers (builds `libkerncap.so` via scikit-build-core on first invocation); AMD GPU at runtime |
+| `metrix` | `metrix-profiling` skill + `metrix` MCP | `uv`; ROCm with `rocprofv3` on `PATH`; AMD GPU at runtime |
+| `linex` | `linex-profiling` skill + `linex` MCP | `uv`; ROCm 7.0+ with `rocprofv3` on `PATH`; AMD GPU at runtime |
+| `nexus` | `nexus-trace` skill + `nexus` MCP | `uv`; ROCm with HSA runtime and LLVM (`LLVM_INSTALL_DIR=/opt/rocm/llvm`); AMD GPU at runtime |
+| `accordo` | `accordo-validation` skill + `accordo` MCP | `uv`; ROCm toolchain (`hipcc`, `cmake`, `libdwarf-dev`, `libzstd-dev`); AMD GPU at runtime |
+| `rocm-mcp` | `hip-compiler`, `hip-docs`, `amd-smi`, `rocminfo` MCPs (no skill) | `uv`; ROCm with `amdsmi` Python bindings (`amd-smi`), `rocminfo` on `PATH`, `hipcc` on `PATH`; network access for `hip-docs` |
+| `uprof-mcp` | `uprof-profiler` MCP (no skill) | `uv`; AMD uProf on **x86** with `AMDuProfCLI` on `PATH` |
+
+All plugins require [`uv`](https://docs.astral.sh/uv/) on `PATH` — each MCP launches via `uv --directory ${CLAUDE_PLUGIN_ROOT} run <script>` (e.g. `metrix-mcp`, `hip-compiler-mcp`). To drop individual MCPs from a multi-server plugin (e.g. keep only `rocminfo` from `rocm-mcp`), edit the installed plugin's `.mcp.json`.
+
 ---
 
 ## Requirements

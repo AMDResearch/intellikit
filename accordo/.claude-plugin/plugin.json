@@ -1,0 +1,10 @@
+{
+  "name": "accordo",
+  "description": "Validate GPU kernel correctness by comparing reference and optimized outputs. Bundles the accordo-validation skill and the accordo MCP server.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Muhammad Awad",
+    "email": "muhaawad@amd.com"
+  },
+  "homepage": "https://github.com/AMDResearch/intellikit/tree/main/accordo"
+}
