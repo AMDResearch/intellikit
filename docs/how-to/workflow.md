@@ -1,11 +1,17 @@
 ---
-title: End-to-End Workflow
-description: "Profile, inspect, and validate: a complete GPU optimization workflow"
+myst:
+    html_meta:
+        "description": "Walk through the full IntelliKit workflow: profile a GPU application, inspect execution, optimize a kernel, and validate correctness using Metrix, Nexus, Linex, Kerncap, and Accordo."
+        "keywords": "IntelliKit, GPU workflow, ROCm, HIP, Metrix, Nexus, Linex, Kerncap, Accordo, kernel optimization"
 ---
 
-This guide walks through the full IntelliKit workflow: profiling a GPU application, inspecting execution, optimizing a kernel, and validating correctness.
+# Use IntelliKit end to end
+
+This topic explains the full IntelliKit workflow: profiling a GPU application, inspecting execution, optimizing a kernel, and validating correctness.
 
 ## The pipeline
+
+The IntelliKit workflow follows five stages.
 
 ```
 Isolate → Profile → Inspect → Optimize → Validate
@@ -13,13 +19,13 @@ Isolate → Profile → Inspect → Optimize → Validate
 
 1. **Isolate** a kernel with Kerncap
 2. **Profile** it with Metrix (hardware counters) and Linex (source-line timing)
-3. **Inspect** execution with Nexus (assembly + HIP source)
+3. **Inspect** execution details with Nexus (assembly + HIP source)
 4. **Optimize** the kernel in isolation
 5. **Validate** correctness with Accordo
 
 ## Step 1: Profile and identify the target kernel
 
-Start with Metrix to find the hot kernels and understand their performance characteristics.
+Use Metrix to find the hot kernels and understand their performance characteristics.
 
 ```python
 from metrix import Metrix
@@ -35,9 +41,9 @@ for kernel in results.kernels:
     print(f"{kernel.name}: {kernel.duration_us.avg:.2f} μs, BW util: {bw:.1f}%")
 ```
 
-## Step 2: Inspect what ran on the GPU
+## Step 2: Inspect GPU execution details
 
-Use Nexus to see the assembly and HIP source for each kernel.
+Use Nexus to inspect what ran on the GPU, including the assembly and HIP source for each kernel.
 
 ```python
 from nexus import Nexus
@@ -49,7 +55,7 @@ for kernel in trace:
 
 ## Step 3: Get source-line profiling
 
-Use Linex to map performance to specific source lines. Compile your application with `-g` for source-line mapping.
+Use Linex to map kernel performance to specific source lines. Compile your application with `-g` for source-line mapping.
 
 ```python
 from linex import Linex
@@ -62,9 +68,13 @@ for line in profiler.source_lines[:5]:
     print(f"  {line.total_cycles:,} cycles ({line.stall_percent:.1f}% stalled)")
 ```
 
-## Step 4: Isolate and optimize
+## Step 4: Isolate and optimize the kernel
 
 Use Kerncap to extract the kernel into a standalone reproducer, then iterate on it.
+
+```{note}
+This step requires `compile_commands.json` from your project's CMake build. Generate it by configuring CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`. Without it, `make recompile` is unavailable. See [Kerncap reference](../tools/kerncap.md) for details.
+```
 
 ```python
 from kerncap import Kerncap
@@ -89,9 +99,9 @@ variant = kc.replay(reproducer_dir, hsaco=os.path.join(reproducer_dir, "optimize
 print(f"Speedup: {baseline.timing_us / variant.timing_us:.2f}x")
 ```
 
-## Step 5: Validate correctness
+## Step 5: Validate kernel correctness
 
-Use Accordo to confirm the optimized kernel still produces correct results.
+Use Accordo to ensure the optimized kernel produces correct results.
 
 ```python
 from accordo import Accordo
@@ -107,9 +117,9 @@ else:
     print(result.summary())
 ```
 
-## Complete example
+## End-to-end workflow 
 
-Putting it all together:
+Here is a complete IntelliKit workflow for profiling, inspecting, and validating your GPU kernel optimizations with Metrix, Nexus, and Accordo:
 
 ```python
 from metrix import Metrix

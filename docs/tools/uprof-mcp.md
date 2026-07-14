@@ -1,18 +1,34 @@
 ---
-title: uProf MCP
-description: MCP server for AMD uProf — host-side CPU hotspot analysis
+myst:
+    html_meta:
+        "description": "uProf MCP is an MCP server that enables LLMs to profile x86 CPU applications using AMD uProf, identifying hotspot functions consuming CPU time."
+        "keywords": "uProf MCP, AMD uProf, CPU profiling, MCP server, LLM, hotspot analysis, x86"
 ---
 
-A Model Context Protocol (MCP) server for profiling x86 CPU applications using AMD uProf. Enables LLMs to analyze CPU performance hotspots through the AMD uProf profiler.
+# uProf MCP (IntelliKit)
+
+uProf MCP is a Model Context Protocol (MCP) server for using AMD uProf™ to profile x86 CPU applications. It enables LLMs to analyze CPU performance hotspots through the AMD uProf profiler.
 
 ## Features
+
+uProf MCP provides the following capabilities.
 
 - Profile CPU applications for hotspot analysis
 - Identify top functions consuming CPU time
 - Generate detailed profiling reports
 - Support for custom executable arguments
 
+## Requirements
+
+uProf MCP requires the following.
+
+- Python 3.10+
+- AMD uProf
+- x86 CPU architecture
+
 ## Installation
+
+Run the following commands from the `uprof_mcp` directory:
 
 ```bash
 # Using uv (recommended)
@@ -37,7 +53,7 @@ Add the following to your MCP client configuration:
 }
 ```
 
-Adjust `/path/to/uprof_mcp` to where you have cloned or installed the package.
+Replace `/path/to/uprof_mcp` with the actual path where you have cloned or installed the package.
 
 ## Python API (non-agentic)
 
@@ -62,6 +78,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
 ## LangChain example
 
+Run the following commands from the `uprof_mcp` directory:
+
 ```bash
 # Agentic mode (with LLM)
 python examples/uprof_profiler.py --executable ./my_app --args arg1 arg2
@@ -71,6 +89,8 @@ python examples/uprof_profiler.py --executable ./my_app --args arg1 arg2 --class
 ```
 
 ## API reference
+
+The following describes the uProf MCP Python API for non-agentic use.
 
 ### UProfProfiler class
 
@@ -83,18 +103,20 @@ profiler = UProfProfiler(logger=None)
 **Methods:**
 
 - `find_hotspots(output_dir, executable, executable_args)` → `UProfProfilerResult`
-  - `output_dir` (str | Path) — directory to store results
-  - `executable` (str | Path) — path to executable
-  - `executable_args` (list[str] | None) — arguments for the executable
-  - Returns `UProfProfilerResult` with `report_path` attribute
 
-## Requirements
+  **Parameters:**
 
-- Python >= 3.10
-- AMD uProf installed
-- x86 CPU architecture
+  - `output_dir` (str | Path): directory to store results
+  - `executable` (str | Path): path to executable
+  - `executable_args` (list[str] | None): arguments for the executable
+
+  **Returns:**
+  
+  - `UProfProfilerResult` with a `report_path` attribute
 
 ## Development
+
+Use the following commands for local development and testing.
 
 ```bash
 # Sync dependencies

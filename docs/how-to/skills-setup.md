@@ -1,20 +1,26 @@
 ---
-title: Skills Setup
-description: Install IntelliKit agent skills for Cursor, Claude Code, Codex, and GitHub Copilot
+myst:
+    html_meta:
+        "description": "Install IntelliKit SKILL.md playbooks for AI coding assistants like Cursor, Claude Code, Codex, and GitHub Copilot to profile, inspect, and validate GPU kernels."
+        "keywords": "IntelliKit, skills, SKILL.md, AI agent, Cursor, Claude, Codex, GitHub Copilot, GPU, ROCm"
 ---
 
-IntelliKit ships `SKILL.md` playbooks for five tools: Metrix, Accordo, Nexus, Linex, and Kerncap. These give AI coding assistants step-by-step instructions for profiling, inspecting, and validating GPU kernels.
+# Set up skills in IntelliKit
+
+IntelliKit ships `SKILL.md` playbooks for five tools: Metrix, Accordo, Nexus, Linex, and Kerncap. These playbooks provide AI coding assistants with step-by-step instructions for profiling, inspecting, and validating GPU kernels.
 
 ## What are skills?
 
 A skill is a markdown file (`SKILL.md`) that teaches an AI agent how to use a tool. When installed into a supported agent's skills directory, the agent can invoke the skill by name. Each skill includes:
 
-- When to activate (trigger conditions)
-- Step-by-step usage instructions
+- Conditions specifying when the skill should be triggered
+- Step-by-step instructions on how to use the tool
 - Expected inputs and outputs
 - Error handling guidance
 
 ## Available skills
+
+IntelliKit includes the following skills and their trigger conditions.
 
 | Skill | Tool | Triggers on |
 |-------|------|-------------|
@@ -26,15 +32,15 @@ A skill is a markdown file (`SKILL.md`) that teaches an AI agent how to use a to
 
 ## Quick install
 
+Run the following command to install all five skills into `.agents/skills/` in the current directory (the default target):
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
 ```
 
-This installs all 5 skills into `.agents/skills/` in the current directory (the default target).
-
 ## Choosing a target
 
-The `--target` flag controls where skills are written:
+Use the `--target` flag to specify where skills are installed. The table below outlines available targets and their respective paths:
 
 | Target | Project-level path | Global path (`--global`) |
 |--------|--------------------|--------------------------|
@@ -51,7 +57,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
   | bash -s -- --target cursor
 ```
 
-Skills land in `.cursor/skills/{tool}/SKILL.md`. Cursor's agent picks them up automatically.
+Skills are installed in `.cursor/skills/{tool}/SKILL.md`. The Cursor agent automatically detects and uses installed skills.
 
 ### Claude Code
 
@@ -60,7 +66,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
   | bash -s -- --target claude
 ```
 
-Skills land in `.claude/skills/{tool}/SKILL.md`.
+Skills are installed in `.claude/skills/{tool}/SKILL.md`.
 
 ### Codex
 
@@ -76,18 +82,20 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
   | bash -s -- --target github
 ```
 
-Skills land in `.github/agents/skills/{tool}/SKILL.md`.
+Skills are installed in `.github/agents/skills/{tool}/SKILL.md`.
 
 ## Global vs project-level
 
-By default, skills are installed into the current directory (project-level). Add `--global` to install into your home directory so they're available across all projects:
+By default, skills are installed into the current directory (project-level). To make skills available across all projects, use the `--global` flag to install them into your home directory:
 
 ```bash
 curl -sSL .../install/skills/install.sh | bash -s -- --target cursor --global
 # Installs to ~/.cursor/skills/
 ```
 
-## Other options
+## Additional install options
+
+The skills script also supports preview and custom source options.
 
 ```bash
 # Preview what would be installed
@@ -99,7 +107,7 @@ curl -sSL .../install/skills/install.sh | bash -s -- --base-url https://raw.gith
 
 ## Installed file structure
 
-After installation, you get one `SKILL.md` per tool:
+After installation, each tool gets its own `SKILL.md` file:
 
 ```
 .cursor/skills/          # or .claude/skills/, .agents/skills/, etc.

@@ -1,23 +1,37 @@
 ---
-title: Metrix
-description: "GPU Profiling. Decoded. Clean, human-readable metrics for AMD GPUs."
+myst:
+    html_meta:
+        "description": "Metrix translates raw AMD GPU hardware counters into human-readable metrics including HBM bandwidth, cache hit rates, compute throughput, and memory coalescing."
+        "keywords": "Metrix, AMD GPU, ROCm, GPU metrics, hardware counters, HBM bandwidth, cache, profiling"
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+# Metrix (IntelliKit)
 
-Clean, human-readable metrics for AMD GPUs. No more cryptic hardware counters.
+Metrix translates raw hardware counters into clean, human-readable metrics for AMD GPUs.
 
-## Why Metrix?
+## Features
 
-- **Clean Python API** with modern design
-- **Human-readable metrics** instead of raw counters
-- **Unit tested** and reliable
-- **20 metrics** across memory, cache, compute, and GPU utilization (availability varies by GPU architecture)
-- **Multi-run profiling**: automatic aggregation with min/max/avg statistics
-- **Kernel filtering**: efficient regex filtering at rocprofv3 level
-- **Multiple output formats**: text, JSON, CSV
+Metrix provides the following capabilities.
+
+- Modern Python API
+- Human-readable metrics instead of raw counters
+- Unit tested and reliable
+- 20 metrics across memory, cache, compute, and GPU utilization (availability varies by GPU architecture)
+- Multi-run profiling supporting automatic aggregation with min/max/avg statistics
+- Kernel filtering with efficient regex filtering at the `rocprofv3` level
+- Multiple output formats, including text, JSON, and CSV
+
+## Requirements
+
+Metrix requires the following.
+
+- Python >= 3.10
+- ROCm >= 7.0 with `rocprofv3`
+- pandas >= 1.5.0
 
 ## Installation
+
+Run the following commands from the `metrix` directory:
 
 ```bash
 pip install -e .
@@ -25,42 +39,45 @@ pip install -e .
 
 ## Quick start
 
-<Tabs syncKey="interface">
-  <TabItem label="CLI">
-    ```bash
-    # Profile with all metrics (architecture auto-detected)
-    metrix ./my_app
+Use the CLI for quick profiling, or the Python API for programmatic access.
 
-    # Time only (fast)
-    metrix --time-only -n 10 ./my_app
+### CLI
 
-    # Filter kernels by name
-    metrix --kernel matmul ./my_app
+```bash
+# Profile with all metrics (architecture auto-detected)
+metrix ./my_app
 
-    # Custom metrics
-    metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
+# Time only (fast)
+metrix --time-only -n 10 ./my_app
 
-    # Save to JSON
-    metrix -o results.json ./my_app
-    ```
-  </TabItem>
-  <TabItem label="Python API">
-    ```python
-    from metrix import Metrix
+# Filter kernels by name
+metrix --kernel matmul ./my_app
 
-    # Architecture is auto-detected
-    profiler = Metrix()
-    results = profiler.profile("./my_app", num_replays=5)
+# Custom metrics
+metrix --metrics memory.l2_hit_rate,memory.coalescing_efficiency ./my_app
 
-    for kernel in results.kernels:
-        print(f"{kernel.name}: {kernel.duration_us.avg:.2f} us")
-        for metric, stats in kernel.metrics.items():
-            print(f"  {metric}: {stats.avg:.2f}")
-    ```
-  </TabItem>
-</Tabs>
+# Save to JSON
+metrix -o results.json ./my_app
+```
+
+### Python API
+
+```python
+from metrix import Metrix
+
+# Architecture is auto-detected
+profiler = Metrix()
+results = profiler.profile("./my_app", num_replays=5)
+
+for kernel in results.kernels:
+    print(f"{kernel.name}: {kernel.duration_us.avg:.2f} us")
+    for metric, stats in kernel.metrics.items():
+        print(f"  {metric}: {stats.avg:.2f}")
+```
 
 ## Available metrics
+
+Metrix provides 20 metrics organized by category. Availability varies by GPU architecture.
 
 ### Compute
 
@@ -114,6 +131,8 @@ pip install -e .
 
 ## CLI reference
 
+The Metrix CLI supports the following commands and options.
+
 ```
 metrix [--version] <command> ...
 
@@ -139,9 +158,3 @@ metrix info <metric|profile> <name>
 ```
 
 GPU architecture is auto-detected using `rocminfo`.
-
-## Requirements
-
-- Python 3.9+
-- ROCm 6.x with rocprofv3
-- pandas >= 1.5.0

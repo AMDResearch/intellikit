@@ -1,0 +1,48 @@
+defaults:
+  numbered: False
+root: index
+subtrees:
+
+- entries:
+  - file: what-is-intellikit
+    title: What is IntelliKit?
+
+- caption: Install
+  entries:
+  - file: getting-started/installation
+    title: Install IntelliKit
+
+- caption: How to
+  entries:
+  - file: how-to/mcp-setup
+    title: Set up MCP
+  - file: how-to/skills-setup
+    title: Set up skills
+  - file: getting-started/quickstart
+    title: Profile an application
+  - file: how-to/workflow
+    title: Use IntelliKit end to end
+
+- caption: Reference
+  entries:
+  - file: tools/kerncap
+    title: Kerncap
+  - file: tools/metrix
+    title: Metrix
+  - file: tools/linex
+    title: Linex
+  - file: tools/nexus
+    title: Nexus
+  - file: tools/accordo
+    title: Accordo
+  - file: tools/rocm-mcp
+    title: ROCm MCP
+  - file: tools/uprof-mcp
+    title: uProf MCP
+
+- caption: About
+  entries:
+  - file: contributing
+    title: Contributing
+  - file: License
+    title: License

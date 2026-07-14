@@ -1,22 +1,34 @@
 ---
-title: Accordo
-description: Automated GPU kernel validation — prove your optimized kernel is still correct
+myst:
+    html_meta:
+        "description": "Accordo validates GPU kernel correctness by capturing and comparing outputs from reference and optimized implementations on AMD GPUs with configurable tolerance."
+        "keywords": "Accordo, AMD GPU, ROCm, kernel validation, correctness, optimization, HIP, KernelDB"
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+# Accordo (IntelliKit)
 
 Accordo automatically validates GPU kernel correctness by capturing and comparing kernel outputs from reference and optimized implementations.
 
 ## Features
 
-- **Automatic kernel extraction**: Uses KernelDB to extract kernel signatures from binaries
-- **Snapshot-based validation**: Capture once, compare against multiple optimizations
-- **Configurable tolerance**: Set precision requirements for floating-point comparisons (`atol`, `rtol`, `equal_nan`)
-- **Performance tracking**: Measure and compare execution times
+Accordo provides the following capabilities.
+
+- **Automatic kernel extraction**: uses KernelDB to extract kernel signatures from binaries
+- **Snapshot-based validation**: captures kernel outputs once and validates against multiple optimizations
+- **Configurable tolerance**: sets precision requirements for floating-point comparisons (`atol`, `rtol`, `equal_nan`)
+- **Performance tracking**: measures and compares execution times
+
+## Requirements
+
+Accordo requires the following.
+
+- Python >= 3.10
+- ROCm >= 7.0
+- KernelDB (automatically installed)
 
 ## Installation
 
-Accordo compiles C++ code (via KernelDB) during installation. You need `cmake`, `libdwarf-dev`, and `libzstd-dev` first:
+Accordo compiles C++ code (through KernelDB) during installation. Ensure `cmake`, `libdwarf-dev`, and `libzstd-dev` are pre-installed:
 
 ```bash
 # System prerequisites (Debian/Ubuntu)
@@ -28,39 +40,42 @@ pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=acco
 
 ## Quick start
 
-<Tabs syncKey="interface">
-  <TabItem label="Python API">
-    ```python
-    from accordo import Accordo
+Use the Python API or CLI to validate GPU kernels.
 
-    # Create validator for a specific kernel
-    validator = Accordo(binary="./app_ref", kernel_name="reduce_sum")
+### Python API
 
-    # Capture snapshots from reference and optimized binaries
-    ref = validator.capture_snapshot(binary="./app_ref")
-    opt = validator.capture_snapshot(binary="./app_opt")
+```python
+from accordo import Accordo
 
-    # Compare with allclose-style controls
-    result = validator.compare_snapshots(ref, opt, atol=1e-6, rtol=1e-5)
+# Create validator for a specific kernel
+validator = Accordo(binary="./app_ref", kernel_name="reduce_sum")
 
-    if result.is_valid:
-        print(f"PASS: {result.num_arrays_validated} arrays matched")
-    else:
-        print(result.summary())
-    ```
-  </TabItem>
-  <TabItem label="CLI">
-    ```bash
-    accordo validate \
-      --kernel-name reduce_sum \
-      --ref-binary ./app_ref \
-      --opt-binary ./app_opt \
-      --atol 1e-6 --rtol 1e-5
-    ```
-  </TabItem>
-</Tabs>
+# Capture snapshots from reference and optimized binaries
+ref = validator.capture_snapshot(binary="./app_ref")
+opt = validator.capture_snapshot(binary="./app_opt")
+
+# Compare with allclose-style controls
+result = validator.compare_snapshots(ref, opt, atol=1e-6, rtol=1e-5)
+
+if result.is_valid:
+    print(f"PASS: {result.num_arrays_validated} arrays matched")
+else:
+    print(result.summary())
+```
+
+### CLI
+
+```bash
+accordo validate \
+  --kernel-name reduce_sum \
+  --ref-binary ./app_ref \
+  --opt-binary ./app_opt \
+  --atol 1e-6 --rtol 1e-5
+```
 
 ### Testing multiple optimizations
+
+You can capture a single reference snapshot and compare it against multiple optimized variants.
 
 ```python
 validator = Accordo(binary="./ref", kernel_name="matmul")
@@ -73,6 +88,8 @@ for opt_binary in ["./opt_v1", "./opt_v2", "./opt_v3"]:
 ```
 
 ## CLI reference
+
+The Accordo CLI provides the following options.
 
 ```
 accordo validate \
@@ -91,14 +108,16 @@ accordo validate \
 
 ## API reference
 
+The following describes the Accordo Python API classes and methods.
+
 ### `Accordo(binary, kernel_name, **options)`
 
 **Parameters:**
-- `binary` (str | list) — binary path to extract kernel signature from
-- `kernel_name` (str) — name of the kernel to validate
-- `kernel_args` (list[tuple] | None) — manual kernel args as `[(name, type), ...]`. Auto-extracted if None.
+- `binary` (str | list): binary path to extract the kernel signature from
+- `kernel_name` (str): name of the kernel to validate
+- `kernel_args` (list[tuple] | None): manual kernel arguments such as `[(name, type), ...]`. Auto-extracted if set to `None`.
 - `working_directory` (str) — working directory (default: `"."`)
-- `force_rebuild` (bool) — force rebuild even if library exists (default: `False`)
+- `force_rebuild` (bool): force rebuild even if the library exists (default: `False`)
 - `parallel_jobs` (int) — number of parallel build jobs (default: `16`)
 - `log_level` (str) — logging level (default: `"WARNING"`)
 
@@ -123,13 +142,8 @@ accordo validate \
 | `is_valid` | `bool` | Whether validation passed |
 | `num_arrays_validated` | `int` | Total arrays checked |
 | `num_mismatches` | `int` | Failed comparisons |
-| `mismatches` | `list[ArrayMismatch]` | Detailed mismatch info |
+| `mismatches` | `list[ArrayMismatch]` | Detailed mismatch information |
 
 **Methods:**
-- `summary()` -> `str` — human-readable validation summary
+- `summary()` -> `str`: human-readable validation summary
 
-## Requirements
-
-- Python >= 3.8
-- ROCm toolchain
-- KernelDB (automatically installed)

@@ -1,9 +1,20 @@
 ---
-title: Linex
-description: Source-level GPU performance profiling for AMD ROCm
+myst:
+    html_meta:
+        "description": "Linex maps GPU performance metrics to your HIP source code lines, identifying hotspots, stall cycles, and idle execution on AMD GPUs with ROCm."
+        "keywords": "Linex, AMD GPU, ROCm, source-line profiling, GPU hotspot, stall cycles, HIP, instruction analysis"
 ---
 
-Map GPU performance metrics to your source code lines.
+# Linex (IntelliKit)
+
+Linex maps GPU performance metrics directly to the corresponding lines of your source code.
+
+## Requirements
+
+Linex requires the following.
+
+- Python >= 3.10
+- ROCm >= 7.0 with `rocprofv3`
 
 ## Installation
 
@@ -12,6 +23,8 @@ pip install -e .
 ```
 
 ## Quick start
+
+The following example profiles an application and prints the five hottest source lines.
 
 ```python
 from linex import Linex
@@ -27,27 +40,31 @@ for line in profiler.source_lines[:5]:
 
 ## What you get
 
-Instruction-level metrics mapped to source lines:
+Linex provides instruction-level GPU performance metrics mapped to corresponding source lines:
 
 | Metric | Description |
 |--------|-------------|
 | `latency_cycles` | Total GPU cycles |
-| `stall_cycles` | Cycles waiting (memory, dependencies) |
+| `stall_cycles` | Cycles spent waiting (memory, dependencies) |
 | `idle_cycles` | Unused execution slots |
-| `execution_count` | How many times it ran |
-| `instruction_address` | Where in GPU memory |
+| `execution_count` | Number of times the instruction was executed |
+| `instruction_address` | Memory address of the GPU instruction |
 
 ## Compiling with and without `-g`
+
+The availability of source-line data depends on whether your application is compiled with debug symbols.
 
 | Build | `instructions` | `source_lines` | `file` / `line` |
 |-------|----------------|-----------------|------------------|
 | **With `-g`** | Populated (ISA + cycles) | Populated (aggregated by file:line) | Real file path and line number |
 | **Without `-g`** | Populated (ISA + cycles) | Empty | `""` and `0` |
 
-- **Use `-g`** when you want source-line mapping: ISA instructions tied to `file:line`, and `source_lines` aggregated by source line.
-- **Omit `-g`** when you only need assembly-level metrics: you still get every instruction with `isa`, `latency_cycles`, `stall_cycles`, etc.
+- Use `-g` when you need source-line mapping. This generates ISA instructions tied to `file:line`, and `source_lines` aggregated by source line.
+- Omit `-g` when you only need assembly-level metrics. You'll still receive data for each instruction, including `isa`, `latency_cycles`, `stall_cycles`, and so on.
 
 ## API
+
+The Linex API exposes the profiler class, source line objects, and instruction data objects.
 
 ### Linex class
 
@@ -60,15 +77,15 @@ profiler = Linex(
 ```
 
 **Methods:**
-- `profile(command, kernel_filter=None)` — run profiling
+- `profile(command, kernel_filter=None)`: run profiling
 
 **Properties:**
-- `source_lines` — `List[SourceLine]` sorted by total_cycles
-- `instructions` — `List[InstructionData]`
+- `source_lines`: `List[SourceLine]` sorted by `total_cycles`
+- `instructions`: `List[InstructionData]`
 
-### SourceLine
+### `SourceLine`
 
-Aggregated metrics for one source code line.
+Aggregated performance metrics for a single source code line.
 
 ```python
 line.file                  # Source file path
@@ -81,9 +98,9 @@ line.instructions          # List of ISA instructions
 line.stall_percent         # Convenience: stall_cycles / total_cycles * 100
 ```
 
-### InstructionData
+### `InstructionData`
 
-Per-ISA-instruction metrics.
+Performance metrics for a single ISA instruction.
 
 ```python
 inst.isa                   # ISA instruction text
@@ -98,6 +115,8 @@ inst.stall_percent         # Convenience: stall_cycles / latency_cycles * 100
 ```
 
 ## Examples
+
+The following examples demonstrate common Linex analysis patterns.
 
 ```python
 # Find memory-bound lines
@@ -117,8 +136,3 @@ for line in profiler.source_lines[:1]:
     for inst in line.instructions:
         print(f"{inst.isa}: {inst.latency_cycles} cycles")
 ```
-
-## Requirements
-
-- Python >= 3.8
-- ROCm 7.0+ with `rocprofv3`
