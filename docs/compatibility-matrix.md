@@ -1,4 +1,4 @@
-# Compatibility matrix
+# IntelliKit compatibility matrix
 
 This topic lists the known version requirements for IntelliKit.
 
