@@ -1,6 +1,6 @@
 # IntelliKit compatibility matrix
 
-This topic lists the known version requirements for IntelliKit.
+This topic lists the hardware and software configurations for IntelliKit.
 
 ## Requirements
 
