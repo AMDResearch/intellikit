@@ -1,4 +1,4 @@
-# Release notes
+# IntelliKit release notes
 
 This topic summarizes the features included in each IntelliKit release.
 
