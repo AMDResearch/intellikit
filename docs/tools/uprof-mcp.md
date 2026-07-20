@@ -5,7 +5,7 @@ myst:
         "keywords": "uProf MCP, AMD uProf, CPU profiling, MCP server, LLM, hotspot analysis, x86"
 ---
 
-# uProf MCP (IntelliKit)
+# uProf MCP
 
 uProf MCP is a Model Context Protocol (MCP) server for using AMD uProf™ to profile x86 CPU applications. It enables LLMs to analyze CPU performance hotspots through the AMD uProf profiler.
 

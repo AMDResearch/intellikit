@@ -5,7 +5,7 @@ myst:
         "keywords": "Accordo, AMD GPU, ROCm, kernel validation, correctness, optimization, HIP, KernelDB"
 ---
 
-# Accordo (IntelliKit)
+# Accordo
 
 Accordo automatically validates GPU kernel correctness by capturing and comparing kernel outputs from reference and optimized implementations.
 

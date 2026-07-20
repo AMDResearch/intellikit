@@ -5,7 +5,7 @@ myst:
         "keywords": "Linex, AMD GPU, ROCm, source-line profiling, GPU hotspot, stall cycles, HIP, instruction analysis"
 ---
 
-# Linex (IntelliKit)
+# Linex
 
 Linex maps GPU performance metrics directly to the corresponding lines of your source code.
 

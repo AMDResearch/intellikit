@@ -5,7 +5,7 @@ myst:
         "keywords": "Kerncap, GPU kernel, AMD GPU, ROCm, HIP, Triton, kernel isolation, reproducer, HSACO"
 ---
 
-# Kerncap (IntelliKit)
+# Kerncap
 
 Kerncap profiles a running application, intercepts a target kernel dispatch, captures its complete runtime state (full device memory snapshot, kernarg buffer, and HSA Code Object (HSACO)), and generates a standalone reproducer that can replay the kernel in isolation using virtual address (VA)-faithful HSA dispatch.
 

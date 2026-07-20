@@ -5,7 +5,7 @@ myst:
         "keywords": "Metrix, AMD GPU, ROCm, GPU metrics, hardware counters, HBM bandwidth, cache, profiling"
 ---
 
-# Metrix (IntelliKit)
+# Metrix
 
 Metrix translates raw hardware counters into clean, human-readable metrics for AMD GPUs.
 
