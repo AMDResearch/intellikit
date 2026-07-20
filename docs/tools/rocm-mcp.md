@@ -5,7 +5,7 @@ myst:
         "keywords": "ROCm MCP, HIP compiler, MCP server, LLM, AMD GPU, rocminfo, HIP documentation, Model Context Protocol"
 ---
 
-# ROCm MCP (IntelliKit)
+# ROCm MCP
 
 ROCm MCP is a collection of Model Context Protocol (MCP) servers for interacting with the AMD ROCm ecosystem. It provides tools for LLMs to compile HIP code, access documentation, and query system information.
 
