@@ -27,7 +27,7 @@ Kerncap operates in five stages to produce a standalone kernel reproducer.
 
 ## Installation
 
-Kerncap requires a ROCm 7.0+ environment to build its native library.
+Kerncap requires a ROCm 7.2.0 (or later) environment to build its native library.
 
 ### Prerequisites
 
