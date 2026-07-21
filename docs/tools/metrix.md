@@ -26,7 +26,7 @@ Metrix provides the following capabilities.
 Metrix requires the following.
 
 - Python >= 3.10
-- ROCm >= 7.2.0 with `rocprofv3`
+- ROCm 7.2.x with `rocprofv3`
 - pandas >= 1.5.0
 
 ## Installation
