@@ -27,11 +27,11 @@ Kerncap operates in five stages to produce a standalone kernel reproducer.
 
 ## Installation
 
-Kerncap requires a ROCm 7.2.0 (or later) environment to build its native library.
+Kerncap requires a ROCm 7.2.x environment to build its native library.
 
 ### Prerequisites
 
-Kerncap builds `libkerncap.so` from source against the host ROCm 7.0+ environment. The following components are included in standard ROCm images:
+Kerncap builds `libkerncap.so` from source against the host ROCm 7.2.x environment. The following components are included in standard ROCm images:
 
 - `hipcc`
 - `cmake`
