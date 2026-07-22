@@ -15,7 +15,7 @@ Before configuring MCP servers, ensure you have the following installed.
 
 - [IntelliKit installation](../getting-started/installation.md)
 - `uv` (recommended) or `pip`
-- [ROCm installation](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/) for GPU-related MCP servers
+- [ROCm installation](https://rocm.docs.amd.com/projects/install-on-linux/en/docs-7.2.0/) for GPU-related MCP servers
 - AMD uProf for `uprof-profiler-mcp`
 
 ## Full configuration

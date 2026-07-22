@@ -7,8 +7,7 @@ IntelliKit documentation
 
 IntelliKit is a set of Python tools designed for AMD-centric performance analysis and validation. For more information, see :doc:`What is IntelliKit <what-is-intellikit>`
 
-IntelliKit is a component of the `Hyperloom <https://github.com/AMD-AGI/Hyperloom>`_ toolkit. The IntelliKit source code is
-hosted in the `AMDResearch/intellikit <https://github.com/AMDResearch/intellikit>`_ GitHub repository.
+The IntelliKit source code is hosted in the `AMDResearch/intellikit <https://github.com/AMDResearch/intellikit>`_ GitHub repository.
 
 .. grid:: 2
    :gutter: 3
