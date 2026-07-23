@@ -8,19 +8,7 @@ version_number = "0.1.0"
 
 html_theme = "rocm_docs_theme"
 html_theme_options = {
-    "flavor": "generic",
-    "header_title": f"IntelliKit {version_number}",
-    "header_link": False,
-    "nav_secondary_items": {
-        "Hyperloom": "https://rocm.docs.amd.com/projects/hyperloom/en/latest/index.html",
-        "GitHub": "https://github.com/AMDResearch/intellikit",
-        "Blogs": "https://rocm.blogs.amd.com/",
-        "ROCm Developer Hub": "https://www.amd.com/en/developer/resources/rocm-hub.html",
-        "Instinct Docs": "https://instinct.docs.amd.com/",
-        "Infinity Hub": "https://www.amd.com/en/developer/resources/infinity-hub.html",
-        "Support": "https://github.com/AMDResearch/intellikit/issues/new/choose",
-    },
-    "link_main_doc": False,
+    "flavor": "hyperloom",
 }
 
 # for PDF output on Read the Docs
