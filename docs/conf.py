@@ -11,6 +11,8 @@ html_theme_options = {
     "flavor": "hyperloom",
     "header_title": f"IntelliKit {version_number}",
     "header_link": False,
+    "use_repository_button": True,
+    "use_issues_button": True,
     "nav_secondary_items": {
         "Hyperloom": "https://rocm.docs.amd.com/projects/hyperloom/en/latest/index.html",
         "GitHub": "https://github.com/AMDResearch/intellikit",
