@@ -8,7 +8,7 @@ version_number = "0.1.0"
 
 html_theme = "rocm_docs_theme"
 html_theme_options = {
-    "flavor": "generic",
+    "flavor": "hyperloom",
     "header_title": f"IntelliKit {version_number}",
     "header_link": False,
     "nav_secondary_items": {
@@ -27,6 +27,8 @@ html_theme_options = {
 project = "IntelliKit"
 author = "Advanced Micro Devices, Inc."
 copyright = "Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved."  # noqa: A001
+version = version_number
+release = version_number
 
 external_toc_path = "./sphinx/_toc.yml"
 
