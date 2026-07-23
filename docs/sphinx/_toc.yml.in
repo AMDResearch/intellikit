@@ -43,6 +43,8 @@ subtrees:
     title: ROCm MCP
   - file: tools/uprof-mcp
     title: uProf MCP
+  - url: https://rocm.docs.amd.com/projects/hyperloom/en/latest/index.html
+    title: Hyperloom
 
 - caption: About
   entries:
