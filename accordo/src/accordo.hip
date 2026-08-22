@@ -813,8 +813,19 @@ hsa_status_t accordo::hsa_amd_queue_create(hsa_agent_t agent,
 
     // queue_size_bytes is a byte count; hsa_amd_queue_intercept_create wants a
     // packet count. An AQL packet is 64 bytes.
-    const uint32_t size_in_packets =
-        desc->queue_size_bytes / static_cast<uint32_t>(sizeof(hsa_kernel_dispatch_packet_t));
+    constexpr uint32_t kPacketSize = static_cast<uint32_t>(sizeof(hsa_kernel_dispatch_packet_t));
+    const uint32_t bytes = desc->queue_size_bytes;
+    const bool power_of_two = bytes != 0 && (bytes & (bytes - 1)) == 0;
+
+    // A size the runtime would reject must still be rejected. Dividing it down
+    // to a packet count would launder it into a legal one -- 65537 becomes
+    // 1024 packets and succeeds -- so the app never learns its request was
+    // invalid. Hand those to the runtime and let it give the real error.
+    if (!power_of_two || bytes % kPacketSize != 0) {
+      record(hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1));
+      continue;
+    }
+    const uint32_t size_in_packets = bytes / kPacketSize;
 
     hsa_queue_t* queue = nullptr;
     const auto result = create_intercept_queue(agent,
