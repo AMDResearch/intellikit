@@ -788,6 +788,18 @@ hsa_status_t accordo::hsa_amd_queue_create(hsa_agent_t agent,
   LOG_DETAIL("Creating intelliperf-rt queue via hsa_amd_queue_create");
 
   auto instance = get_instance();
+
+  // The runtime does not stop at the first failure. Per the API contract,
+  // queues that were created stay valid, a descriptor that failed is left with
+  // a NULL queue, and the caller is handed the first error. Returning early
+  // here would abandon descriptors the runtime would have created.
+  hsa_status_t first_error = HSA_STATUS_SUCCESS;
+  const auto record = [&first_error](hsa_status_t status) {
+    if (status != HSA_STATUS_SUCCESS && first_error == HSA_STATUS_SUCCESS) {
+      first_error = status;
+    }
+  };
+
   for (uint32_t i = 0; i < num_descs; ++i) {
     hsa_amd_queue_create_desc_t* desc = &descs[i];
 
@@ -795,10 +807,7 @@ hsa_status_t accordo::hsa_amd_queue_create(hsa_agent_t agent,
     // to the runtime untouched -- intercepting them would gain us nothing and
     // AIE is not implemented by the runtime yet.
     if (desc->engine_type != HSA_AMD_QUEUE_ENGINE_COMPUTE) {
-      const auto result = hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
-      if (result != HSA_STATUS_SUCCESS) {
-        return result;
-      }
+      record(hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1));
       continue;
     }
 
@@ -808,28 +817,26 @@ hsa_status_t accordo::hsa_amd_queue_create(hsa_agent_t agent,
         desc->queue_size_bytes / static_cast<uint32_t>(sizeof(hsa_kernel_dispatch_packet_t));
 
     hsa_queue_t* queue = nullptr;
-    auto result = create_intercept_queue(agent,
-                                         size_in_packets,
-                                         desc->engine.compute.type,
-                                         desc->callback,
-                                         desc->callback_data,
-                                         desc->engine.compute.private_segment_size,
-                                         0,
-                                         &queue);
-    if (result != HSA_STATUS_SUCCESS) {
-      // An intercept queue is an optimisation, not a requirement. Fall back to
-      // the runtime so the application still runs, uninstrumented.
-      LOG_ERROR("Failed to create intercept queue {}, falling back",
-                static_cast<int>(result));
-      result = hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
-      if (result != HSA_STATUS_SUCCESS) {
-        return result;
-      }
+    const auto result = create_intercept_queue(agent,
+                                               size_in_packets,
+                                               desc->engine.compute.type,
+                                               desc->callback,
+                                               desc->callback_data,
+                                               desc->engine.compute.private_segment_size,
+                                               0,
+                                               &queue);
+    if (result == HSA_STATUS_SUCCESS) {
+      desc->queue = queue;
       continue;
     }
-    desc->queue = queue;
+
+    // An intercept queue is an optimisation, not a requirement. Fall back to
+    // the runtime so the application still runs, uninstrumented. The runtime
+    // writes desc->queue itself, including the NULL on failure.
+    LOG_ERROR("Failed to create intercept queue {}, falling back", static_cast<int>(result));
+    record(hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1));
   }
-  return HSA_STATUS_SUCCESS;
+  return first_error;
 }
 #endif
 
