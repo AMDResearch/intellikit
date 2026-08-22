@@ -232,6 +232,26 @@ class accordo {
                                        uint32_t private_segment_size,
                                        uint32_t group_segment_size,
                                        hsa_queue_t** queue);
+  // Shared by both queue-creation hooks: swaps the runtime's queue for an
+  // intercept queue and registers our packet callback on it.
+  static hsa_status_t create_intercept_queue(hsa_agent_t agent,
+                                             uint32_t size,
+                                             hsa_queue_type32_t type,
+                                             void (*callback)(hsa_status_t status,
+                                                              hsa_queue_t* source,
+                                                              void* data),
+                                             void* data,
+                                             uint32_t private_segment_size,
+                                             uint32_t group_segment_size,
+                                             hsa_queue_t** queue);
+#ifdef ACCORDO_HAVE_HSA_AMD_QUEUE_CREATE
+  // ROCm 10 added this entry point and HIP moved its compute queue onto it.
+  // hsa_queue_create is still exported and still used, so both slots stay
+  // hooked rather than one replacing the other.
+  static hsa_status_t hsa_amd_queue_create(hsa_agent_t agent,
+                                           hsa_amd_queue_create_desc_t* descs,
+                                           uint32_t num_descs);
+#endif
   static hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t pool,
                                                    size_t size,
                                                    uint32_t flags,

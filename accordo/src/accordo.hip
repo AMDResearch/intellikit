@@ -571,6 +571,12 @@ void accordo::hook_api() {
   api_table_->core_->hsa_queue_create_fn = accordo::hsa_queue_create;
   api_table_->core_->hsa_queue_destroy_fn = accordo::hsa_queue_destroy;
 
+#ifdef ACCORDO_HAVE_HSA_AMD_QUEUE_CREATE
+  // ROCm 10 moved HIP's compute queue onto hsa_amd_queue_create. Without this
+  // the hook above is never entered and no dispatch packet is ever seen.
+  api_table_->amd_ext_->hsa_amd_queue_create_fn = accordo::hsa_amd_queue_create;
+#endif
+
   api_table_->amd_ext_->hsa_amd_memory_pool_allocate_fn =
       accordo::hsa_amd_memory_pool_allocate;
   api_table_->core_->hsa_memory_allocate_fn = accordo::hsa_memory_allocate;
@@ -709,18 +715,16 @@ hsa_status_t accordo::hsa_memory_allocate(hsa_region_t region, size_t size, void
   return result;
 }
 
-hsa_status_t accordo::hsa_queue_create(hsa_agent_t agent,
-                                       uint32_t size,
-                                       hsa_queue_type32_t type,
-                                       void (*callback)(hsa_status_t status,
-                                                        hsa_queue_t* source,
-                                                        void* data),
-                                       void* data,
-                                       uint32_t private_segment_size,
-                                       uint32_t group_segment_size,
-                                       hsa_queue_t** queue) {
-  LOG_DETAIL("Creating intelliperf-rt queue");
-
+hsa_status_t accordo::create_intercept_queue(hsa_agent_t agent,
+                                             uint32_t size,
+                                             hsa_queue_type32_t type,
+                                             void (*callback)(hsa_status_t status,
+                                                              hsa_queue_t* source,
+                                                              void* data),
+                                             void* data,
+                                             uint32_t private_segment_size,
+                                             uint32_t group_segment_size,
+                                             hsa_queue_t** queue) {
   hsa_status_t result = HSA_STATUS_SUCCESS;
   auto instance = get_instance();
   try {
@@ -736,18 +740,18 @@ hsa_status_t accordo::hsa_queue_create(hsa_agent_t agent,
                           queue);
 
     if (result == HSA_STATUS_SUCCESS) {
-      auto result = instance->add_queue(*queue, agent);
-      if (result != HSA_STATUS_SUCCESS) {
-        LOG_ERROR("Failed to add queue {} ", static_cast<int>(result));
+      auto status = instance->add_queue(*queue, agent);
+      if (status != HSA_STATUS_SUCCESS) {
+        LOG_ERROR("Failed to add queue {} ", static_cast<int>(status));
       }
-      result = hsa_ext_call(instance,
+      status = hsa_ext_call(instance,
                             hsa_amd_queue_intercept_register,
                             *queue,
                             accordo::on_submit_packet,
                             reinterpret_cast<void*>(*queue));
-      if (result != HSA_STATUS_SUCCESS) {
-        LOG_ERROR("Failed to register intercept callback with result of ",
-                  static_cast<int>(result));
+      if (status != HSA_STATUS_SUCCESS) {
+        LOG_ERROR("Failed to register intercept callback with result of {}",
+                  static_cast<int>(status));
       }
     }
   } catch (const std::exception& e) {
@@ -755,6 +759,80 @@ hsa_status_t accordo::hsa_queue_create(hsa_agent_t agent,
   }
   return result;
 }
+
+hsa_status_t accordo::hsa_queue_create(hsa_agent_t agent,
+                                       uint32_t size,
+                                       hsa_queue_type32_t type,
+                                       void (*callback)(hsa_status_t status,
+                                                        hsa_queue_t* source,
+                                                        void* data),
+                                       void* data,
+                                       uint32_t private_segment_size,
+                                       uint32_t group_segment_size,
+                                       hsa_queue_t** queue) {
+  LOG_DETAIL("Creating intelliperf-rt queue");
+  return create_intercept_queue(agent,
+                                size,
+                                type,
+                                callback,
+                                data,
+                                private_segment_size,
+                                group_segment_size,
+                                queue);
+}
+
+#ifdef ACCORDO_HAVE_HSA_AMD_QUEUE_CREATE
+hsa_status_t accordo::hsa_amd_queue_create(hsa_agent_t agent,
+                                           hsa_amd_queue_create_desc_t* descs,
+                                           uint32_t num_descs) {
+  LOG_DETAIL("Creating intelliperf-rt queue via hsa_amd_queue_create");
+
+  auto instance = get_instance();
+  for (uint32_t i = 0; i < num_descs; ++i) {
+    hsa_amd_queue_create_desc_t* desc = &descs[i];
+
+    // Only compute queues carry AQL dispatch packets. SDMA and AIE queues go
+    // to the runtime untouched -- intercepting them would gain us nothing and
+    // AIE is not implemented by the runtime yet.
+    if (desc->engine_type != HSA_AMD_QUEUE_ENGINE_COMPUTE) {
+      const auto result = hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
+      if (result != HSA_STATUS_SUCCESS) {
+        return result;
+      }
+      continue;
+    }
+
+    // queue_size_bytes is a byte count; hsa_amd_queue_intercept_create wants a
+    // packet count. An AQL packet is 64 bytes.
+    const uint32_t size_in_packets =
+        desc->queue_size_bytes / static_cast<uint32_t>(sizeof(hsa_kernel_dispatch_packet_t));
+
+    hsa_queue_t* queue = nullptr;
+    auto result = create_intercept_queue(agent,
+                                         size_in_packets,
+                                         desc->engine.compute.type,
+                                         desc->callback,
+                                         desc->callback_data,
+                                         desc->engine.compute.private_segment_size,
+                                         0,
+                                         &queue);
+    if (result != HSA_STATUS_SUCCESS) {
+      // An intercept queue is an optimisation, not a requirement. Fall back to
+      // the runtime so the application still runs, uninstrumented.
+      LOG_ERROR("Failed to create intercept queue {}, falling back",
+                static_cast<int>(result));
+      result = hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
+      if (result != HSA_STATUS_SUCCESS) {
+        return result;
+      }
+      continue;
+    }
+    desc->queue = queue;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+#endif
+
 hsa_status_t accordo::hsa_queue_destroy(hsa_queue_t* queue) {
   LOG_DETAIL("Destroying intelliperf-rt queue");
   return hsa_core_call(singleton_, hsa_queue_destroy, queue);
