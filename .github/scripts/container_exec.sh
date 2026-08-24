@@ -97,11 +97,18 @@ elif [ "$CONTAINER_RUNTIME" = "docker" ]; then
     # to delete those files when it checks out again, so hand them back before
     # exiting -- including when the command failed. Apptainer does not need
     # this: it runs as the invoking user.
-    OWNER="$(id -u):$(id -g)"
     EXIT_CODE=0
-    $RUN_CMD "$IMAGE_NAME" -c \
-        "rc=0; { set -e; $COMMAND; } || rc=\$?; \
-         chown -R ${OWNER} /intellikit_workspace 2>/dev/null || true; \
-         exit \$rc" || EXIT_CODE=$?
+    $RUN_CMD "$IMAGE_NAME" -c "set -e; $COMMAND" || EXIT_CODE=$?
+
+    # The container runs as root, so anything it wrote into the bind-mounted
+    # workspace is root-owned, and actions/checkout -- running as an ordinary
+    # user -- cannot delete it on the next job. Hand ownership back in a
+    # separate invocation: wrapping the command instead would splice shell
+    # syntax into a caller-supplied, possibly multi-line, command string.
+    # Runs after failures too, since a failed job still leaves artifacts.
+    docker run --rm -v "${PWD}:/intellikit_workspace" \
+        --entrypoint chown "$IMAGE_NAME" \
+        -R "$(id -u):$(id -g)" /intellikit_workspace 2>/dev/null || true
+
     exit $EXIT_CODE
 fi
