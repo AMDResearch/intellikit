@@ -16,6 +16,15 @@ if [ -z "$COMMAND" ]; then
     exit 1
 fi
 
+# Apptainer being installed does not mean it can build. Building runs %post as
+# root inside a user namespace: a setuid starter does that directly, otherwise
+# it needs a uid mapping, which AppArmor can refuse even when the userns
+# sysctls read permissive. Probe the operation rather than the binary.
+apptainer_can_build() {
+    [ -u /usr/libexec/apptainer/bin/starter-suid ] && return 0
+    unshare --user --map-root-user true 2>/dev/null
+}
+
 # See container_build.sh for why an explicit override exists.
 if [ -n "$CONTAINER_RUNTIME" ]; then
     if ! command -v "$CONTAINER_RUNTIME" &> /dev/null; then
@@ -23,12 +32,20 @@ if [ -n "$CONTAINER_RUNTIME" ]; then
         exit 1
     fi
     echo "[INFO] Using $CONTAINER_RUNTIME (forced via CONTAINER_RUNTIME)"
-elif command -v apptainer &> /dev/null; then
+elif command -v apptainer &> /dev/null && apptainer_can_build; then
     CONTAINER_RUNTIME="apptainer"
     echo "[INFO] Using Apptainer"
 elif command -v docker &> /dev/null; then
     CONTAINER_RUNTIME="docker"
-    echo "[INFO] Using Docker"
+    if command -v apptainer &> /dev/null; then
+        echo "[INFO] Using Docker (Apptainer is installed but cannot build:" \
+             "no setuid starter and no usable user namespace)"
+    else
+        echo "[INFO] Using Docker"
+    fi
+elif command -v apptainer &> /dev/null; then
+    CONTAINER_RUNTIME="apptainer"
+    echo "[WARN] Using Apptainer, which cannot build on this host, and Docker is absent"
 else
     echo "[ERROR] Neither Apptainer nor Docker is available" >&2
     exit 1
