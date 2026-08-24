@@ -92,7 +92,16 @@ elif [ "$CONTAINER_RUNTIME" = "docker" ]; then
     RUN_CMD="$RUN_CMD -e HOME=/intellikit_workspace"
     RUN_CMD="$RUN_CMD --entrypoint bash"
 
+    # The container runs as root, so anything it writes into the bind-mounted
+    # workspace is root-owned. The runner is an ordinary user and must be able
+    # to delete those files when it checks out again, so hand them back before
+    # exiting -- including when the command failed. Apptainer does not need
+    # this: it runs as the invoking user.
+    OWNER="$(id -u):$(id -g)"
     EXIT_CODE=0
-    $RUN_CMD "$IMAGE_NAME" -c "set -e; $COMMAND" || EXIT_CODE=$?
+    $RUN_CMD "$IMAGE_NAME" -c \
+        "rc=0; { set -e; $COMMAND; } || rc=\$?; \
+         chown -R ${OWNER} /intellikit_workspace 2>/dev/null || true; \
+         exit \$rc" || EXIT_CODE=$?
     exit $EXIT_CODE
 fi
