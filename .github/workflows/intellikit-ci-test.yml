@@ -70,6 +70,18 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Reset workspace ownership
+        # Containers run as root, so a job that is cancelled, superseded or
+        # killed leaves root-owned build artifacts behind. actions/checkout
+        # wipes the workspace before every run and cannot delete them, so the
+        # NEXT job fails at checkout with EACCES -- on a PR that did nothing
+        # wrong. Reset at the start, where it runs no matter how the previous
+        # job ended; a chown after the command only runs on the happy path.
+        run: |
+          if [ -d "${{ github.workspace }}" ] && command -v docker >/dev/null; then
+            docker run --rm -v "${{ github.workspace }}:/w" alpine:latest \
+              chown -R "$(id -u):$(id -g)" /w 2>/dev/null || true
+          fi
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -89,6 +101,18 @@ jobs:
         install_method: [editable, non-editable, github]
 
     steps:
+      - name: Reset workspace ownership
+        # Containers run as root, so a job that is cancelled, superseded or
+        # killed leaves root-owned build artifacts behind. actions/checkout
+        # wipes the workspace before every run and cannot delete them, so the
+        # NEXT job fails at checkout with EACCES -- on a PR that did nothing
+        # wrong. Reset at the start, where it runs no matter how the previous
+        # job ended; a chown after the command only runs on the happy path.
+        run: |
+          if [ -d "${{ github.workspace }}" ] && command -v docker >/dev/null; then
+            docker run --rm -v "${{ github.workspace }}:/w" alpine:latest \
+              chown -R "$(id -u):$(id -g)" /w 2>/dev/null || true
+          fi
       - name: Checkout repository
         uses: actions/checkout@v4
 
