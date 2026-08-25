@@ -400,7 +400,7 @@ def _generate_reproducer(
                 "loop will not.",
                 e,
             )
-            return _generate_hsaco(
+            result = _generate_hsaco(
                 kernel_name,
                 capture_dir,
                 output_dir,
@@ -409,6 +409,20 @@ def _generate_reproducer(
                 defines,
                 metadata,
             )
+            # ``ExtractResult.language`` says how to *use* the reproducer, not
+            # what the kernel was written in, and what came out of the fallback
+            # is an HSACO-only HIP harness with no ``reproducer.py``.  Label it
+            # for what was produced.
+            #
+            # Without this the label depends on how the language was determined
+            # rather than on what was generated: ``_generate_hsaco`` returns
+            # ``language or "hip"``, so an explicit ``--language triton`` came
+            # back as "triton" while the same capture auto-detected from
+            # metadata came back as "hip".  The "triton" case then made
+            # ``cli._print_next_steps`` tell the user to run
+            # ``python3 reproducer.py``, a file this path never writes.
+            result.language = "hip"
+            return result
 
     if effective_lang == "triton":
         return _generate_triton(

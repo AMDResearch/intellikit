@@ -71,6 +71,14 @@ def hsaco(tmp_path):
     return str(path)
 
 
+@pytest.fixture
+def runner():
+    """Only used to capture click's echo output when driving _print_next_steps."""
+    from click.testing import CliRunner
+
+    return CliRunner()
+
+
 def kernel_source(**overrides):
     """A stand-in for ``KernelSource`` carrying only what extract.py reads."""
     fields = {
@@ -941,16 +949,20 @@ class TestGenerateReproducerRouting:
         assert "falling back to HIP harness" in caplog.text
         assert "no name_map.json" in caplog.text
 
-    def test_the_fallback_result_is_labelled_hip_not_triton(self, tmp_path):
-        """A fallen-back Triton capture reports ``language="hip"``.
+    @pytest.mark.parametrize("user_language", [None, "triton"])
+    def test_the_fallback_is_always_labelled_hip(self, tmp_path, user_language):
+        """The fallback produces an HSACO-only HIP harness, so it says "hip".
 
-        ``_generate_reproducer`` hands ``_generate_hsaco`` the *user's*
-        ``language`` argument rather than the language detected from
-        metadata, so an auto-detected Triton kernel that falls back is
-        labelled by what was actually produced — a HIP harness — not by what
-        the kernel was. That is what the CLI keys off in
-        ``_print_next_steps``, so it decides which instructions the user is
-        shown.
+        ``ExtractResult.language`` drives how the CLI tells the user to *use*
+        the reproducer, and this path writes no ``reproducer.py`` — so the
+        label has to describe what was generated, not what the kernel was
+        written in.
+
+        Parametrised over both ways the language can be determined because
+        that used to change the answer: ``_generate_hsaco`` returns
+        ``language or "hip"``, so an explicit ``--language triton`` came back
+        as "triton" while the same capture auto-detected from metadata came
+        back as "hip".
         """
         capture = write_capture(tmp_path, {"language": "triton"})
 
@@ -961,13 +973,23 @@ class TestGenerateReproducerRouting:
             ),
             patch("kerncap.reproducer.generate_hsaco_reproducer"),
         ):
-            result = _generate_reproducer("k", capture, str(tmp_path / "out"), None, None, [])
+            result = _generate_reproducer(
+                "k", capture, str(tmp_path / "out"), None, user_language, []
+            )
 
         assert result.language == "hip"
 
-    def test_an_explicit_triton_language_survives_the_fallback(self, tmp_path):
-        """Passing --language triton keeps the label, since it is echoed back."""
+    def test_the_fallback_tells_the_user_to_use_make_not_reproducer_py(self, tmp_path, runner):
+        """End to end: the label must not produce instructions for a missing file.
+
+        This is the reason the label matters. With ``language="triton"`` the
+        CLI would print ``python3 reproducer.py`` for a directory that has no
+        such file.
+        """
+        from kerncap import cli
+
         capture = write_capture(tmp_path, {"language": "triton"})
+        out = tmp_path / "out"
 
         with (
             patch(
@@ -976,6 +998,28 @@ class TestGenerateReproducerRouting:
             ),
             patch("kerncap.reproducer.generate_hsaco_reproducer"),
         ):
-            result = _generate_reproducer("k", capture, str(tmp_path / "out"), None, "triton", [])
+            result = _generate_reproducer("k", capture, str(out), None, "triton", [])
+
+        with runner.isolation() as streams:
+            cli._print_next_steps(result)
+        printed = streams[0].getvalue().decode()
+
+        assert "make recompile" in printed
+        assert "reproducer.py" not in printed
+
+    def test_a_successful_triton_reproducer_is_still_labelled_triton(self, tmp_path):
+        """The normalisation must not leak into the path that does write one."""
+        capture = write_capture(tmp_path, {"language": "triton"})
+        (tmp_path / "out").mkdir()
+        (tmp_path / "out" / "kernel_variant.py").write_text("# variant\n")
+        (tmp_path / "capture" / "name_map.json").write_text('[{"user_name": "k"}]')
+        src = tmp_path / "src"
+        src.mkdir()
+
+        with (
+            patch("kerncap.source_finder.find_kernel_source", return_value=kernel_source()),
+            patch("kerncap.reproducer.generate_triton_hsa_reproducer"),
+        ):
+            result = _generate_reproducer("k", capture, str(tmp_path / "out"), str(src), None, [])
 
         assert result.language == "triton"
