@@ -14,8 +14,13 @@ ENV LD_LIBRARY_PATH=$ROCM_PATH/lib:$LD_LIBRARY_PATH \
     PATH="$ROCM_PATH/bin:$PATH"
 ENV PYTHONPATH=$TRITON_PATH
 
-# Install system packages
-RUN apt-get update && \
+# Install system packages. The base image ships an AMD artifactory ROCm repo
+# in /etc/apt/sources.list.d/rocm.list whose path now 404s, which fails
+# apt-get update and makes the install exit 100. ROCm is already present in
+# the image; that repo is only needed to install ROCm packages, which this
+# file does not do.
+RUN rm -f /etc/apt/sources.list.d/rocm.list && \
+    apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git wget ninja-build cmake python3-pip python3-dev build-essential jq \
     libhwloc-dev libhwloc15 hwloc-nox libnuma-dev libdwarf-dev libzstd-dev && \

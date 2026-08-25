@@ -26,6 +26,12 @@ apptainer_can_build() {
 }
 
 # See container_build.sh for why an explicit override exists.
+# Apptainer is disabled for now: the CI hosts either cannot build with it
+# (no setuid starter, no usable user namespace) or do not have it at all,
+# and the runner has no root to install it. Remove this line to restore
+# autodetection.
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
+
 if [ -n "$CONTAINER_RUNTIME" ]; then
     if ! command -v "$CONTAINER_RUNTIME" &> /dev/null; then
         echo "[ERROR] CONTAINER_RUNTIME=$CONTAINER_RUNTIME but it is not installed" >&2

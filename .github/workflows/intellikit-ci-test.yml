@@ -73,17 +73,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Apptainer (if not available)
-        run: |
-          if ! command -v apptainer &> /dev/null; then
-            echo "Apptainer not found, installing..."
-            apt-get update && apt-get install -y software-properties-common
-            add-apt-repository -y ppa:apptainer/ppa
-            apt-get update && apt-get install -y apptainer
-          else
-            echo "Apptainer already available"
-          fi
-
       - name: Build Intellikit container
         run: |
           bash .github/scripts/container_build.sh
