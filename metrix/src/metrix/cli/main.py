@@ -41,9 +41,7 @@ Examples:
 """,
     )
 
-    parser.add_argument(
-        "--version", action="version", version=f"Metrix {__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"Metrix {__version__}")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
