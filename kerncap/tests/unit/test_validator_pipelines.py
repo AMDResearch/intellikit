@@ -11,8 +11,6 @@ real files written with numpy, so the dtype inference and shape comparison run
 for real rather than being mocked away.
 """
 
-import json
-import os
 import subprocess
 from unittest.mock import patch
 
@@ -141,18 +139,9 @@ class TestFormatRouting:
 
         assert triton.call_args.args[1] == {}
 
-    def test_bare_triton_reproducer_still_reads_metadata_when_present(self, tmp_path):
-        """No dispatch.json, but capture/metadata.json exists and is used."""
-        (tmp_path / "capture").mkdir()
-        (tmp_path / "reproducer.py").write_text("")
-        # Written *after* the legacy branch would have matched, so this
-        # exercises the second metadata read rather than the first.
-        (tmp_path / "capture" / "metadata.json").write_text('{"args": [{"index": 7}]}')
-
-        with patch("kerncap.validator._validate_triton") as triton:
-            validate_reproducer(str(tmp_path))
-
-        triton.assert_called_once()
+    # A metadata.json + reproducer.py combination is covered by
+    # TestUnreachableMetadataRead below, which asserts what actually happens
+    # (the legacy branch handles it) rather than the second, unreachable read.
 
     def test_nothing_recognisable_fails_clearly(self, repro):
         result = validate_reproducer(str(repro))

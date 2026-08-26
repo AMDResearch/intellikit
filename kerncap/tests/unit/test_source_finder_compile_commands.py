@@ -284,9 +284,30 @@ class TestExtractIncludes:
 
         assert result == [str(inc)]
 
-    def test_no_working_dir_leaves_relative_paths_alone(self):
-        """Without a working dir a relative path cannot be resolved, so it
-        will not match a real directory and is dropped."""
+    def test_without_a_working_dir_a_relative_path_resolves_against_cwd(
+        self, tmp_path, monkeypatch
+    ):
+        """With ``working_dir=""`` the path stays relative, so ``os.path.isdir``
+        resolves it against the *process* working directory.
+
+        Real callers pass the compile_commands entry's ``directory``, so this
+        fallback does not bite in practice — but it means the function's result
+        depends on where the process happens to be. Pinned in both directions
+        below rather than left implicit.
+
+        ``chdir`` is what makes this deterministic: without it the assertion
+        silently depends on whether an ``include/`` directory happens to exist
+        wherever pytest was invoked from.
+        """
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "include").mkdir()
+
+        assert _extract_includes_from_command("hipcc -Iinclude x.cu", [], "") == ["include"]
+
+    def test_without_a_working_dir_an_unresolvable_path_is_dropped(self, tmp_path, monkeypatch):
+        """Same call, a CWD with no matching directory: the path is dropped."""
+        monkeypatch.chdir(tmp_path)
+
         assert _extract_includes_from_command("hipcc -Iinclude x.cu", [], "") == []
 
 
