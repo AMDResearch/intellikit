@@ -460,7 +460,9 @@ class TestPrintNextSteps:
         )
         with runner.isolation() as streams:
             cli._print_next_steps(result)
-        out = streams[0].getvalue().decode()
+            # Read inside the block: Click closes these streams on exit,
+            # so getvalue() afterwards raises "I/O operation on closed file".
+            out = streams[0].getvalue().decode()
 
         assert "edit:    /iso/attn/kernel_variant.py" in out
         assert "rebuild: cd /iso/attn && python3 reproducer.py" in out
@@ -475,7 +477,9 @@ class TestPrintNextSteps:
         )
         with runner.isolation() as streams:
             cli._print_next_steps(result)
-        out = streams[0].getvalue().decode()
+            # Read inside the block: Click closes these streams on exit,
+            # so getvalue() afterwards raises "I/O operation on closed file".
+            out = streams[0].getvalue().decode()
 
         assert "edit:    /iso/gemm/kernel_variant.cpp" in out
         assert "rebuild: cd /iso/gemm && make recompile" in out
@@ -490,7 +494,9 @@ class TestPrintNextSteps:
         )
         with runner.isolation() as streams:
             cli._print_next_steps(result)
-        out = streams[0].getvalue().decode()
+            # Read inside the block: Click closes these streams on exit,
+            # so getvalue() afterwards raises "I/O operation on closed file".
+            out = streams[0].getvalue().decode()
 
         assert "edit:" not in out
         assert "rebuild:" in out

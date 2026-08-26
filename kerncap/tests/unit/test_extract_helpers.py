@@ -1002,7 +1002,9 @@ class TestGenerateReproducerRouting:
 
         with runner.isolation() as streams:
             cli._print_next_steps(result)
-        printed = streams[0].getvalue().decode()
+            # Read inside the block: Click closes these streams on exit,
+            # so getvalue() afterwards raises "I/O operation on closed file".
+            printed = streams[0].getvalue().decode()
 
         assert "make recompile" in printed
         assert "reproducer.py" not in printed
