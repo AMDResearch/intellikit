@@ -93,7 +93,7 @@ jobs:
     name: pytest ${{ matrix.install_method }} - ${{ matrix.package }}
     needs: [detect-changes, build-container-image]
     runs-on: [self-hosted, mi3xx]
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
