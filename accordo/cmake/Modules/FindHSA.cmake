@@ -24,21 +24,34 @@
 
 # FindHSA.cmake - Locate the HSA runtime library and set up the target
 
-# Search for the HSA include directory with priority given to /opt/rocm
+# An explicitly selected ROCm wins over whatever is installed at /opt/rocm.
+# Without this, building against a side-by-side ROCm silently picks up
+# /opt/rocm's headers while the loader resolves the other tree's runtime -- a
+# mixed build that links, runs, and quietly misses any API the older headers
+# do not declare. ldd cannot see this: it only observes the runtime half.
+set(_hsa_hints)
+foreach(_root IN ITEMS ${ROCM_PATH} $ENV{ROCM_PATH} ${HIP_ROOT_DIR} $ENV{HIP_PATH})
+    if(_root)
+        list(APPEND _hsa_hints "${_root}")
+    endif()
+endforeach()
 
 file(GLOB ROCM_PATHS "/opt/rocm*/include")
 
 find_path(HSA_INCLUDE_DIR
     NAMES hsa/hsa.h
+    HINTS ${_hsa_hints}
+    PATH_SUFFIXES include
     PATHS ${ROCM_PATHS}
     /usr/local/include
     /usr/include
     DOC "Path to HSA include directory"
 )
 
-# Search for the HSA library with priority given to /opt/rocm
 find_library(HSA_LIBRARY
     NAMES hsa-runtime64
+    HINTS ${_hsa_hints}
+    PATH_SUFFIXES lib lib64
     PATHS /opt/rocm/lib
     /opt/rocm/lib64
     /usr/local/lib
@@ -46,6 +59,8 @@ find_library(HSA_LIBRARY
     /usr/lib/x86_64-linux-gnu
     DOC "Path to HSA runtime library"
 )
+
+unset(_hsa_hints)
 
 message("HSA_INCLUDE_DIR: ${HSA_INCLUDE_DIR}")
 message("HSA_LIBRARY: ${HSA_LIBRARY}")
