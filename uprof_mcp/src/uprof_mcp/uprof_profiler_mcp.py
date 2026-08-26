@@ -47,12 +47,15 @@ async def profile_for_hotspots(
                 executable_args=executable_arguments,
             )
         else:
-            with tempfile.TemporaryDirectory(delete=False) as tmpdir:
-                result = profiler.find_hotspots(
-                    output_dir=tmpdir,
-                    executable=executable,
-                    executable_args=executable_arguments,
-                )
+            # mkdtemp rather than TemporaryDirectory(delete=False): the latter is
+            # Python 3.12+, and this package supports >=3.10. The directory is kept
+            # deliberately -- the caller reads the report out of it after we return.
+            tmpdir = tempfile.mkdtemp()
+            result = profiler.find_hotspots(
+                output_dir=tmpdir,
+                executable=executable,
+                executable_args=executable_arguments,
+            )
 
         await ctx.info(f"Profiling of {executable} completed with results in {result.report_path}.")
         with result.report_path.open() as file:
