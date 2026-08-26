@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+#
+# ROCm 10 image. Kept alongside docker/Dockerfile (ROCm 7) so CI can run the
+# suite on both; change the two together when adding a dependency.
+#
+# Differences from the ROCm 7 image, all forced by the base:
+#   * There is no rocm/pytorch tag for ROCm 10, so this starts from
+#     rocm/dev-ubuntu-24.04 and installs the Python side itself.
+#   * That base has no PyTorch and no torch wheel is published for ROCm 10
+#     (download.pytorch.org/whl/rocm10.0 is 403; rocm7.0 is the newest). Torch
+#     is imported lazily inside functions in kerncap and metrix, so the tests
+#     that need it skip rather than fail. Add it here once a wheel exists.
+#   * Ubuntu 24.04's Python is externally managed, so this uses a venv rather
+#     than --break-system-packages.
+
+FROM rocm/dev-ubuntu-24.04:10.0.0-full
+
+SHELL ["/bin/bash", "-c"]
+
+ENV TRITON_PATH=/opt/triton
+ENV ROCM_PATH=/opt/rocm
+ENV LD_LIBRARY_PATH=$ROCM_PATH/lib:$LD_LIBRARY_PATH \
+    PATH="/opt/venv/bin:$ROCM_PATH/bin:$PATH"
+ENV PYTHONPATH=$TRITON_PATH
+
+# Install system packages. Mirrors the ROCm 7 image; python3-venv is extra
+# because that base already provided an environment to install into.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    git wget ninja-build cmake python3-pip python3-dev python3-venv \
+    build-essential jq \
+    libhwloc-dev libhwloc15 hwloc-nox libnuma-dev libdwarf-dev libzstd-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create groups if they don't exist
+RUN groupadd -r video 2>/dev/null || true && \
+    groupadd -r render 2>/dev/null || true
+
+RUN python3 -m venv /opt/venv
+
+# Install Python packages with pip
+RUN pip3 install --upgrade pip && \
+    pip3 install wheel jupyter pytest
+
+# Clone and install Triton
+RUN cd /opt && \
+    git clone https://github.com/triton-lang/triton.git $TRITON_PATH && \
+    cd $TRITON_PATH && \
+    git checkout 715f6b1d442601436bf8d462db6ff8e17aec8cfb && \
+    pip3 install -e .
+
+# Set up workspace
+WORKDIR /workspace
