@@ -895,6 +895,17 @@ hsa_status_t nexus::hsa_amd_queue_create(hsa_agent_t agent,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
+  // The runtime does not stop at the first failure. Per hsa_ext_amd.h, queues
+  // that were created stay valid, a descriptor that failed is left with a NULL
+  // queue, and the caller is handed the first error. Returning early here would
+  // abandon descriptors the runtime would have created.
+  hsa_status_t first_error = HSA_STATUS_SUCCESS;
+  const auto record = [&first_error](hsa_status_t status) {
+    if (status != HSA_STATUS_SUCCESS && first_error == HSA_STATUS_SUCCESS) {
+      first_error = status;
+    }
+  };
+
   for (uint32_t i = 0; i < num_descs; ++i) {
     hsa_amd_queue_create_desc_t* desc = &descs[i];
 
@@ -904,18 +915,25 @@ hsa_status_t nexus::hsa_amd_queue_create(hsa_agent_t agent,
     if (desc->engine_type != HSA_AMD_QUEUE_ENGINE_COMPUTE) {
       LOG_DETAIL("Passing through non-compute queue (engine_type {})",
                  static_cast<unsigned>(desc->engine_type));
-      hsa_status_t passthrough =
-          hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
-      if (passthrough != HSA_STATUS_SUCCESS) {
-        return passthrough;
-      }
+      record(hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1));
       continue;
     }
 
     // queue_size_bytes is a byte count; hsa_amd_queue_intercept_create takes a
     // packet count.
     constexpr uint32_t kAqlPacketSize = 64;
-    const uint32_t packets = desc->queue_size_bytes / kAqlPacketSize;
+    const uint32_t bytes = desc->queue_size_bytes;
+    const bool power_of_two = bytes != 0 && (bytes & (bytes - 1)) == 0;
+
+    // A size the runtime would reject must still be rejected. Dividing it down
+    // to a packet count launders it into a legal one -- 65537 becomes 1024
+    // packets and succeeds -- so the caller never learns its request was
+    // invalid. Hand those to the runtime and let it return the real error.
+    if (!power_of_two || bytes % kAqlPacketSize != 0) {
+      record(hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1));
+      continue;
+    }
+    const uint32_t packets = bytes / kAqlPacketSize;
     hsa_queue_t* queue = nullptr;
     hsa_status_t result = HSA_STATUS_SUCCESS;
 
@@ -940,11 +958,7 @@ hsa_status_t nexus::hsa_amd_queue_create(hsa_agent_t agent,
       // simply will not be traced.
       LOG_WARN("Intercept create failed ({}), falling back to hsa_amd_queue_create",
                static_cast<int>(result));
-      hsa_status_t fallback =
-          hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
-      if (fallback != HSA_STATUS_SUCCESS) {
-        return fallback;
-      }
+      record(hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1));
       continue;
     }
 
@@ -967,7 +981,7 @@ hsa_status_t nexus::hsa_amd_queue_create(hsa_agent_t agent,
     desc->queue = queue;
   }
 
-  return HSA_STATUS_SUCCESS;
+  return first_error;
 }
 #endif  // NEXUS_HAS_AMD_QUEUE_CREATE
 hsa_status_t nexus::hsa_queue_destroy(hsa_queue_t* queue) {
