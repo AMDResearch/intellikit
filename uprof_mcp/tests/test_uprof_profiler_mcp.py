@@ -19,8 +19,6 @@ asserted.
 
 import asyncio
 import inspect
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -101,22 +99,6 @@ def _call(fake: FakeUProfProfiler, **kwargs) -> tuple[str, FakeContext]:
         return asyncio.run(profile_for_hotspots(ctx, **kwargs)), ctx
 
 
-def _fake_temporary_directory(path: Path, calls: list[dict]):  # noqa: ANN202
-    """Build a TemporaryDirectory replacement that yields ``path``.
-
-    The real ``tempfile.TemporaryDirectory(delete=False)`` keyword only exists
-    on Python 3.12+, so patching it here both keeps the test off the host's
-    temporary directory and pins the keyword the server relies on.
-    """
-
-    @contextmanager
-    def _factory(**kwargs) -> Iterator[str]:
-        calls.append(kwargs)
-        yield str(path)
-
-    return _factory
-
-
 class TestProfileForHotspots:
     """Cover the profile_for_hotspots tool."""
 
@@ -175,23 +157,27 @@ class TestProfileForHotspots:
         """With no output directory a temporary one that survives the run is used."""
         scratch = tmp_path / "scratch"
         scratch.mkdir()
-        tempdir_calls: list[dict] = []
+        mkdtemp_calls: list[int] = []
         fake = FakeUProfProfiler(_report(tmp_path))
         ctx = FakeContext()
+
+        def _fake_mkdtemp() -> str:
+            mkdtemp_calls.append(1)
+            return str(scratch)
+
         with (
             patch.object(uprof_profiler_mcp, "profiler", fake),
-            patch(
-                "tempfile.TemporaryDirectory",
-                _fake_temporary_directory(scratch, tempdir_calls),
-            ),
+            patch("tempfile.mkdtemp", _fake_mkdtemp),
         ):
             out = asyncio.run(
                 profile_for_hotspots(ctx, executable="./app", executable_arguments=[])
             )
         assert out == REPORT
         assert fake.calls[0]["output_dir"] == str(scratch)
-        # The results have to outlive the context manager or the report is gone.
-        assert tempdir_calls == [{"delete": False}]
+        # mkdtemp, not TemporaryDirectory(delete=False): the latter is 3.12+ and this
+        # package supports >=3.10. The directory must outlive the call either way --
+        # the report is read out of it after we return.
+        assert mkdtemp_calls == [1]
 
     def test_empty_report(self, tmp_path: Path) -> None:
         """An empty report is returned as an empty string, not an error."""

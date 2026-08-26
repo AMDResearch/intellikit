@@ -567,3 +567,42 @@ def _registered_tools() -> set[str]:
         name = getattr(t, "name", None)
         names.add(name if name is not None else str(t))
     return names
+
+
+class TestLazyConstruction:
+    """The AmdSmi handle is built on first use, not at import time."""
+
+    def test_constructs_once_and_caches(self) -> None:
+        """_get_amd_smi builds the handle once and reuses it."""
+        built = []
+
+        class _Fake:
+            def __init__(self, **kwargs: object) -> None:
+                built.append(kwargs)
+
+        with (
+            patch.object(amd_smi_mcp, "amd_smi", None),
+            patch.object(amd_smi_mcp, "AmdSmi", _Fake),
+        ):
+            first = amd_smi_mcp._get_amd_smi()  # noqa: SLF001
+            second = amd_smi_mcp._get_amd_smi()  # noqa: SLF001
+
+        assert first is second
+        # Constructed exactly once despite two calls -- importing the module must
+        # not call amdsmi_init(), and neither should a second tool invocation.
+        assert len(built) == 1
+
+    def test_returns_a_substituted_fake_without_constructing(self) -> None:
+        """Assigning amd_smi directly is honoured, so tests need no driver."""
+        sentinel = object()
+
+        class _Boom:
+            def __init__(self, **_: object) -> None:
+                msg = "must not construct when one was supplied"
+                raise AssertionError(msg)
+
+        with (
+            patch.object(amd_smi_mcp, "amd_smi", sentinel),
+            patch.object(amd_smi_mcp, "AmdSmi", _Boom),
+        ):
+            assert amd_smi_mcp._get_amd_smi() is sentinel  # noqa: SLF001
