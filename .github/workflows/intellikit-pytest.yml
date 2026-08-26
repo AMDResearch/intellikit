@@ -42,6 +42,10 @@ jobs:
               - 'metrix/**'
             nexus:
               - 'nexus/**'
+            rocm_mcp:
+              - 'rocm_mcp/**'
+            uprof_mcp:
+              - 'uprof_mcp/**'
             infra:
               - '.github/**'
               - 'apptainer/**'
@@ -52,15 +56,14 @@ jobs:
       - name: Build package matrix
         id: build-matrix
         run: |
-          ALL='["accordo","kerncap","linex","metrix","nexus"]'
+          ALL='["accordo","kerncap","linex","metrix","nexus","rocm_mcp","uprof_mcp"]'
 
           # Infra changes or non-PR events → test everything
           if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
             echo "packages=${ALL}" >> "$GITHUB_OUTPUT"
           else
-            # Filter to only pytest-eligible packages (exclude rocm_mcp, uprof_mcp)
             CHANGED='${{ steps.filter.outputs.changes }}'
-            FILTERED=$(echo "$CHANGED" | jq -c '[.[] | select(. == "accordo" or . == "kerncap" or . == "linex" or . == "metrix" or . == "nexus")]')
+            FILTERED=$(echo "$CHANGED" | jq -c '[.[] | select(. == "accordo" or . == "kerncap" or . == "linex" or . == "metrix" or . == "nexus" or . == "rocm_mcp" or . == "uprof_mcp")]')
             echo "packages=${FILTERED}" >> "$GITHUB_OUTPUT"
           fi
 
