@@ -81,7 +81,7 @@ jobs:
         # rocm/dev-ubuntu-24.04 instead. Both are cached independently.
         include:
           - rocm: "7"
-            image: intellikit-dev
+            image: intellikit-dev-rocm7
             dockerfile: docker/Dockerfile
           - rocm: "10"
             image: intellikit-dev-rocm10
@@ -122,7 +122,7 @@ jobs:
         rocm: ["7", "10"]
         include:
           - rocm: "7"
-            image: intellikit-dev
+            image: intellikit-dev-rocm7
             dockerfile: docker/Dockerfile
           - rocm: "10"
             image: intellikit-dev-rocm10
