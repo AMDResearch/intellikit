@@ -7,10 +7,10 @@
 # Differences from the ROCm 7 image, all forced by the base:
 #   * There is no rocm/pytorch tag for ROCm 10, so this starts from
 #     rocm/dev-ubuntu-24.04 and installs the Python side itself.
-#   * That base has no PyTorch and no torch wheel is published for ROCm 10
-#     (download.pytorch.org/whl/rocm10.0 is 403; rocm7.0 is the newest). Torch
-#     is imported lazily inside functions in kerncap and metrix, so the tests
-#     that need it skip rather than fail. Add it here once a wheel exists.
+#   * That base has no PyTorch, so it is installed from the nightly rocm7.14
+#     wheel index (there is no rocm10.0 index -- it 404s). Verified on MI350X:
+#     torch 2.15.0.dev+rocm7.14, hip 7.14, 8 devices, vector add / matmul /
+#     reduction all matching CPU results.
 #   * Ubuntu 24.04's Python is externally managed, so this uses a venv rather
 #     than --break-system-packages.
 
@@ -42,6 +42,11 @@ RUN python3 -m venv /opt/venv
 # Install Python packages with pip
 RUN pip3 install --upgrade pip && \
     pip3 install wheel jupyter pytest
+
+# PyTorch. The nightly rocm7.14 index is the one that works on this base; it
+# pulls its own rocm-sdk-* wheels alongside the system ROCm, which is expected.
+RUN pip3 install --pre torch torchvision \
+    --index-url https://download.pytorch.org/whl/nightly/rocm7.14
 
 # Clone and install Triton
 RUN cd /opt && \
