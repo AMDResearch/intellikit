@@ -72,10 +72,14 @@ if [ "$CONTAINER_RUNTIME" = "apptainer" ]; then
 elif [ "$CONTAINER_RUNTIME" = "docker" ]; then
     IMAGE_NAME=${DOCKER_IMAGE_NAME:-"intellikit-dev"}
     DOCKER_DIR="$(dirname "$(realpath "$0")")/../../docker"
+    # DOCKERFILE selects the ROCm version: docker/Dockerfile is ROCm 7,
+    # docker/Dockerfile.rocm10 is ROCm 10. Both are built and cached
+    # separately, so the hash file is per-image rather than global.
+    DOCKERFILE=${DOCKERFILE:-"$DOCKER_DIR/Dockerfile"}
 
     # Rebuild when the Dockerfile changes, mirroring the def-hash check above.
-    CURRENT_HASH=$(sha256sum "$DOCKER_DIR/Dockerfile" | awk '{print $1}')
-    HASH_FILE=~/.intellikit-docker-image.sha256
+    CURRENT_HASH=$(sha256sum "$DOCKERFILE" | awk '{print $1}')
+    HASH_FILE=~/.intellikit-docker-image.${IMAGE_NAME}.sha256
 
     if docker image inspect "$IMAGE_NAME" &> /dev/null \
        && [ -f "$HASH_FILE" ] && [ "$CURRENT_HASH" = "$(cat "$HASH_FILE")" ]; then
@@ -84,7 +88,7 @@ elif [ "$CONTAINER_RUNTIME" = "docker" ]; then
     fi
 
     echo "[INFO] Building Docker image: $IMAGE_NAME"
-    docker build -t "$IMAGE_NAME" "$DOCKER_DIR"
+    docker build -t "$IMAGE_NAME" -f "$DOCKERFILE" "$DOCKER_DIR"
     echo "$CURRENT_HASH" > "$HASH_FILE"
     echo "[INFO] Build completed (hash: $CURRENT_HASH)"
 fi
