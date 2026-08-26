@@ -16,7 +16,21 @@ mcp = FastMCP(
     instructions=("MCP server for querying AMD GPU system management information."),
 )
 logger = get_logger(mcp.name)
-amd_smi = AmdSmi(logger=logger)
+amd_smi: AmdSmi | None = None
+
+
+def _get_amd_smi() -> AmdSmi:
+    """Return the shared AmdSmi, constructing it on first use.
+
+    Constructing it at import time called ``amdsmi_init()`` as a side effect of
+    importing this module, so the module could not be imported at all without a
+    working driver -- not even to print ``--help``. Tests may assign ``amd_smi``
+    directly to substitute a fake.
+    """
+    global amd_smi  # noqa: PLW0603
+    if amd_smi is None:
+        amd_smi = AmdSmi(logger=logger)
+    return amd_smi
 
 
 @mcp.tool()
@@ -27,7 +41,7 @@ async def get_driver_information(ctx: Annotated[Context, Field(description="MCP 
         str: The driver version, name, and date.
     """
     try:
-        result = amd_smi.get_driver_information()
+        result = _get_amd_smi().get_driver_information()
     except Exception as e:
         msg = f"Failed to get driver version: {e!s}"
         await ctx.error(msg)
@@ -48,7 +62,7 @@ async def list_gpus(ctx: Annotated[Context, Field(description="MCP context.")]) 
         str: GPU index, BDF address, and UUID for each GPU.
     """
     try:
-        gpus = amd_smi.list_gpus()
+        gpus = _get_amd_smi().list_gpus()
     except Exception as e:
         msg = f"Failed to list GPUs: {e!s}"
         await ctx.error(msg)
@@ -72,7 +86,7 @@ async def get_gpu_static_info(
         str: Market name, VRAM, compute units, power caps, and other hardware details.
     """
     try:
-        infos = amd_smi.get_gpu_static_info(gpu_index)
+        infos = _get_amd_smi().get_gpu_static_info(gpu_index)
     except IndexError as e:
         return f"Error: {e!s}"
     except Exception as e:
@@ -110,7 +124,7 @@ async def get_gpu_metrics(
         str: Activity, temperature, power, clock, and VRAM usage for each GPU.
     """
     try:
-        metrics_list = amd_smi.get_gpu_metrics(gpu_index)
+        metrics_list = _get_amd_smi().get_gpu_metrics(gpu_index)
     except IndexError as e:
         return f"Error: {e!s}"
     except Exception as e:
@@ -149,7 +163,7 @@ async def get_gpu_firmware_info(
         str: VBIOS info and firmware block versions for each GPU.
     """
     try:
-        fw_list = amd_smi.get_gpu_firmware_info(gpu_index)
+        fw_list = _get_amd_smi().get_gpu_firmware_info(gpu_index)
     except IndexError as e:
         return f"Error: {e!s}"
     except Exception as e:
@@ -184,7 +198,7 @@ async def get_gpu_process_info(
         str: PID, name, and VRAM usage for processes on each GPU.
     """
     try:
-        proc_list = amd_smi.get_gpu_process_info(gpu_index)
+        proc_list = _get_amd_smi().get_gpu_process_info(gpu_index)
     except IndexError as e:
         return f"Error: {e!s}"
     except Exception as e:
@@ -219,7 +233,7 @@ async def get_gpu_bad_pages(
         str: ECC error counts and retired page count for each GPU.
     """
     try:
-        bp_list = amd_smi.get_gpu_bad_page_info(gpu_index)
+        bp_list = _get_amd_smi().get_gpu_bad_page_info(gpu_index)
     except IndexError as e:
         return f"Error: {e!s}"
     except Exception as e:

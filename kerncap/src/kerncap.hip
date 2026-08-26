@@ -325,6 +325,12 @@ void CaptureState::hook_api() {
         CaptureState::hsa_queue_create;
     api_table_->core_->hsa_queue_destroy_fn =
         CaptureState::hsa_queue_destroy;
+#ifdef KERNCAP_HAVE_HSA_AMD_QUEUE_CREATE
+    // ROCm 10 moved HIP's compute queue onto hsa_amd_queue_create. Without this
+    // the hook above is never entered and no dispatch packet is ever seen.
+    api_table_->amd_ext_->hsa_amd_queue_create_fn =
+        CaptureState::hsa_amd_queue_create;
+#endif
     api_table_->amd_ext_->hsa_amd_memory_pool_allocate_fn =
         CaptureState::hsa_amd_memory_pool_allocate;
     api_table_->amd_ext_->hsa_amd_memory_pool_free_fn =
@@ -646,29 +652,30 @@ hsa_status_t CaptureState::hsa_amd_vmem_unmap(
 // ---------------------------------------------------------------------------
 // Queue interception
 // ---------------------------------------------------------------------------
+bool CaptureState::should_intercept_queue(CaptureState* inst, const char* api_name) {
+    if (!inst->is_active_process()) {
+        KERNCAP_INFO("Passive mode (pid=%d): passing through %s", getpid(), api_name);
+        return false;
+    }
+    if (inst->intercept_first_queue_only_) {
+        std::shared_lock g(mutex_);
+        if (!inst->queue_agents_.empty()) {
+            KERNCAP_INFO("First-queue-only mode (pid=%d): passing through %s",
+                         getpid(), api_name);
+            return false;
+        }
+    }
+    return true;
+}
+
 hsa_status_t CaptureState::hsa_queue_create(
         hsa_agent_t agent, uint32_t size, hsa_queue_type32_t type,
         void (*callback)(hsa_status_t, hsa_queue_t*, void*),
         void* data, uint32_t private_segment_size,
         uint32_t group_segment_size, hsa_queue_t** queue) {
     auto* inst = get_instance();
-    bool intercept_queue = true;
 
-    if (!inst->is_active_process()) {
-        KERNCAP_INFO("Passive mode (pid=%d): passing through hsa_queue_create",
-                     getpid());
-        return hsa_core_call(inst, hsa_queue_create, agent, size, type,
-                             callback, data, private_segment_size,
-                             group_segment_size, queue);
-    }
-
-    if (inst->intercept_first_queue_only_) {
-        std::shared_lock g(mutex_);
-        intercept_queue = inst->queue_agents_.empty();
-    }
-    if (!intercept_queue) {
-        KERNCAP_INFO("First-queue-only mode (pid=%d): passing through hsa_queue_create",
-                     getpid());
+    if (!should_intercept_queue(inst, "hsa_queue_create")) {
         return hsa_core_call(inst, hsa_queue_create, agent, size, type,
                              callback, data, private_segment_size,
                              group_segment_size, queue);
@@ -677,6 +684,17 @@ hsa_status_t CaptureState::hsa_queue_create(
     KERNCAP_INFO("Active mode (pid=%d): intercepting hsa_queue_create "
                  "(size=%u, type=%u)", getpid(), size, type);
 
+    return intercept_and_register(inst, agent, size, type, callback, data,
+                                  private_segment_size, group_segment_size,
+                                  queue);
+}
+
+hsa_status_t CaptureState::intercept_and_register(
+        CaptureState* inst, hsa_agent_t agent, uint32_t size,
+        hsa_queue_type32_t type,
+        void (*callback)(hsa_status_t, hsa_queue_t*, void*),
+        void* data, uint32_t private_segment_size,
+        uint32_t group_segment_size, hsa_queue_t** queue) {
     auto result = hsa_ext_call(inst, hsa_amd_queue_intercept_create,
                                agent, size, type, callback, data,
                                private_segment_size, group_segment_size, queue);
@@ -700,6 +718,70 @@ hsa_status_t CaptureState::hsa_queue_create(
     }
     return result;
 }
+
+#ifdef KERNCAP_HAVE_HSA_AMD_QUEUE_CREATE
+hsa_status_t CaptureState::hsa_amd_queue_create(
+        hsa_agent_t agent, hsa_amd_queue_create_desc_t* descs,
+        uint32_t num_descs) {
+    auto* inst = get_instance();
+
+    // The runtime does not stop at the first failure: queues that succeed stay
+    // valid, a failed descriptor is left with a NULL queue, and the caller gets
+    // the first error. Returning early would abandon descriptors the runtime
+    // would have created.
+    hsa_status_t first_error = HSA_STATUS_SUCCESS;
+    auto record = [&first_error](hsa_status_t status) {
+        if (status != HSA_STATUS_SUCCESS && first_error == HSA_STATUS_SUCCESS) {
+            first_error = status;
+        }
+    };
+
+    for (uint32_t i = 0; i < num_descs; ++i) {
+        hsa_amd_queue_create_desc_t* desc = &descs[i];
+
+        // Only compute queues carry AQL dispatch packets. SDMA and AIE go to
+        // the runtime untouched; AIE is not implemented by the runtime yet.
+        const bool compute = desc->engine_type == HSA_AMD_QUEUE_ENGINE_COMPUTE;
+
+        // queue_size_bytes must be a power of two and a multiple of the 64-byte
+        // AQL packet. Dividing an illegal size down to a packet count would
+        // launder it into a legal one, so those go to the runtime for the real
+        // error rather than silently succeeding here.
+        constexpr uint32_t kPacketSize =
+            static_cast<uint32_t>(sizeof(hsa_kernel_dispatch_packet_t));
+        const uint32_t bytes = desc->queue_size_bytes;
+        const bool valid_size = bytes != 0 && (bytes & (bytes - 1)) == 0 &&
+                                bytes % kPacketSize == 0;
+
+        if (!compute || !valid_size ||
+            !should_intercept_queue(inst, "hsa_amd_queue_create")) {
+            record(hsa_ext_call(inst, hsa_amd_queue_create, agent, desc, 1));
+            continue;
+        }
+
+        KERNCAP_INFO("Active mode (pid=%d): intercepting hsa_amd_queue_create "
+                     "(bytes=%u, type=%u)", getpid(), bytes,
+                     desc->engine.compute.type);
+
+        hsa_queue_t* queue = nullptr;
+        const auto result = intercept_and_register(
+            inst, agent, bytes / kPacketSize, desc->engine.compute.type,
+            desc->callback, desc->callback_data,
+            desc->engine.compute.private_segment_size, 0, &queue);
+        if (result == HSA_STATUS_SUCCESS) {
+            desc->queue = queue;
+            continue;
+        }
+
+        // Capture is best-effort: fall back so the application still runs,
+        // uninstrumented. The runtime writes desc->queue itself.
+        KERNCAP_ERROR("Intercept queue create failed: %d, falling back",
+                      static_cast<int>(result));
+        record(hsa_ext_call(inst, hsa_amd_queue_create, agent, desc, 1));
+    }
+    return first_error;
+}
+#endif
 
 hsa_status_t CaptureState::hsa_queue_destroy(hsa_queue_t* queue) {
     auto* inst = get_instance();

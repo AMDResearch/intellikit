@@ -109,9 +109,13 @@ class UProfProfiler:
                 environment variable 'INTELLIKIT_UPROF_CLI' or the default path DEFAULT_EXE_PATH.
         """
         self.logger = logger if logger is not None else logging.getLogger(self.__class__.__name__)
-        self.profiler_exe = os.getenv(
-            "INTELLIKIT_UPROF_CLI",
-            str(uprof) if uprof is not None else UProfProfiler.DEFAULT_EXE_PATH,
+        # An explicit argument wins over the environment; the env var is only a
+        # fallback when the caller did not choose. The reverse made it impossible
+        # to override the env var in-process.
+        self.profiler_exe = (
+            str(uprof)
+            if uprof is not None
+            else os.getenv("INTELLIKIT_UPROF_CLI", UProfProfiler.DEFAULT_EXE_PATH)
         )
         self.logger.info("Initialized profiler.")
 

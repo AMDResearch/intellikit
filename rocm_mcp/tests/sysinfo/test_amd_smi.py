@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
+import gc
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,6 +21,22 @@ from rocm_mcp.sysinfo.amd_smi import (
     GpuStaticInfo,
     ProcessEntry,
 )
+
+
+@pytest.fixture(autouse=True)
+def _flush_finalizers() -> Iterator[None]:
+    """Finalize stray AmdSmi instances before and after each test.
+
+    ``AmdSmi.__del__`` calls ``amdsmi_shut_down()``. An instance created by an
+    earlier test can be collected *during* a later one, where it reaches that
+    test's patched mock and inflates the call count -- so ``assert_called_once()``
+    fails depending on collection order rather than on anything the test did.
+    Collecting at both ends makes the count deterministic.
+    """
+    gc.collect()
+    yield
+    gc.collect()
+
 
 SAMPLE_DRIVER_INFO = {
     "driver_name": "amdgpu",
