@@ -6,6 +6,8 @@ Linex API - Source-level GPU performance profiling
 """
 
 import json
+import os
+import shlex
 import subprocess
 import urllib.request
 from dataclasses import dataclass
@@ -120,6 +122,8 @@ class Linex:
     # Default rocprofv3 parameters
     DEFAULT_DECODER_URL = "https://raw.githubusercontent.com/ROCm/rocprof-trace-decoder/12c9d5871b3f803937ef92f1adce9294dfc549a7/releases/linux_glibc_2_28_x86_64/librocprof-trace-decoder.so"
     DEFAULT_DECODER_PATH = Path.home() / ".cache" / "linex" / "librocprof-trace-decoder.so"
+    # rocprofv3 looks for exactly this filename under --att-library-path.
+    DECODER_SONAME = "librocprof-trace-decoder.so"
 
     def __init__(
         self,
@@ -144,8 +148,44 @@ class Linex:
         self._instructions: List[InstructionData] = []
         self._source_lines: Dict[str, SourceLine] = {}
 
+    @classmethod
+    def _find_rocm_decoder(cls) -> Optional[Path]:
+        """Locate a decoder shipped with ROCm, if one is installed.
+
+        ROCm 7.13 and newer bundle the trace decoder, so there is no need to
+        fetch a copy.  Returns None on older ROCm, where it must be downloaded.
+        """
+        roots = [os.environ.get("ROCM_PATH"), "/opt/rocm"]
+        for root in roots:
+            if not root:
+                continue
+            base = Path(root)
+            if not base.is_dir():
+                continue
+            # Layout varies: <root>/lib on classic installs, <root>/core-X.Y/lib
+            # on versioned ones.
+            for pattern in (f"lib/{cls.DECODER_SONAME}", f"*/lib/{cls.DECODER_SONAME}"):
+                for candidate in sorted(base.glob(pattern)):
+                    if candidate.is_file():
+                        return candidate
+        return None
+
     def _ensure_decoder(self) -> Path:
-        """Ensure decoder library is available, download if needed."""
+        """Locate the decoder library, downloading a copy only if ROCm has none.
+
+        Preference order:
+          1. the decoder shipped with the installed ROCm (7.13+)
+          2. a previously downloaded copy in the local cache
+          3. a fresh download
+
+        The download exists for ROCm older than 7.13.  It pins a build from a
+        repository that upstream has deprecated, so the ROCm-provided library is
+        preferred whenever one is present.
+        """
+        shipped = self._find_rocm_decoder()
+        if shipped is not None:
+            return shipped
+
         if self.DEFAULT_DECODER_PATH.exists():
             return self.DEFAULT_DECODER_PATH
 
@@ -180,7 +220,6 @@ class Linex:
         Returns:
             self for chaining
         """
-        import os
         import tempfile
 
         # Use temp directory if not specified
@@ -205,7 +244,15 @@ class Linex:
         if kernel_filter:
             cmd.extend(["--kernel-include-regex", kernel_filter])
 
-        cmd.extend(["--", *command.split()])
+        # shlex.split so quoted argument groups survive as single argv tokens;
+        # rocprofv3 execs the target directly without a shell.
+        try:
+            target_argv = shlex.split(command)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Failed to parse command for rocprofv3: {command!r}. Check for unmatched quotes."
+            ) from exc
+        cmd.extend(["--", *target_argv])
 
         env = os.environ.copy()
         if force_cu_mask:
