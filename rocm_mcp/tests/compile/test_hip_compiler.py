@@ -7,10 +7,14 @@ import pytest
 
 from rocm_mcp import HipCompiler
 
+# Anchored to this file, not the working directory: CI runs pytest from the
+# repository root, where a path relative to rocm_mcp/ does not resolve.
+_HERE = Path(__file__).parent
+
 
 def test_hip_compiler_minimal(tmp_path: Path) -> None:
     """Test HIP compilation only with source."""
-    source_file = "tests/compile/vectoradd_hip.cpp"
+    source_file = str(_HERE / "vectoradd_hip.cpp")
     output_file = tmp_path / "vectoradd_hip.out"
     compiler = HipCompiler()
     result = compiler.compile(source_file=source_file, output_file=output_file)
@@ -28,7 +32,7 @@ def test_hip_compiler_no_source(tmp_path: Path) -> None:
 
 def test_hip_compiler_unknown_source(tmp_path: Path) -> None:
     """Test HIP compilation with unknown source."""
-    source_file = "tests/compile/doesntexist.cpp"
+    source_file = str(_HERE / "doesntexist.cpp")
     output_file = tmp_path / "vectoradd_hip.out"
     compiler = HipCompiler()
     with pytest.raises(FileNotFoundError, match="not exist"):
@@ -37,7 +41,7 @@ def test_hip_compiler_unknown_source(tmp_path: Path) -> None:
 
 def test_hip_compiler_no_output() -> None:
     """Test HIP compilation with missing output file."""
-    source_file = "tests/compile/vectoradd_hip.cpp"
+    source_file = str(_HERE / "vectoradd_hip.cpp")
     compiler = HipCompiler()
     with pytest.raises(ValueError, match="provided"):
         compiler.compile(source_file=source_file, output_file=None)
@@ -45,7 +49,7 @@ def test_hip_compiler_no_output() -> None:
 
 def test_hip_compiler_flags(tmp_path: Path) -> None:
     """Test HIP compilation with flags."""
-    source_file = "tests/compile/vectoradd_hip.cpp"
+    source_file = str(_HERE / "vectoradd_hip.cpp")
     output_file = tmp_path / "vectoradd_hip.out"
     compiler = HipCompiler()
     result = compiler.compile(
@@ -59,7 +63,7 @@ def test_hip_compiler_flags(tmp_path: Path) -> None:
 
 def test_hip_compiler_include_dirs(tmp_path: Path) -> None:
     """Test HIP compilation with include dirs."""
-    source_file = "tests/compile/vectoradd_hip.cpp"
+    source_file = str(_HERE / "vectoradd_hip.cpp")
     output_file = tmp_path / "vectoradd_hip.out"
     compiler = HipCompiler()
     result = compiler.compile(
@@ -73,7 +77,7 @@ def test_hip_compiler_include_dirs(tmp_path: Path) -> None:
 
 def test_hip_compiler_libraries(tmp_path: Path) -> None:
     """Test HIP compilation with libraries."""
-    source_file = "tests/compile/vectoradd_hip.cpp"
+    source_file = str(_HERE / "vectoradd_hip.cpp")
     output_file = tmp_path / "vectoradd_hip.out"
     compiler = HipCompiler()
     result = compiler.compile(

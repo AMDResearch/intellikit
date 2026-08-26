@@ -131,8 +131,11 @@ class Rocminfo:
                 or defaults to 'rocminfo' in the system PATH.
         """
         self.logger = logger or logging.getLogger(self.__class__.__name__)
-        self.rocminfo_exe = os.getenv(
-            "INTELLIKIT_ROCMINFO", str(rocminfo) if rocminfo is not None else "rocminfo"
+        # An explicit argument wins over the environment; the env var is only a
+        # fallback when the caller did not choose. The reverse made it impossible
+        # to override the env var in-process.
+        self.rocminfo_exe = (
+            str(rocminfo) if rocminfo is not None else os.getenv("INTELLIKIT_ROCMINFO", "rocminfo")
         )
         self.logger.info("Initialized rocminfo wrapper.")
 
