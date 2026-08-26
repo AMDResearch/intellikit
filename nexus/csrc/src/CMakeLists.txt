@@ -53,6 +53,25 @@ CPMAddPackage("gh:nlohmann/json@3.11.3")
 
 find_package(HSA REQUIRED)
 
+# ROCm 10 adds hsa_amd_queue_create; ROCm <= 7 headers do not declare it, so the
+# hook must compile out rather than fail to build. The header probed here MUST be
+# the same one the compile uses, or the probe answers about the wrong tree.
+if(NOT HSA_INCLUDE_DIR)
+    message(FATAL_ERROR "nexus: HSA_INCLUDE_DIR unset -- FindHSA must run first")
+endif()
+set(_nexus_hdr "${HSA_INCLUDE_DIR}/hsa/hsa_ext_amd.h")
+if(NOT EXISTS "${_nexus_hdr}")
+    message(FATAL_ERROR "nexus: no hsa_ext_amd.h under ${HSA_INCLUDE_DIR}")
+endif()
+file(READ "${_nexus_hdr}" _nexus_hsa_ext_amd)
+string(FIND "${_nexus_hsa_ext_amd}" "hsa_amd_queue_create(" _nexus_amd_qc)
+if(NOT _nexus_amd_qc EQUAL -1)
+    message(STATUS "=== nexus: QUEUE SLOTS = legacy + hsa_amd_queue_create  (${_nexus_hdr})")
+    set(NEXUS_AMD_QUEUE_CREATE ON)
+else()
+    message(STATUS "=== nexus: QUEUE SLOTS = legacy ONLY  (${_nexus_hdr})")
+endif()
+
 #
 # nexus target
 #
@@ -89,3 +108,11 @@ target_link_libraries(nexus
         hsa::hsa
     PRIVATE
 )
+
+if(NEXUS_AMD_QUEUE_CREATE)
+    if(NOT TARGET nexus)
+        message(FATAL_ERROR "nexus: target missing, cannot enable the amd queue hook")
+    endif()
+    target_compile_definitions(nexus PRIVATE NEXUS_HAS_AMD_QUEUE_CREATE)
+    message(STATUS "=== nexus: NEXUS_HAS_AMD_QUEUE_CREATE bound to target nexus")
+endif()

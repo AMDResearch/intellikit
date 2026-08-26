@@ -1,14 +1,18 @@
 <div align="center">
 
-<img src="./docs/intellikit.svg" alt="IntelliKit" width="200" />
+<img src="./docs/public/intellikit.svg" alt="IntelliKit" width="200" />
 
 # IntelliKit
 
-**Profiling and analysis for AMD software — GPU, host CPU, and LLM workflows**
+**Agent-first tooling for AMD hardware**
+
+<a href="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml"><img src="https://github.com/AMDResearch/intellikit/actions/workflows/intellikit-pytest.yml/badge.svg" alt="Intellikit Pytest"></a>
+<a href="https://rocm.docs.amd.com/projects/intellikit/en/latest/"><img src="https://img.shields.io/badge/docs-live-blue" alt="Docs"></a>
+<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 
 </div>
 
-IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
+IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, **amd-smi**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
 
 ---
 
@@ -22,7 +26,7 @@ Rough workflow: **isolate** a kernel → **profile** it (counters and/or source 
 | **[Metrix](metrix/)** | **Profile** — **human-readable** metrics from hardware counters (bandwidth, cache, etc.). | [README](metrix/README.md) · [examples](metrix/examples/) |
 | **[Linex](linex/)** | **Profile** — **source-line** timing and stalls (compile with `-g` for file:line mapping). | [README](linex/README.md) · [examples](linex/examples/) |
 | **[Nexus](nexus/)** | **Inspect** — from **HSA packets**, see what ran: source and assembly. | [README](nexus/README.md) · [examples](nexus/examples/) |
-| **[rocm_mcp](rocm_mcp/)** | **MCP** — HIP compile, HIP docs, **rocminfo**, and related servers for agents. | [README](rocm_mcp/README.md) · [examples](rocm_mcp/examples/) |
+| **[rocm_mcp](rocm_mcp/)** | **MCP** — HIP compile, HIP docs, **rocminfo**, **amd-smi**, and related servers for agents. | [README](rocm_mcp/README.md) · [examples](rocm_mcp/examples/) |
 | **[uprof_mcp](uprof_mcp/)** | **CPU** — MCP bridge to **AMD uProf** for host-side hotspots. | [README](uprof_mcp/README.md) · [examples](uprof_mcp/examples/) |
 | **[Accordo](accordo/)** | **Validate** — prove an optimized kernel still matches a reference. | [README](accordo/README.md) · [examples](accordo/examples/) |
 
@@ -55,7 +59,10 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 | Python | 3.10 or newer |
 | ROCm | 6.0+ for GPU packages (use **7.0+** for Linex); skip if you only use host-side tools like `uprof_mcp` |
 | GPU | **MI300+** for the full GPU experience; some pieces vary by tool — see each package’s README |
+| cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** only (C++ build via KernelDB) |
 | uProf | **AMD uProf** on **x86** for `uprof_mcp` only — see that README |
+
+> **System packages for accordo / nexus:** These tools compile C++ code (via [KernelDB](https://github.com/AMDResearch/KernelDB)) during `pip install`. Install `cmake`, `libdwarf-dev`, and `libzstd-dev` (`libdwarf-devel`/`libzstd-devel` on Fedora/RHEL) first, or the build will fail. The [IntelliKit Docker image](docker/Dockerfile) includes these packages; `install.sh` checks for them and exits with an error if missing. See [docs](https://amdresearch.github.io/intellikit/getting-started/installation/) for details.
 
 For **development** on a subset of packages only, use editable installs (nothing to install at the monorepo root):
 
@@ -98,6 +105,10 @@ With **uv** and a clone of this repo, you can point an MCP client at each packag
     "hip-compiler-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "hip-compiler-mcp"]
+    },
+    "amd-smi-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/rocm_mcp", "amd-smi-mcp"]
     }
   }
 }

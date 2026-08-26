@@ -34,12 +34,23 @@ static std::vector<char> read_file(const std::string& path) {
 }
 
 static hsa_agent_t g_gpu_agent{};
+static hsa_agent_t g_cpu_agent{};
 
 static hsa_status_t find_gpu(hsa_agent_t agent, void*) {
     hsa_device_type_t type;
     hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type);
     if (type == HSA_DEVICE_TYPE_GPU) {
         g_gpu_agent = agent;
+        return HSA_STATUS_INFO_BREAK;
+    }
+    return HSA_STATUS_SUCCESS;
+}
+
+static hsa_status_t find_cpu(hsa_agent_t agent, void*) {
+    hsa_device_type_t type;
+    hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type);
+    if (type == HSA_DEVICE_TYPE_CPU) {
+        g_cpu_agent = agent;
         return HSA_STATUS_INFO_BREAK;
     }
     return HSA_STATUS_SUCCESS;
@@ -297,6 +308,7 @@ int main(int argc, char** argv) {
     }
 
     hsa_iterate_agents(find_gpu, nullptr);
+    hsa_iterate_agents(find_cpu, nullptr);
 
     std::cerr << "Stage 1: GPU agent found\n";
     std::cerr.flush();
@@ -341,6 +353,94 @@ int main(int argc, char** argv) {
     }
 
     std::cerr << "Stage 2: backing pool found\n";
+    std::cerr.flush();
+
+    // Kernarg pool placement preference (matches HIP/CLR convention on
+    // production discrete GPUs):
+    //
+    //   Tier 1: GPU-agent KERNARG_INIT pool       -- device-local, CPU-writable,
+    //                                                dispatch-readable. Present on
+    //                                                AIE agents today; ROCr is
+    //                                                expected to expose this for
+    //                                                GPU agents going forward.
+    //   Tier 2: GPU-agent coarse-grain pool       -- HIP's path on current
+    //                                                discrete GPUs. Keeps kernargs
+    //                                                on-device for low dispatch
+    //                                                latency. NOT CPU-writable via
+    //                                                plain memcpy on RDNA dGPUs --
+    //                                                must be populated via
+    //                                                hsa_memory_copy (DMA), like
+    //                                                the backing_pool regions.
+    //   Tier 3: CPU-agent KERNARG_INIT pool       -- historical / safe fallback.
+    //                                                Kernargs live in host-pinned
+    //                                                memory; GPU reads them across
+    //                                                PCIe per dispatch.
+    //
+    // Tier 2 reuses backing_pool: it is the GPU agent's first runtime-allocable
+    // global pool, which on AMD platforms is coarse-grained. Allocation from
+    // backing_pool was already validated above (RUNTIME_ALLOC_ALLOWED), so
+    // tier 2 is essentially always available; tier 3 is reached only if both
+    // GPU paths fail at allocation time.
+    enum class KernargPoolTier {
+        GPU_KERNARG,
+        GPU_COARSE_GRAIN,
+        CPU_KERNARG,
+    };
+
+    auto kernarg_init_cb = [](hsa_amd_memory_pool_t pool, void* data) {
+        auto* ctx = reinterpret_cast<std::pair<hsa_amd_memory_pool_t*, bool*>*>(data);
+        hsa_amd_segment_t segment;
+        hsa_amd_memory_pool_get_info(pool,
+            HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &segment);
+        if (segment != HSA_AMD_SEGMENT_GLOBAL) return HSA_STATUS_SUCCESS;
+
+        uint32_t flags = 0;
+        hsa_amd_memory_pool_get_info(pool,
+            HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flags);
+        if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT) {
+            *ctx->first = pool;
+            *ctx->second = true;
+            return HSA_STATUS_INFO_BREAK;
+        }
+        return HSA_STATUS_SUCCESS;
+    };
+
+    hsa_amd_memory_pool_t gpu_kernarg_pool{};
+    bool has_gpu_kernarg = false;
+    std::pair<hsa_amd_memory_pool_t*, bool*> gpu_kctx{&gpu_kernarg_pool, &has_gpu_kernarg};
+    hsa_amd_agent_iterate_memory_pools(g_gpu_agent, kernarg_init_cb, &gpu_kctx);
+
+    // Look up CPU-agent KERNARG_INIT preemptively so we can fall back at
+    // allocation time without re-iterating.
+    hsa_amd_memory_pool_t cpu_kernarg_pool{};
+    bool has_cpu_kernarg = false;
+    std::pair<hsa_amd_memory_pool_t*, bool*> cpu_kctx{&cpu_kernarg_pool, &has_cpu_kernarg};
+    hsa_amd_agent_iterate_memory_pools(g_cpu_agent, kernarg_init_cb, &cpu_kctx);
+
+    // Pick the initial tier: prefer GPU-kernarg if available, otherwise
+    // GPU-coarse-grain (== backing_pool). CPU-kernarg is reserved as an
+    // allocation-time fallback below.
+    hsa_amd_memory_pool_t kernarg_pool;
+    KernargPoolTier kernarg_tier;
+    if (has_gpu_kernarg) {
+        kernarg_pool = gpu_kernarg_pool;
+        kernarg_tier = KernargPoolTier::GPU_KERNARG;
+    } else {
+        kernarg_pool = backing_pool;
+        kernarg_tier = KernargPoolTier::GPU_COARSE_GRAIN;
+    }
+
+    auto kernarg_tier_name = [](KernargPoolTier t) -> const char* {
+        switch (t) {
+            case KernargPoolTier::GPU_KERNARG:      return "GPU-kernarg";
+            case KernargPoolTier::GPU_COARSE_GRAIN: return "GPU-coarse-grain";
+            case KernargPoolTier::CPU_KERNARG:      return "CPU-kernarg";
+        }
+        return "unknown";
+    };
+
+    std::cerr << "Stage 2: kernarg pool selected (tier: "
+              << kernarg_tier_name(kernarg_tier) << ")\n";
     std::cerr.flush();
 
     // ==========================================================
@@ -391,10 +491,22 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        hsa_amd_memory_access_desc_t access{};
-        access.agent_handle = g_gpu_agent;
-        access.permissions = HSA_ACCESS_PERMISSION_RW;
-        hsa_amd_vmem_set_access(reserved, r.aligned_size, &access, 1);
+        hsa_amd_memory_access_desc_t access[2]{};
+        access[0].agent_handle = g_gpu_agent;
+        access[0].permissions = HSA_ACCESS_PERMISSION_RW;
+        access[1].agent_handle = g_cpu_agent;
+        access[1].permissions = HSA_ACCESS_PERMISSION_RW;
+        hsa_status_t set_access_status =
+            hsa_amd_vmem_set_access(reserved, r.aligned_size, access, 2);
+        if (set_access_status != HSA_STATUS_SUCCESS) {
+            std::cerr << "vmem_set_access failed for region 0x"
+                      << std::hex << r.base << std::dec
+                      << " while enabling GPU+CPU RW access (status="
+                      << static_cast<int>(set_access_status)
+                      << "). Ensure a valid CPU agent is available for host-side "
+                      << "access to mapped replay memory.\n";
+            return 1;
+        }
 
         std::stringstream fname;
         fname << capture_dir << "/memory/region_"
@@ -560,7 +672,8 @@ int main(int argc, char** argv) {
         hsa_executable_symbol_get_info(kernel_symbol,
             HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
             &kernel_object);
-        hsa_executable_symbol_get_info(kernel_symbol,
+        hsa_status_t kernarg_query_st = hsa_executable_symbol_get_info(
+            kernel_symbol,
             HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
             &kernarg_size);
         hsa_executable_symbol_get_info(kernel_symbol,
@@ -569,6 +682,78 @@ int main(int argc, char** argv) {
         hsa_executable_symbol_get_info(kernel_symbol,
             HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE,
             &private_segment);
+
+        // kernarg_size may be 0 for assembly-origin kernels whose .kd
+        // doesn't expose the standard symbol attribute (notably Tensile-
+        // generated rocBLAS GEMMs). Fall back to the AMDGPU-note value
+        // from metadata.json first (strictly authoritative -- read from
+        // the same code object's .kernarg_segment_size note), then to
+        // dispatch.json's kernarg_size as a last resort.
+        //
+        // metadata.json is preferred over dispatch.json because old
+        // captures from pre-fix kerncap versions wrote a guessed 4096
+        // into dispatch.json, while metadata.json's value has always
+        // been parsed authoritatively. Trusting dispatch.json first
+        // would silently propagate that historical bug.
+        //
+        // Special case: if the user supplied --hsaco for a recompiled
+        // variant, falling back silently to the captured kernarg size
+        // would substitute possibly-wrong-ABI bytes into the variant's
+        // launch. Escalate to a hard error in that case.
+        bool kernarg_query_failed =
+            (kernarg_query_st != HSA_STATUS_SUCCESS) || (kernarg_size == 0);
+        if (kernarg_query_failed) {
+            uint32_t fallback_size = 0;
+            std::string fallback_source;
+
+            auto meta_blob_for_kernarg = read_file(capture_dir + "/metadata.json");
+            if (!meta_blob_for_kernarg.empty()) {
+                nlohmann::json mj = nlohmann::json::parse(
+                    std::string(meta_blob_for_kernarg.begin(),
+                                meta_blob_for_kernarg.end()),
+                    nullptr, /*exceptions=*/false);
+                if (!mj.is_discarded()) {
+                    auto it = mj.find("kernarg_segment_size_meta");
+                    if (it != mj.end() && it->is_number()) {
+                        fallback_size = it->get<uint32_t>();
+                        fallback_source = "metadata.json (AMDGPU note)";
+                    }
+                }
+            }
+
+            if (fallback_size == 0) {
+                uint32_t dispatch_kernarg = get_uint("kernarg_size");
+                if (dispatch_kernarg > 0) {
+                    fallback_size = dispatch_kernarg;
+                    fallback_source = "dispatch.json";
+                }
+            }
+
+            if (fallback_size == 0) {
+                std::cerr << "Fatal: cannot determine kernarg_size from HSACO "
+                             "(symbol query unavailable), dispatch.json, or "
+                             "metadata.json. Capture is unusable; re-capture "
+                             "with a kerncap version that records "
+                             "kernarg_segment_size_meta.\n";
+                return 1;
+            }
+
+            if (!override_hsaco_path.empty()) {
+                std::cerr << "Fatal: --hsaco variant (" << override_hsaco_path
+                          << ") exposes no kernarg_size via HSA symbol query, "
+                             "and the captured kernarg_size (" << fallback_size
+                          << " bytes from " << fallback_source << ") cannot be "
+                             "safely substituted -- the variant may have a "
+                             "different ABI. Re-assemble the variant with "
+                             "proper AMDGPU metadata (.kernarg_segment_size).\n";
+                return 1;
+            }
+
+            std::cerr << "Note: HSACO kernarg_size unavailable; using "
+                      << fallback_size << " bytes from " << fallback_source
+                      << " (assembly-origin kernel).\n";
+            kernarg_size = fallback_size;
+        }
     }
 
     uint32_t grid[3] = {1, 1, 1};
@@ -603,6 +788,217 @@ int main(int argc, char** argv) {
     }
 
     // ==========================================================
+    // STAGE 4.5: RESTORE MODULE-SCOPE VARIABLES
+    // ==========================================================
+    //
+    // Kokkos's hip_parallel_launch_constant_memory<...> launchers (LAMMPS
+    // TagPairEAMKernelC, SPARTA, ExaMPM) carry their View pointers and
+    // scalars in the HSACO module variable
+    // ``kokkos_impl_hip_constant_memory_buffer``, populated at runtime by
+    // hipMemcpyToSymbol. Without restoring these bytes the kernel reads
+    // NULL ``View::m_data`` and faults at (nil).
+    //
+    // module_variables.json is optional: older captures (or captures with
+    // ``KERNCAP_DISABLE_VARIABLE_SNAPSHOT=1``) won't have it, in which
+    // case we silently no-op for back-compat.
+    struct ModuleVarRestore {
+        std::string name;
+        uint64_t addr;        // device address looked up in the loaded executable
+        size_t   captured;    // bytes in the on-disk blob
+        size_t   current;     // bytes the loaded variable actually has
+        std::vector<char> blob;
+    };
+    std::vector<ModuleVarRestore> module_var_restores;
+
+    {
+        // Identify the captured kernel's executable so we can filter the
+        // module-variable manifest to entries from THAT executable. Without
+        // this, a capture that observed many Kokkos kernels (LAMMPS,
+        // SPARTA, etc.) writes one ``kokkos_impl_hip_constant_memory_buffer``
+        // entry per executable, all with the SAME symbol name but DIFFERENT
+        // blob contents. Since only one HSACO is loaded at replay time,
+        // ``hsa_executable_get_symbol_by_name`` resolves them all to the
+        // SAME address; the last entry in JSON order silently stomps the
+        // correct blob, leaving the kernel's __constant__ View pointers
+        // pointing into the wrong kernel's data and faulting at (nil).
+        //
+        // The captured kernel's executable sha256 is recorded in
+        // metadata.json (``hsaco_sha256``). If absent (older captures or
+        // missing field) we fall back to copying every entry, matching
+        // the previous behavior.
+        std::string captured_exec_sha;
+        {
+            auto meta_blob = read_file(capture_dir + "/metadata.json");
+            if (!meta_blob.empty()) {
+                std::string mtext(meta_blob.begin(), meta_blob.end());
+                nlohmann::json mjson = nlohmann::json::parse(
+                    mtext, nullptr, /*exceptions=*/false);
+                if (!mjson.is_discarded()) {
+                    auto sit = mjson.find("hsaco_sha256");
+                    if (sit != mjson.end() && sit->is_string()) {
+                        captured_exec_sha = sit->get<std::string>();
+                    }
+                }
+            }
+            if (captured_exec_sha.empty()) {
+                std::cerr << "Stage 4.5: NOTE metadata.json missing 'hsaco_sha256'; "
+                             "module-variable restore will not filter by "
+                             "executable (older capture format)\n";
+            }
+        }
+
+        std::vector<char> mvbuf = read_file(capture_dir + "/module_variables.json");
+        if (!mvbuf.empty()) {
+            std::string mvtext(mvbuf.begin(), mvbuf.end());
+            nlohmann::json mvjson = nlohmann::json::parse(
+                mvtext, nullptr, /*exceptions=*/false);
+            if (mvjson.is_discarded()) {
+                std::cerr << "Stage 4.5: WARNING module_variables.json is malformed; "
+                             "skipping module-variable restore\n";
+            } else {
+                auto entries_it = mvjson.find("variables");
+                if (entries_it != mvjson.end() && entries_it->is_array()) {
+                    size_t total = entries_it->size();
+                    size_t restored = 0;
+                    size_t filtered_out = 0;
+                    for (const auto& entry : *entries_it) {
+                        std::string name = entry.value("name", std::string{});
+                        size_t captured_size = entry.value("size", size_t{0});
+                        std::string blob_rel = entry.value("blob", std::string{});
+                        std::string entry_exec_sha =
+                            entry.value("executable_sha256", std::string{});
+                        if (name.empty() || captured_size == 0 || blob_rel.empty()) {
+                            continue;
+                        }
+
+                        // Only restore variables that belong to the captured
+                        // kernel's executable. Other entries describe symbols
+                        // from sibling Kokkos kernels and would alias onto the
+                        // same loaded address with incorrect bytes.
+                        if (!captured_exec_sha.empty() &&
+                            !entry_exec_sha.empty() &&
+                            entry_exec_sha != captured_exec_sha) {
+                            ++filtered_out;
+                            continue;
+                        }
+
+                        // Look up the symbol's current device address.
+                        // HIP path uses hipModuleGetGlobal because the
+                        // hsa_executable_t isn't directly exposed; HSA
+                        // path goes through hsa_executable_get_symbol_by_name.
+                        uint64_t addr = 0;
+                        size_t   current_size = 0;
+                        if (use_hip) {
+                            hipDeviceptr_t dptr = nullptr;
+                            size_t bytes = 0;
+                            hipError_t st = hipModuleGetGlobal(
+                                &dptr, &bytes, hip_module, name.c_str());
+                            if (st != hipSuccess) {
+                                std::cerr << "Stage 4.5: WARNING symbol '" << name
+                                          << "' not found in loaded module ("
+                                          << hipGetErrorString(st)
+                                          << "); skipping (likely --hsaco variant "
+                                             "renamed/removed it)\n";
+                                continue;
+                            }
+                            addr = reinterpret_cast<uint64_t>(dptr);
+                            current_size = bytes;
+                        } else {
+                            hsa_executable_symbol_t sym{};
+                            hsa_status_t st = hsa_executable_get_symbol_by_name(
+                                executable, name.c_str(), &g_gpu_agent, &sym);
+                            if (st != HSA_STATUS_SUCCESS) {
+                                std::cerr << "Stage 4.5: WARNING symbol '" << name
+                                          << "' not found in loaded executable "
+                                             "(status=" << st
+                                          << "); skipping (likely --hsaco variant "
+                                             "renamed/removed it)\n";
+                                continue;
+                            }
+                            if (hsa_executable_symbol_get_info(
+                                    sym,
+                                    HSA_EXECUTABLE_SYMBOL_INFO_VARIABLE_ADDRESS,
+                                    &addr) != HSA_STATUS_SUCCESS ||
+                                hsa_executable_symbol_get_info(
+                                    sym,
+                                    HSA_EXECUTABLE_SYMBOL_INFO_VARIABLE_SIZE,
+                                    &current_size) != HSA_STATUS_SUCCESS) {
+                                std::cerr << "Stage 4.5: WARNING failed to query "
+                                             "address/size for '" << name
+                                          << "'; skipping\n";
+                                continue;
+                            }
+                        }
+
+                        if (addr == 0 || current_size == 0) {
+                            std::cerr << "Stage 4.5: WARNING '" << name
+                                      << "' resolved to addr=0 or size=0; skipping\n";
+                            continue;
+                        }
+
+                        if (current_size != captured_size) {
+                            // ABI drift on --hsaco variants. Same posture as
+                            // the kernarg-size mismatch warning below: copy
+                            // min(...) and warn so the user can reason about it.
+                            std::cerr << "Stage 4.5: WARNING size mismatch for '"
+                                      << name << "': captured=" << captured_size
+                                      << " current=" << current_size
+                                      << "; copying min(...)\n";
+                        }
+
+                        std::vector<char> blob =
+                            read_file(capture_dir + "/" + blob_rel);
+                        if (blob.empty()) {
+                            std::cerr << "Stage 4.5: WARNING blob '" << blob_rel
+                                      << "' is missing or empty; skipping '"
+                                      << name << "'\n";
+                            continue;
+                        }
+                        if (blob.size() != captured_size) {
+                            std::cerr << "Stage 4.5: WARNING blob '" << blob_rel
+                                      << "' is " << blob.size() << " bytes but "
+                                         "manifest says " << captured_size
+                                      << "; using actual blob size\n";
+                        }
+
+                        ModuleVarRestore mvr;
+                        mvr.name = std::move(name);
+                        mvr.addr = addr;
+                        mvr.captured = blob.size();
+                        mvr.current = current_size;
+                        mvr.blob = std::move(blob);
+                        module_var_restores.push_back(std::move(mvr));
+                        ++restored;
+                    }
+                    std::cerr << "Stage 4.5: restored " << restored << "/" << total
+                              << " module variable(s)";
+                    if (filtered_out > 0) {
+                        std::cerr << " (" << filtered_out
+                                  << " filtered out: belong to other captured executables)";
+                    }
+                    std::cerr << "\n";
+                } else {
+                    std::cerr << "Stage 4.5: module_variables.json has no 'variables' "
+                                 "array; skipping\n";
+                }
+            }
+        }
+        // No file: silently no-op (back-compat with older captures).
+    }
+
+    auto restore_module_variables = [&]() {
+        for (const auto& mvr : module_var_restores) {
+            size_t copy_size = std::min(mvr.captured, mvr.current);
+            hsa_status_t cst = hsa_memory_copy(
+                reinterpret_cast<void*>(mvr.addr), mvr.blob.data(), copy_size);
+            if (cst != HSA_STATUS_SUCCESS) {
+                std::cerr << "Stage 4.5: hsa_memory_copy failed for '"
+                          << mvr.name << "' (status=" << cst << ")\n";
+            }
+        }
+    };
+
+    // ==========================================================
     // STAGE 5: MULTI-ITERATION DISPATCH WITH PROFILING
     // ==========================================================
 
@@ -610,15 +1006,57 @@ int main(int argc, char** argv) {
         for (auto& rr : runtime_regions) {
             void* dst = static_cast<void*>(
                 static_cast<uint8_t*>(rr.reserved) + rr.offset);
-            hsa_memory_copy(dst, rr.blob.data(), rr.size);
+            hsa_status_t cst = hsa_memory_copy(dst, rr.blob.data(), rr.size);
+            if (cst != HSA_STATUS_SUCCESS) {
+                std::cerr << "hsa_memory_copy failed for region 0x"
+                          << std::hex << rr.original_base << std::dec
+                          << " (status=" << cst << ")\n";
+            }
         }
     };
 
     void* kernarg = nullptr;
-    hsa_amd_memory_pool_allocate(backing_pool,
-                                 kernarg_size,
-                                 0,
-                                 &kernarg);
+    hsa_status_t kernarg_alloc_st = hsa_amd_memory_pool_allocate(
+        kernarg_pool, kernarg_size, 0, &kernarg);
+
+    // If the selected GPU tier fails to allocate, fall back to CPU-kernarg.
+    // This is rare in practice (the GPU pool was already validated as
+    // RUNTIME_ALLOC_ALLOWED) but covers exotic configurations such as
+    // out-of-VRAM at replay time.
+    if ((kernarg_alloc_st != HSA_STATUS_SUCCESS || kernarg == nullptr) &&
+        kernarg_tier != KernargPoolTier::CPU_KERNARG &&
+        has_cpu_kernarg) {
+        std::cerr << "Note: kernarg allocation failed on "
+                  << kernarg_tier_name(kernarg_tier)
+                  << " (status=" << kernarg_alloc_st
+                  << "); falling back to CPU-kernarg\n";
+        kernarg = nullptr;
+        kernarg_pool = cpu_kernarg_pool;
+        kernarg_tier = KernargPoolTier::CPU_KERNARG;
+        kernarg_alloc_st = hsa_amd_memory_pool_allocate(
+            kernarg_pool, kernarg_size, 0, &kernarg);
+    }
+
+    if (kernarg_alloc_st != HSA_STATUS_SUCCESS || kernarg == nullptr) {
+        std::cerr << "Failed to allocate kernarg buffer"
+                  << " (size=" << kernarg_size
+                  << ", status=" << kernarg_alloc_st
+                  << ", tier=" << kernarg_tier_name(kernarg_tier) << ")\n";
+        return 1;
+    }
+
+    // Belt-and-suspenders: ensure the GPU agent can read the kernarg buffer.
+    // Kernarg-flagged pools are typically already accessible to all execution
+    // agents, but on configurations where the pool lives on the CPU agent this
+    // grant guarantees GPU visibility. For the GPU coarse-grain tier the GPU
+    // already owns the pool so this is effectively a no-op. Failure here is
+    // non-fatal -- most often it means access is already granted.
+    hsa_status_t aa_st = hsa_amd_agents_allow_access(
+        1, &g_gpu_agent, nullptr, kernarg);
+    if (aa_st != HSA_STATUS_SUCCESS) {
+        std::cerr << "Warning: hsa_amd_agents_allow_access for kernarg "
+                     "returned status=" << aa_st << " (likely already accessible)\n";
+    }
 
     std::vector<char> kblob = read_file(capture_dir + "/kernarg.bin");
     // kernarg_size comes from the loaded HSACO symbol; kblob is from the captured
@@ -630,7 +1068,26 @@ int main(int argc, char** argv) {
                   << ") != HSACO kernarg_size (" << kernarg_size
                   << "); kernel ABI may not match captured data\n";
     }
-    memcpy(kernarg, kblob.data(), std::min(kblob.size(), (size_t)kernarg_size));
+
+    // Populate the kernarg buffer. KERNARG_INIT-flagged pools (tiers 1 and 3)
+    // are guaranteed CPU-writable, so a plain memcpy is correct. Tier 2
+    // (GPU coarse-grain) is device VRAM that ROCr does not pre-map into the
+    // host process on RDNA discrete GPUs -- a CPU memcpy there faults. Use
+    // hsa_memory_copy (DMA) for that tier, matching the path that backing_pool
+    // regions already use to populate captured memory.
+    const size_t kernarg_copy_bytes = std::min(kblob.size(), (size_t)kernarg_size);
+    if (kernarg_tier == KernargPoolTier::GPU_COARSE_GRAIN) {
+        hsa_status_t kcp_st = hsa_memory_copy(kernarg, kblob.data(),
+                                              kernarg_copy_bytes);
+        if (kcp_st != HSA_STATUS_SUCCESS) {
+            std::cerr << "hsa_memory_copy for kernarg (tier="
+                      << kernarg_tier_name(kernarg_tier)
+                      << ") failed (status=" << kcp_st << ")\n";
+            return 1;
+        }
+    } else {
+        memcpy(kernarg, kblob.data(), kernarg_copy_bytes);
+    }
 
     result.raw_ns.clear();
     result.raw_ns.reserve(iterations);
@@ -667,10 +1124,12 @@ int main(int argc, char** argv) {
                   << "  regions: " << runtime_regions.size() << "\n";
 
         restore_memory();
+        restore_module_variables();
 
         for (size_t iter = 0; iter < iterations; ++iter) {
             if (iter > 0 && recopy) {
                 restore_memory();
+                restore_module_variables();
             }
 
             hipModuleLaunchKernel(
@@ -723,11 +1182,13 @@ int main(int argc, char** argv) {
                   << "  regions: " << runtime_regions.size() << "\n";
 
         restore_memory();
+        restore_module_variables();
 
         for (size_t iter = 0; iter < iterations; ++iter) {
 
             if (iter > 0 && recopy) {
                 restore_memory();
+                restore_module_variables();
             }
 
             uint64_t index = hsa_queue_load_write_index_relaxed(queue);

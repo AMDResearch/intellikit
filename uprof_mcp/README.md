@@ -27,6 +27,22 @@ uv pip install .
 pip install .
 ```
 
+## Setting the uProf Path
+
+uProf MCP needs to know where AMD uProf is installed. There are three ways to set this, in order of precedence:
+
+1. **Environment variable** `INTELLIKIT_UPROF_CLI`:
+   ```bash
+   export INTELLIKIT_UPROF_CLI=/opt/AMDuProf_5.3-521/bin/AMDuProfCLI
+   ```
+
+2. **Constructor argument** (Python API only):
+   ```python
+   profiler = UProfProfiler(uprof="/opt/AMDuProf_5.3-521/bin/AMDuProfCLI")
+   ```
+
+3. **Default path**: `/opt/AMDuProf_5.1-701/bin/AMDuProfCLI`
+
 ## Configuration
 
 To use this server with an MCP client, add the following to your configuration file:
@@ -36,13 +52,16 @@ To use this server with an MCP client, add the following to your configuration f
   "mcpServers": {
     "uprof-profiler-mcp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/uprof_mcp", "uprof-profiler-mcp"]
+      "args": ["run", "--directory", "/path/to/uprof_mcp", "uprof-profiler-mcp"],
+      "env": {
+        "INTELLIKIT_UPROF_CLI": "/opt/AMDuProf_5.3-521/bin/AMDuProfCLI"
+      }
     }
   }
 }
 ```
 
-*Note: Adjust `/path/to/uprof_mcp` to the actual path where you have cloned or installed the package.*
+*Note: Adjust `/path/to/uprof_mcp` to the actual path where you have cloned or installed the package, and update the uProf path to match your installation.*
 
 ## Usage
 
@@ -114,8 +133,13 @@ This project uses `uv` for dependency management.
 ```python
 from uprof_mcp.uprof_profiler import UProfProfiler
 
-profiler = UProfProfiler(logger=None)
+profiler = UProfProfiler(logger=None, uprof=None)
 ```
+
+**Constructor parameters:**
+
+- `logger` (logging.Logger | None): Logger instance. If None, a default logger is created.
+- `uprof` (str | PathLike | None): Path to the uProf CLI executable. If None, uses the `INTELLIKIT_UPROF_CLI` environment variable, or falls back to the default path.
 
 **Methods:**
 

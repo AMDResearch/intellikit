@@ -187,6 +187,130 @@ class TestROCProfV3Wrapper:
         with patch.object(ROCProfV3Wrapper, "_check_rocprofv3"):
             return ROCProfV3Wrapper(timeout_seconds=60)
 
+    def test_command_with_quoted_args_preserved(self, wrapper_no_rocm_check):
+        """Commands with quoted arguments must be split correctly (shlex, not str.split).
+
+        This is a regression test: str.split() would turn
+            python -c "import torch; print(1)"
+        into
+            ["python", "-c", "\"import", "torch;", "print(1)\""]
+        which causes SyntaxError in the spawned Python process.
+        shlex.split() correctly produces:
+            ["python", "-c", "import torch; print(1)"]
+        """
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command='python -c "import torch; print(torch.cuda.is_available())"',
+                counters=["SQ_WAVES"],
+                output_dir=Path(tmpdir),
+            )
+
+        # Find everything after "--"
+        sep_idx = captured_cmd.index("--")
+        target_args = captured_cmd[sep_idx + 1 :]
+
+        assert target_args == [
+            "python",
+            "-c",
+            "import torch; print(torch.cuda.is_available())",
+        ], f"Quoted argument was mangled: {target_args}"
+
+    def test_command_with_single_quoted_args(self, wrapper_no_rocm_check):
+        """Single-quoted arguments should also be handled correctly"""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command="python -c 'print(1+1)'",
+                counters=["SQ_WAVES"],
+                output_dir=Path(tmpdir),
+            )
+
+        sep_idx = captured_cmd.index("--")
+        target_args = captured_cmd[sep_idx + 1 :]
+
+        assert target_args == ["python", "-c", "print(1+1)"]
+
+    def test_command_with_unmatched_quotes_raises(self, wrapper_no_rocm_check):
+        """Commands with unmatched quotes should raise RuntimeError, not ValueError"""
+        wrapper = wrapper_no_rocm_check
+
+        def fake_run(cmd, **kwargs):
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+            pytest.raises(RuntimeError, match="Failed to parse command"),
+        ):
+            wrapper.profile(
+                command='python -c "unterminated',
+                counters=["SQ_WAVES"],
+                output_dir=Path(tmpdir),
+            )
+
+    def test_simple_command_still_works(self, wrapper_no_rocm_check):
+        """Simple commands without quotes should still be split normally"""
+        wrapper = wrapper_no_rocm_check
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            return mock_result
+
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch.object(wrapper, "_parse_output", return_value=[]),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            wrapper.profile(
+                command="./benchmark --size 1024 --warmup 5",
+                counters=["SQ_WAVES"],
+                output_dir=Path(tmpdir),
+            )
+
+        sep_idx = captured_cmd.index("--")
+        target_args = captured_cmd[sep_idx + 1 :]
+
+        assert target_args == ["./benchmark", "--size", "1024", "--warmup", "5"]
+
     def test_kernel_filter_uses_kernel_include_regex(self, wrapper_no_rocm_check):
         """kernel_filter passes the value directly to --kernel-include-regex"""
         wrapper = wrapper_no_rocm_check

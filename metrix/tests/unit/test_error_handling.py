@@ -8,6 +8,7 @@ import pytest
 import subprocess
 from pathlib import Path
 from metrix.profiler.rocprof_wrapper import ROCProfV3Wrapper
+from .conftest import requires_arch, requires_metric
 
 
 class TestMissingExecutable:
@@ -40,11 +41,12 @@ class TestMissingExecutable:
 class TestInvalidArguments:
     """Test handling of invalid CLI arguments"""
 
-    @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
-    def test_invalid_metric_name(self, arch):
+    def test_invalid_metric_name(self):
         """Should handle invalid metric names gracefully"""
         from metrix.backends import get_backend
+        from metrix.backends.detect import detect_or_default
 
+        arch = detect_or_default()
         backend = get_backend(arch)
 
         with pytest.raises(ValueError) as exc_info:
@@ -83,8 +85,8 @@ class TestBackendValidation:
     """Test backend metric validation"""
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
-    def test_get_available_metrics(self, arch):
-        """Backend should list all available metrics"""
+    def test_get_available_metrics_cdna(self, arch):
+        """CDNA backend should list all available metrics including CDNA-only"""
         from metrix.backends import get_backend
 
         backend = get_backend(arch)
@@ -94,9 +96,22 @@ class TestBackendValidation:
         assert "memory.l2_hit_rate" in metrics
         assert "memory.coalescing_efficiency" in metrics
 
+    @requires_metric("memory.l2_hit_rate")
+    def test_get_available_metrics_any_arch(self):
+        """Backend for detected arch should list metrics including l2_hit_rate"""
+        from metrix.backends import get_backend
+        from metrix.backends.detect import detect_or_default
+
+        arch = detect_or_default()
+        backend = get_backend(arch)
+        metrics = backend.get_available_metrics()
+
+        assert len(metrics) > 0
+        assert "memory.l2_hit_rate" in metrics
+
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
-    def test_get_required_counters(self, arch):
-        """Backend should report required counters for metrics"""
+    def test_get_required_counters_cdna(self, arch):
+        """CDNA backend should report TCC counters for L2 hit rate"""
         from metrix.backends import get_backend
 
         backend = get_backend(arch)
@@ -110,6 +125,7 @@ class TestBackendValidation:
 class TestUnsupportedMetrics:
     """Test handling of unsupported metrics on different architectures"""
 
+    @requires_arch("gfx90a")
     def test_gfx90a_has_unsupported_atomic_latency(self):
         """MI200 (gfx90a) should mark atomic_latency as unsupported"""
         from metrix.backends import get_backend
@@ -120,6 +136,7 @@ class TestUnsupportedMetrics:
         assert "TCC_EA_ATOMIC_LEVEL_sum" in backend._unsupported_metrics["memory.atomic_latency"]
         assert "broken" in backend._unsupported_metrics["memory.atomic_latency"].lower()
 
+    @requires_arch("gfx942")
     def test_gfx942_supports_atomic_latency(self):
         """MI300X (gfx942) should support atomic_latency"""
         from metrix.backends import get_backend
@@ -129,6 +146,7 @@ class TestUnsupportedMetrics:
         # Should not be in unsupported - metric is supported on gfx942
         assert "memory.atomic_latency" not in backend._unsupported_metrics
 
+    @requires_arch("gfx90a")
     def test_filter_supported_metrics_gfx90a(self):
         """Filtering should remove unsupported metrics on gfx90a"""
         from metrix.backends import get_backend
@@ -146,6 +164,7 @@ class TestUnsupportedMetrics:
         assert "memory.hbm_bandwidth_utilization" in filtered
         assert "memory.atomic_latency" not in filtered
 
+    @requires_arch("gfx90a")
     def test_check_multiple_metrics(self):
         """Check multiple metrics at once"""
         from metrix.backends import get_backend
@@ -166,15 +185,31 @@ class TestMetricComputation:
     """Test metric computation edge cases"""
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
-    def test_division_by_zero_handling(self, arch):
-        """Metrics should handle zero denominators gracefully"""
+    def test_division_by_zero_handling_cdna(self, arch):
+        """Metrics should handle zero denominators gracefully (CDNA counters)"""
         from metrix.backends import get_backend
 
         backend = get_backend(arch)
         backend._raw_data = {"TCC_HIT_sum": 0, "TCC_MISS_sum": 0}
 
         # Should return 0.0, not raise ZeroDivisionError
-        result = backend._l2_hit_rate()
+        result = backend._metrics["memory.l2_hit_rate"]["compute"]()
+        assert result == 0.0
+
+    @requires_metric("memory.l2_hit_rate")
+    def test_division_by_zero_handling_any_arch(self):
+        """Metrics should handle zero denominators when l2_hit_rate is defined"""
+        from metrix.backends import get_backend
+        from metrix.backends.detect import detect_or_default
+
+        arch = detect_or_default()
+        backend = get_backend(arch)
+
+        # Set all required counters for l2_hit_rate to zero
+        counters = backend._metrics["memory.l2_hit_rate"]["counters"]
+        backend._raw_data = {c: 0 for c in counters}
+
+        result = backend._metrics["memory.l2_hit_rate"]["compute"]()
         assert result == 0.0
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
@@ -189,5 +224,5 @@ class TestMetricComputation:
         }
 
         # Should not crash
-        result = backend._l2_hit_rate()
+        result = backend._metrics["memory.l2_hit_rate"]["compute"]()
         assert isinstance(result, (int, float))

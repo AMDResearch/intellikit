@@ -14,12 +14,15 @@ class Snapshot:
     """Represents a captured snapshot of kernel argument data.
 
     Attributes:
-            arrays: List of numpy arrays containing kernel argument data
+            arrays: Output arrays from the first kernel dispatch (for backward compatibility).
+                     Use dispatch_arrays for per-dispatch access when multiple dispatches are captured.
             execution_time_ms: Time taken to execute and capture the snapshot (milliseconds)
             binary: The binary command that was executed
             working_directory: The directory where the binary was executed
             grid_size: Optional grid dimensions dict with x,y,z (if available)
             block_size: Optional workgroup dimensions dict with x,y,z (if available)
+            dispatch_arrays: Optional list of captured dispatch arrays. Each dispatch
+                             is a list of output arrays in kernel argument order.
 
 
     Example:
@@ -40,6 +43,7 @@ class Snapshot:
     working_directory: str
     grid_size: Optional[dict] = None
     block_size: Optional[dict] = None
+    dispatch_arrays: Optional[List[List[np.ndarray]]] = None
 
     def __repr__(self) -> str:
         """Pretty representation of snapshot."""
@@ -60,6 +64,8 @@ class Snapshot:
             f"  Execution Time: {self.execution_time_ms:.2f}ms",
             f"  Number of Arrays: {len(self.arrays)}",
         ]
+        if self.dispatch_arrays is not None:
+            lines.append(f"  Number of Dispatches: {len(self.dispatch_arrays)}")
 
         if self.grid_size is not None:
             lines.append(

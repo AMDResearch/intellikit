@@ -89,6 +89,15 @@ make run
 
 **If `make run` succeeds**: Proceed to validation.
 
+For Triton reproducers, there may be no `make run` target. Instead run:
+
+```bash
+cd /tmp/kerncap-test/<kernel_name>
+python3 reproducer.py
+```
+
+This replays through Triton and, after edits, writes `candidate.hsaco` for byte-exact validation.
+
 ### Step 5: Validate the reproducer
 
 **5a. Smoke test** — confirm baseline replay works:
@@ -97,9 +106,11 @@ make run
 kerncap validate /tmp/kerncap-test/<kernel_name>
 ```
 
-This is a smoke test only (VA-faithful captures). It confirms the replay runs without crashing but does not check numerical correctness.
+If no rebuilt HSACO is present, this is a smoke test only (VA-faithful captures). It confirms the replay runs without crashing but does not check numerical correctness. If `candidate.hsaco` or `optimized.hsaco` exists from a prior rebuild, kerncap auto-detects it and performs captured-vs-rebuilt byte-exact validation.
 
-**5b. Recompile** — build a baseline HSACO from the unmodified kernel source:
+**5b. Rebuild** — build a baseline HSACO from the unmodified kernel source:
+
+For HIP reproducers:
 
 ```bash
 cd /tmp/kerncap-test/<kernel_name>
@@ -108,15 +119,26 @@ make recompile
 
 This confirms the VFS-overlay recompile pipeline works. It produces `optimized.hsaco` from the unmodified `kernel_variant.cpp`.
 
-**If `make recompile` fails**: Stop here and report the error. This indicates an issue with the source finder or VFS overlay generation.
-
-**5c. Correctness validation** — compare recompiled HSACO against captured baseline:
+For Triton reproducers:
 
 ```bash
-kerncap validate /tmp/kerncap-test/<kernel_name> --hsaco /tmp/kerncap-test/<kernel_name>/optimized.hsaco
+cd /tmp/kerncap-test/<kernel_name>
+python3 reproducer.py
 ```
 
-This runs replay twice (captured HSACO vs recompiled HSACO) and compares outputs byte-for-byte. Since the kernel source is unmodified, they should match exactly. A failure here indicates a recompilation fidelity issue.
+This confirms the editable Python reproducer can re-JIT the kernel and write `candidate.hsaco`.
+
+**If the rebuild fails**: Stop here and report the error. For HIP, this indicates an issue with the source finder or VFS overlay generation. For Triton, this indicates an issue with source copying, signature reconstruction, tensor layout reconstruction, or Triton re-JIT.
+
+**5c. Correctness validation** — compare rebuilt HSACO against captured baseline:
+
+```bash
+kerncap validate /tmp/kerncap-test/<kernel_name>
+```
+
+This auto-detects `optimized.hsaco` (HIP) or `candidate.hsaco` (Triton), runs replay twice (captured HSACO vs rebuilt HSACO), and compares output memory regions byte-for-byte. Since the kernel source is unmodified, they should match exactly. A failure here indicates a recompilation or re-JIT fidelity issue.
+
+Use `kerncap validate -v /tmp/kerncap-test/<kernel_name>` when you need the per-region PASS lines; by default kerncap prints a concise `Result: PASS/FAIL (...)` footer and suppresses noisy per-region success output unless validation fails.
 
 ### Step 6: Report results
 
@@ -126,6 +148,6 @@ Summarize:
 - Whether extraction completed (and any warnings)
 - Whether `make run` compiled and executed successfully
 - Whether smoke test passed (Step 5a)
-- Whether recompile succeeded (Step 5b)
+- Whether rebuild succeeded (Step 5b)
 - Whether correctness validation passed (Step 5c)
 - Any errors or warnings encountered at each step

@@ -1,0 +1,75 @@
+"""
+GFX950 (MI350X/MI355X) Backend
+
+Metrics are loaded from counter_defs.yaml.
+This file provides architecture-specific infrastructure only.
+Device specs are queried from hipGetDeviceProperties at runtime.
+"""
+
+from .base import CounterBackend, DeviceSpecs, ProfileResult
+from .device_info import query_device_specs
+from ..utils.common import split_counters_into_passes
+from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
+from typing import List, Optional, Dict
+
+
+class GFX950Backend(CounterBackend):
+    """
+    AMD MI350X/MI355X (gfx950) counter backend
+
+    Metric definitions live in counter_defs.yaml.
+    """
+
+    def _get_device_specs(self) -> DeviceSpecs:
+        return query_device_specs("gfx950")
+
+    def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
+        """
+        Group counters into passes using MI350X-specific block limits.
+
+        This keeps the hardware-specific knowledge (block limits and naming)
+        in the gfx950 backend while reusing the generic helper from
+        `common.py` for the actual bin-packing.
+        """
+        from ..logger import logger
+
+        block_limits = self._get_counter_block_limits()
+        return split_counters_into_passes(
+            counters,
+            block_limits=block_limits,
+            get_counter_block=self._get_counter_block,
+            logger=logger,
+        )
+
+    def _get_counter_block_limits(self) -> Dict[str, int]:
+        """
+        Return per-hardware-block counter limits for gfx950 (MI350X).
+
+        These limits define how many performance counters can be simultaneously
+        collected from each hardware block in a single profiling pass.
+        Ref: rocm-systems mi_gpu_spec.yaml perfmon_config for gfx950.
+        """
+        return {
+            "SQ": 8,  # Shader Sequencer — instruction issue & scheduling
+            "TA": 2,  # Texture Addresser — coalesces memory requests
+            "TD": 2,  # Texture Data — routes cache data back to SIMDs
+            "TCP": 4,  # Texture Cache per Pipe — L1 vector cache
+            "TCC": 4,  # Texture Cache Channel — L2 cache / memory controller
+            "CPC": 2,  # Command Processor Compute — decodes dispatches
+            "CPF": 2,  # Command Processor Fetch — fetches commands from memory
+            "SPI": 6,  # Shader Processor Input — workgroup manager, schedules waves to CUs
+            "GRBM": 2,  # Graphics Register Bus Manager — top-level GPU activity counters
+            "GDS": 4,  # Global Data Share — chip-wide shared memory
+        }
+
+    def _run_rocprof(
+        self,
+        command: str,
+        counters: List[str],
+        kernel_filter: Optional[str] = None,
+        cwd: Optional[str] = None,
+        timeout_seconds: Optional[int] = 0,
+    ) -> List[ProfileResult]:
+        """Run rocprofv3 and return results (single pass only - base class handles multi-pass)"""
+        wrapper = ROCProfV3Wrapper(timeout_seconds=timeout_seconds)
+        return wrapper.profile(command, counters, kernel_filter=kernel_filter, cwd=cwd)

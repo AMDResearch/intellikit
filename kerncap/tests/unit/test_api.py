@@ -94,6 +94,7 @@ class TestKerncapExtract:
             dispatch=-1,
             defines=None,
             timeout=300,
+            triton_backend="hsa",
         )
         assert result.output_dir == "./isolated/my_kernel"
         assert result.has_source is True
@@ -126,6 +127,7 @@ class TestKerncapExtract:
             dispatch=2,
             defines=["-D FOO"],
             timeout=60,
+            triton_backend="hsa",
         )
 
 

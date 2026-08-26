@@ -2,7 +2,7 @@
  * kerncap_log.hpp — Minimal fprintf-based logging for the HSA capture tool.
  *
  * Thread-safe on POSIX (fprintf to stderr is atomic for reasonable messages).
- * Zero dependencies, zero static constructors — safe for HSA_TOOLS_LIB injection.
+ * Zero dependencies, zero static constructors — safe for LD_PRELOAD injection.
  */
 #pragma once
 

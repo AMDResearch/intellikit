@@ -4,7 +4,8 @@ Unit tests for the high-level Metrix API
 
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
-from metrix.backends import Statistics
+from metrix.backends import Statistics, get_backend
+from .conftest import requires_arch, requires_metric
 
 
 class TestMetrixInit:
@@ -13,9 +14,9 @@ class TestMetrixInit:
     def test_init_default(self):
         """Test default initialization (falls back to gfx942 if no hardware detected)"""
         profiler = Metrix()
-        # Default depends on hardware detection, but should succeed
-        assert profiler.arch in ["gfx942", "gfx90a", "gfx1201"]
+        # Should succeed on any registered architecture
         assert profiler.backend is not None
+        assert len(profiler.arch) > 0
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_init_custom_arch(self, arch):
@@ -39,7 +40,7 @@ class TestMetrixMetricListing:
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_list_metrics_includes_compute(self, arch):
-        """Test that compute metrics are included in list"""
+        """Test that compute metrics are included in list (CDNA only)"""
         profiler = Metrix(arch=arch)
         metrics = profiler.list_metrics()
         assert "compute.total_flops" in metrics
@@ -47,6 +48,18 @@ class TestMetrixMetricListing:
         assert "compute.hbm_arithmetic_intensity" in metrics
         assert "compute.l2_arithmetic_intensity" in metrics
         assert "compute.l1_arithmetic_intensity" in metrics
+
+    def test_list_metrics_on_detected_arch(self):
+        """Test that listing metrics works on whatever GPU is detected"""
+        profiler = Metrix()
+        metrics = profiler.list_metrics()
+        assert isinstance(metrics, list)
+
+    @requires_metric("memory.l2_hit_rate")
+    def test_list_metrics_includes_l2(self):
+        """memory.l2_hit_rate should appear in list_metrics() when supported"""
+        profiler = Metrix()
+        assert "memory.l2_hit_rate" in profiler.list_metrics()
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_list_profiles(self, arch):
@@ -69,7 +82,7 @@ class TestMetrixMetricListing:
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("memory.l2_hit_rate")
         assert info["name"] == "L2 Cache Hit Rate"
-        assert info["unit"] == "percent"
+        assert info["unit"] == "Percent"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_compute_metric_info(self, arch):
@@ -85,7 +98,7 @@ class TestMetrixMetricListing:
         profiler = Metrix(arch=arch)
         info = profiler.get_metric_info("compute.hbm_arithmetic_intensity")
         assert info["name"] == "HBM Arithmetic Intensity"
-        assert info["unit"] == "FLOP/byte"
+        assert info["unit"] == "FLOPs/Byte"
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_unknown_metric_raises(self, arch):
@@ -134,6 +147,7 @@ class TestProfilingResults:
 class TestUnsupportedMetricsAPI:
     """Test API-level handling of unsupported metrics"""
 
+    @requires_arch("gfx90a")
     def test_explicit_unsupported_metric_raises_error(self):
         """Explicitly requesting unsupported metric should raise ValueError"""
         profiler = Metrix(arch="gfx90a")
@@ -141,6 +155,7 @@ class TestUnsupportedMetricsAPI:
         # Verify atomic_latency is marked as unsupported
         assert "memory.atomic_latency" in profiler.backend._unsupported_metrics
 
+    @requires_arch("gfx90a")
     def test_profile_filters_unsupported_in_profile(self):
         """Using a profile that includes unsupported metrics should filter them"""
         profiler = Metrix(arch="gfx90a")

@@ -94,7 +94,10 @@ class HipCompiler:
                 or defaults to 'hipcc' in the system PATH.
         """
         self.logger = logger or logging.getLogger(self.__class__.__name__)
-        self.hipcc_exe = os.getenv("INTELLIKIT_HIPCC", str(hipcc) if hipcc is not None else "hipcc")
+        # An explicit argument wins over the environment; the env var is only a
+        # fallback when the caller did not choose. The reverse made it impossible
+        # to override the env var in-process.
+        self.hipcc_exe = str(hipcc) if hipcc is not None else os.getenv("INTELLIKIT_HIPCC", "hipcc")
         self.logger.info("Initialized compiler.")
 
     def compile(

@@ -627,6 +627,12 @@ void nexus::hook_api() {
   api_table_->core_->hsa_queue_create_fn = nexus::hsa_queue_create;
   api_table_->core_->hsa_queue_destroy_fn = nexus::hsa_queue_destroy;
 
+#ifdef NEXUS_HAS_AMD_QUEUE_CREATE
+  // Hooked in addition to, not instead of, hsa_queue_create: the legacy entry
+  // point still exists on ROCm 10 and is still the one used on ROCm <= 7.
+  api_table_->amd_ext_->hsa_amd_queue_create_fn = nexus::hsa_amd_queue_create;
+#endif
+
   api_table_->amd_ext_->hsa_amd_memory_pool_allocate_fn =
       nexus::hsa_amd_memory_pool_allocate;
   api_table_->core_->hsa_memory_allocate_fn = nexus::hsa_memory_allocate;
@@ -877,6 +883,93 @@ hsa_status_t nexus::hsa_queue_create(hsa_agent_t agent,
   }
   return result;
 }
+
+#ifdef NEXUS_HAS_AMD_QUEUE_CREATE
+hsa_status_t nexus::hsa_amd_queue_create(hsa_agent_t agent,
+                                         hsa_amd_queue_create_desc_t* descs,
+                                         uint32_t num_descs) {
+  LOG_DETAIL("Creating nexus queue (amd, {} descriptor(s))", num_descs);
+
+  auto instance = get_instance();
+  if (descs == nullptr) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  for (uint32_t i = 0; i < num_descs; ++i) {
+    hsa_amd_queue_create_desc_t* desc = &descs[i];
+
+    // Only compute queues carry AQL dispatch packets. SDMA and AIE queues are
+    // passed through untouched -- intercepting them would capture nothing and
+    // AIE is not implemented by the runtime yet.
+    if (desc->engine_type != HSA_AMD_QUEUE_ENGINE_COMPUTE) {
+      LOG_DETAIL("Passing through non-compute queue (engine_type {})",
+                 static_cast<unsigned>(desc->engine_type));
+      hsa_status_t passthrough =
+          hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
+      if (passthrough != HSA_STATUS_SUCCESS) {
+        return passthrough;
+      }
+      continue;
+    }
+
+    // queue_size_bytes is a byte count; hsa_amd_queue_intercept_create takes a
+    // packet count.
+    constexpr uint32_t kAqlPacketSize = 64;
+    const uint32_t packets = desc->queue_size_bytes / kAqlPacketSize;
+    hsa_queue_t* queue = nullptr;
+    hsa_status_t result = HSA_STATUS_SUCCESS;
+
+    try {
+      result = hsa_ext_call(instance,
+                            hsa_amd_queue_intercept_create,
+                            agent,
+                            packets,
+                            desc->engine.compute.type,
+                            desc->callback,
+                            desc->callback_data,
+                            desc->engine.compute.private_segment_size,
+                            0,
+                            &queue);
+    } catch (const std::exception& e) {
+      LOG_ERROR("Interception queue create throw {} error", e.what());
+      result = HSA_STATUS_ERROR;
+    }
+
+    if (result != HSA_STATUS_SUCCESS) {
+      // Fall back to the real entry point so the application still runs; it
+      // simply will not be traced.
+      LOG_WARN("Intercept create failed ({}), falling back to hsa_amd_queue_create",
+               static_cast<int>(result));
+      hsa_status_t fallback =
+          hsa_ext_call(instance, hsa_amd_queue_create, agent, desc, 1);
+      if (fallback != HSA_STATUS_SUCCESS) {
+        return fallback;
+      }
+      continue;
+    }
+
+    hsa_status_t added = instance->add_queue(queue, agent);
+    if (added != HSA_STATUS_SUCCESS) {
+      LOG_ERROR("Failed to add queue {} ", static_cast<int>(added));
+    }
+
+    added = hsa_ext_call(instance,
+                         hsa_amd_queue_intercept_register,
+                         queue,
+                         nexus::on_submit_packet,
+                         reinterpret_cast<void*>(queue));
+    if (added != HSA_STATUS_SUCCESS) {
+      LOG_ERROR("Failed to register intercept callback with result of ",
+                static_cast<int>(added));
+    }
+
+    // The caller reads the created queue back out of the descriptor.
+    desc->queue = queue;
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+#endif  // NEXUS_HAS_AMD_QUEUE_CREATE
 hsa_status_t nexus::hsa_queue_destroy(hsa_queue_t* queue) {
   LOG_DETAIL("Destroying nexus queue");
   return hsa_core_call(singleton_, hsa_queue_destroy, queue);

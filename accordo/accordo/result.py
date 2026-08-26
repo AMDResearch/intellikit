@@ -30,11 +30,15 @@ class ArrayMismatch:
     mean_difference: float
     reference_sample: np.ndarray
     optimized_sample: np.ndarray
+    dispatch_index: Optional[int] = None
 
     def __str__(self) -> str:
         """Human-readable string representation."""
+        dispatch_prefix = (
+            f"dispatch {self.dispatch_index}: " if self.dispatch_index is not None else ""
+        )
         return (
-            f"Mismatch in arg '{self.arg_name}' ({self.arg_type}): "
+            f"Mismatch in {dispatch_prefix}arg '{self.arg_name}' ({self.arg_type}): "
             f"max_diff={self.max_difference:.2e}, mean_diff={self.mean_difference:.2e}"
         )
 

@@ -7,6 +7,7 @@ import sys
 import argparse
 from pathlib import Path
 
+from .. import __version__
 from ..metrics import METRIC_PROFILES, METRIC_CATALOG
 from ..metrics.catalog import list_all_metrics, list_all_profiles, get_metric_info
 from .profile_cmd import profile_command
@@ -40,7 +41,7 @@ Examples:
 """,
     )
 
-    parser.add_argument("--version", action="version", version="Metrix 0.1.0")
+    parser.add_argument("--version", action="version", version=f"Metrix {__version__}")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 

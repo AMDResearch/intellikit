@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 
+import argparse
 import tempfile
 from pathlib import Path
 from typing import Annotated
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.utilities.logging import get_logger
+from fastmcp import Context, FastMCP
+from fastmcp.utilities.logging import get_logger
 from pydantic import Field
 
 from rocm_mcp.compile.hip_compiler import HipCompiler
@@ -53,8 +54,8 @@ async def compile_hip_source_file(
 
     try:
         if output_file is None:
-            with tempfile.TemporaryDirectory(delete=False) as tmpdir:
-                output_file = Path(tmpdir) / source_file.stem
+            tmpdir = tempfile.mkdtemp()
+            output_file = Path(tmpdir) / source_file.stem
     except Exception as e:
         msg = f"Failed to create output file: {e!s}"
         await ctx.error(msg)
@@ -107,12 +108,12 @@ async def compile_hip_source_string(
         executable.
     """
     try:
-        with tempfile.TemporaryDirectory(delete=False) as tmpdir:
-            source_file = Path(tmpdir) / "hip_source.cpp"
-            if output_file is None:
-                output_file = Path(tmpdir) / "hip_exe"
-            with source_file.open("w") as f:
-                f.write(source)
+        tmpdir = tempfile.mkdtemp()
+        source_file = Path(tmpdir) / "hip_source.cpp"
+        if output_file is None:
+            output_file = Path(tmpdir) / "hip_exe"
+        with source_file.open("w") as f:
+            f.write(source)
     except Exception as e:
         msg = f"Failed to create temporary source file: {e!s}"
         await ctx.error(msg)
@@ -141,7 +142,35 @@ async def compile_hip_source_string(
 
 def main() -> None:
     """Main function to run the HIP compiler MCP server."""
-    mcp.run(transport="stdio")
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http"],
+        default="stdio",
+        help="Transport to use",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind the HTTP server to (only used if transport is http)",
+    )
+    parser.add_argument(
+        "--path",
+        default="/rocm_mcp/hip_compiler",
+        help="Path to serve the HTTP server on (only used if transport is http)",
+    )
+    args = parser.parse_args()
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+    elif args.transport == "http":
+        mcp.run(transport="streamable-http", host=args.host, port=args.port, path=args.path)
 
 
 if __name__ == "__main__":

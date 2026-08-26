@@ -12,6 +12,7 @@
 #include <hsa/hsa_api_trace.h>
 #include <hsa/hsa_ven_amd_loader.h>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -25,6 +26,7 @@
 #include <nlohmann/json.hpp>
 
 #include "kerncap_log.hpp"
+#include "kernarg_metadata.hpp"
 
 #define PUBLIC_API __attribute__((visibility("default")))
 
@@ -73,6 +75,11 @@ public:
         uint64_t failed_tool_count = 0,
         const char* const* failed_tool_names = nullptr);
 
+    // Returns true if this process should perform queue interception.
+    // In multi-process apps (KERNCAP_CAPTURE_CHILD=1), the parent goes
+    // passive after fork and only the child actively intercepts.
+    bool is_active_process();
+
     // Saved (original) API table — public so macros can use it
     HsaApiTable saved_api_;
 
@@ -94,6 +101,29 @@ private:
         void (*callback)(hsa_status_t, hsa_queue_t*, void*),
         void* data, uint32_t private_segment_size,
         uint32_t group_segment_size, hsa_queue_t** queue);
+
+    // Shared by both queue-creation hooks. Returns false when kerncap should
+    // leave this queue alone -- passive process, or first-queue-only mode with
+    // a queue already taken. api_name only labels the log line.
+    static bool should_intercept_queue(CaptureState* inst, const char* api_name);
+
+    // Swaps the runtime's queue for an intercept queue and registers the
+    // packet callback on it.
+    static hsa_status_t intercept_and_register(
+        CaptureState* inst, hsa_agent_t agent, uint32_t size,
+        hsa_queue_type32_t type,
+        void (*callback)(hsa_status_t, hsa_queue_t*, void*),
+        void* data, uint32_t private_segment_size,
+        uint32_t group_segment_size, hsa_queue_t** queue);
+
+#ifdef KERNCAP_HAVE_HSA_AMD_QUEUE_CREATE
+    // ROCm 10 added this entry point and HIP creates its compute queue through
+    // it. hsa_queue_create is still exported and still used, so both slots stay
+    // hooked rather than one replacing the other.
+    static hsa_status_t hsa_amd_queue_create(
+        hsa_agent_t agent, hsa_amd_queue_create_desc_t* descs,
+        uint32_t num_descs);
+#endif
 
     static hsa_status_t hsa_queue_destroy(hsa_queue_t* queue);
 
@@ -170,15 +200,33 @@ private:
     // Snapshot all tracked device memory for VA-faithful replay
     void snapshot_all_tracked_memory(const hsa_kernel_dispatch_packet_t* disp);
 
+    // Snapshot module-scope variables (HSA_SYMBOL_KIND_VARIABLE) from every
+    // observed executable. Required for kernels that read state populated via
+    // hipMemcpyToSymbol / __constant__ / __device__ globals (e.g. Kokkos's
+    // hip_parallel_launch_constant_memory<...> launchers used by LAMMPS).
+    void snapshot_module_variables(const hsa_kernel_dispatch_packet_t* disp);
+
     // Capture kernel dispatch data to the output directory
     void capture_kernel(const hsa_kernel_dispatch_packet_t* disp,
                         const std::string& kernel_name);
+
+    bool should_trace_dispatch(
+        uint64_t queue_id,
+        uint64_t dispatch_seq,
+        uint64_t queue_dispatch_seq,
+        bool is_target) const;
+
+    // Fork safety: clear inherited tracking state in the child process
+    void reset_inherited_state();
+
+    // pthread_atfork parent handler — sets fork_detected_ flag
+    static void atfork_parent_handler();
 
 private:
     // ---- State ----
 
     static CaptureState* singleton_;
-    static std::mutex mutex_;
+    static std::shared_mutex mutex_;
 
     HsaApiTable* api_table_;   // live table (hooked)
 
@@ -195,24 +243,71 @@ private:
     std::unordered_set<void*> vmem_tracked_;  // subset of pointer_sizes_ from VMEM APIs
     std::mutex ptr_mutex_;
 
-    // Code object tracking for .hsaco capture
+    // Code object tracking for .hsaco capture.
+    //
+    // The executable bytes are stored exactly once per loaded executable
+    // (in executable_blobs_). kernel_hsaco_ only records which executable
+    // a given kernel_object came from, so N kernel symbols sharing one
+    // executable do NOT each hold a copy of the (potentially many-MB) blob.
+    // This is critical for libraries like rocBLAS/Tensile that pack many
+    // kernels into a single executable.
     std::unordered_map<uint64_t, std::vector<uint8_t>> pending_reader_blobs_;  // reader handle -> blob
     std::unordered_map<uint64_t, std::vector<uint8_t>> executable_blobs_;      // executable handle -> blob
-    std::unordered_map<uint64_t, std::vector<uint8_t>> kernel_hsaco_;          // kernel_object -> blob
+    std::unordered_map<uint64_t, uint64_t> kernel_hsaco_;                      // kernel_object -> executable handle
     std::mutex code_object_mutex_;
+
+    // Kernarg slot tables parsed from each loaded code object's AMDGPU
+    // metadata. Keyed by executable handle (since ``hsa_*_load_agent_code_object``
+    // gives us the executable; the kernel_object -> symbol -> executable
+    // mapping is built lazily and gives us the right entry on dispatch).
+    std::unordered_map<uint64_t, std::vector<KernelKernargInfo>>
+        executable_kernargs_;
+    std::unordered_map<uint64_t, std::string> executable_blob_sha256_;
+
+    // Triton HSA capture mode: name_map.json path (KERNCAP_TRITON_NAME_MAP)
+    // and the rows we have already loaded.  We re-read on mtime change
+    // because libkerncap.so is preloaded *before* the Python wrapper has
+    // had a chance to populate the file.
+    struct TritonNameMapRow {
+        std::string user_name;
+        std::string hsaco_sha256;
+        std::string hsaco_path;
+        nlohmann::json constexpr_values;
+    };
+    std::string triton_name_map_path_;
+    std::vector<TritonNameMapRow> triton_name_map_;
+    int64_t triton_name_map_mtime_ns_ = 0;
+    std::mutex triton_name_map_mutex_;
+
+    void maybe_reload_triton_name_map();
+    std::optional<TritonNameMapRow>
+        lookup_triton_user_name(const std::string& blob_sha256);
 
     // Queue tracking
     std::map<hsa_queue_t*, hsa_agent_t> queue_agents_;
+    std::unordered_map<uint64_t, uint64_t> queue_dispatch_seen_;
 
     // Dispatch counter for the target kernel (for --dispatch filtering)
     uint32_t target_dispatch_count_ = 0;
+    std::atomic<uint64_t> dispatch_seen_count_{0};
 
     // Configuration (read from env vars once)
     std::string target_kernel_;     // KERNCAP_KERNEL
     int target_dispatch_ = -1;      // KERNCAP_DISPATCH (-1 = first match)
     std::string output_dir_;        // KERNCAP_OUTPUT
     std::string gpu_arch_;          // e.g. "gfx90a" (queried at init)
-    bool captured_ = false;         // true after a successful capture
+    std::atomic<bool> captured_{false};  // true after a successful capture
+    uint64_t trace_dispatch_limit_ = 0;   // KERNCAP_TRACE_DISPATCHES
+    uint64_t trace_dispatch_per_queue_limit_ = 0;  // KERNCAP_TRACE_DISPATCHES_PER_QUEUE
+    bool intercept_first_queue_only_ = false;  // KERNCAP_INTERCEPT_FIRST_QUEUE_ONLY
+    bool bypass_after_capture_ = false;  // KERNCAP_BYPASS_AFTER_CAPTURE
+    bool disable_code_object_hooks_ = false;  // KERNCAP_DISABLE_CODE_OBJECT_HOOKS
+
+    // Fork safety (multi-process support)
+    pid_t initial_pid_ = 0;              // PID when CaptureState was created
+    bool capture_child_mode_ = false;    // KERNCAP_CAPTURE_CHILD env var present
+    std::atomic<bool> fork_detected_{false};    // set by atfork parent handler after fork()
+    std::atomic<bool> child_state_reset_{false}; // true after inherited state cleared in child
 };
 
 }  // namespace kerncap

@@ -12,12 +12,12 @@ description = "Metrix: GPU Profiling. Decoded. Clean metrics for humans, not har
 authors = [
     { name = "Muhammad Awad", email = "muhaawad@amd.com" },
 ]
-license = "MIT"
+license = {text = "MIT"}
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "pandas>=1.5.0",
-    "mcp[cli]",
+    "fastmcp>=2.0.0",
 ]
 
 classifiers = [
@@ -25,9 +25,9 @@ classifiers = [
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Profiling",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 [project.urls]
@@ -57,6 +57,9 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"metrix.backends" = ["*.hip"]
 
 # ---- Ruff configuration ----
 [tool.ruff]

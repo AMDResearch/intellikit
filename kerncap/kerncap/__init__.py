@@ -1,5 +1,12 @@
 """kerncap — Kernel extraction and isolation tool for HIP and Triton on AMD GPUs."""
 
+from importlib.metadata import PackageNotFoundError, version as _get_version
+
+try:
+    __version__ = _get_version("kerncap")
+except PackageNotFoundError:
+    __version__ = "0.1.0"
+
 import logging
 import os
 import pathlib
@@ -83,6 +90,7 @@ class Kerncap:
         dispatch: int = -1,
         defines: Optional[List[str]] = None,
         timeout: int = 300,
+        triton_backend: str = "hsa",
     ) -> ExtractResult:
         """Extract a kernel into a standalone reproducer.
 
@@ -106,6 +114,10 @@ class Kerncap:
             Extra preprocessor defines for reproducer.
         timeout : int
             Maximum seconds to wait for the application.
+        triton_backend : str
+            ``"hsa"`` (default; recommended) or ``"python"`` (legacy).
+            Only consulted when *language* (or auto-detection) is
+            ``"triton"``.
 
         Returns
         -------
@@ -122,6 +134,7 @@ class Kerncap:
             dispatch=dispatch,
             defines=defines,
             timeout=timeout,
+            triton_backend=triton_backend,
         )
 
     def validate(
