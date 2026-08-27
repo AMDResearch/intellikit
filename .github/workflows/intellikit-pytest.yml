@@ -25,10 +25,10 @@ jobs:
       packages: ${{ steps.build-matrix.outputs.packages }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect changed paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -103,7 +103,7 @@ jobs:
               chown -R "$(id -u):$(id -g)" /w 2>/dev/null || true
           fi
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build Intellikit container
         run: |
@@ -145,7 +145,7 @@ jobs:
               chown -R "$(id -u):$(id -g)" /w 2>/dev/null || true
           fi
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Pytest ${{ matrix.install_method }} - ${{ matrix.package }}
         run: |
