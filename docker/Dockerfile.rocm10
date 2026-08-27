@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+#
+# ROCm 10 image. Kept alongside docker/Dockerfile (ROCm 7) so CI can run the
+# suite on both; change the two together when adding a dependency.
+#
+# Differences from the ROCm 7 image, all forced by the base:
+#   * There is no rocm/pytorch tag for ROCm 10, so this starts from
+#     rocm/dev-ubuntu-24.04 and installs the Python side itself.
+#   * No PyTorch. The nightly rocm7.14 wheels do install and run here, but they
+#     drop rocm-sdk-* shims into the venv that shadow ~25 real ROCm tools
+#     (hipcc, hipconfig, rocprofv3, rocminfo, amd-smi ...). Those shims fail
+#     inside pip's isolated build env -- kerncap's CMake could not find ROCm --
+#     and where they do work they route to ROCm 7.14 rather than the image's
+#     ROCm 10, so the leg would silently test the wrong userspace. Torch is
+#     imported lazily inside functions in kerncap and metrix, so those tests
+#     skip rather than fail.
+#   * Ubuntu 24.04's Python is externally managed, so this uses a venv rather
+#     than --break-system-packages.
+
+FROM rocm/dev-ubuntu-24.04:10.0.0-full
+
+SHELL ["/bin/bash", "-c"]
+
+ENV TRITON_PATH=/opt/triton
+ENV ROCM_PATH=/opt/rocm
+ENV LD_LIBRARY_PATH=$ROCM_PATH/lib:$LD_LIBRARY_PATH \
+    PATH="/opt/venv/bin:$ROCM_PATH/bin:$PATH"
+ENV PYTHONPATH=$TRITON_PATH
+
+# Install system packages. Mirrors the ROCm 7 image; python3-venv is extra
+# because that base already provided an environment to install into.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    git wget ninja-build cmake python3-pip python3-dev python3-venv \
+    build-essential jq \
+    libhwloc-dev libhwloc15 hwloc-nox libnuma-dev libdwarf-dev libelf-dev \
+    libzstd-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create groups if they don't exist
+RUN groupadd -r video 2>/dev/null || true && \
+    groupadd -r render 2>/dev/null || true
+
+RUN python3 -m venv /opt/venv
+
+# Install Python packages with pip
+RUN pip3 install --upgrade pip && \
+    pip3 install wheel jupyter pytest
+
+# amdsmi from the ROCm tree, not PyPI. rocm_mcp declares an unpinned "amdsmi",
+# and the PyPI wheel is 7.0.2 while ROCm 10 ships libamd_smi.so.27 -- importing
+# it dies with "undefined symbol: amdsmi_set_gpu_clk_range". Installing the
+# bindings that ship with this ROCm keeps them in step, and satisfies the
+# declared dependency so pip does not fetch the wheel.
+RUN pip3 install /opt/rocm/share/amd_smi
+
+# Clone and install Triton
+RUN cd /opt && \
+    git clone https://github.com/triton-lang/triton.git $TRITON_PATH && \
+    cd $TRITON_PATH && \
+    git checkout 715f6b1d442601436bf8d462db6ff8e17aec8cfb && \
+    pip3 install -e .
+
+# Set up workspace
+WORKDIR /workspace

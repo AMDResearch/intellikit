@@ -102,6 +102,29 @@ private:
         void* data, uint32_t private_segment_size,
         uint32_t group_segment_size, hsa_queue_t** queue);
 
+    // Shared by both queue-creation hooks. Returns false when kerncap should
+    // leave this queue alone -- passive process, or first-queue-only mode with
+    // a queue already taken. api_name only labels the log line.
+    static bool should_intercept_queue(CaptureState* inst, const char* api_name);
+
+    // Swaps the runtime's queue for an intercept queue and registers the
+    // packet callback on it.
+    static hsa_status_t intercept_and_register(
+        CaptureState* inst, hsa_agent_t agent, uint32_t size,
+        hsa_queue_type32_t type,
+        void (*callback)(hsa_status_t, hsa_queue_t*, void*),
+        void* data, uint32_t private_segment_size,
+        uint32_t group_segment_size, hsa_queue_t** queue);
+
+#ifdef KERNCAP_HAVE_HSA_AMD_QUEUE_CREATE
+    // ROCm 10 added this entry point and HIP creates its compute queue through
+    // it. hsa_queue_create is still exported and still used, so both slots stay
+    // hooked rather than one replacing the other.
+    static hsa_status_t hsa_amd_queue_create(
+        hsa_agent_t agent, hsa_amd_queue_create_desc_t* descs,
+        uint32_t num_descs);
+#endif
+
     static hsa_status_t hsa_queue_destroy(hsa_queue_t* queue);
 
     static hsa_status_t hsa_amd_memory_pool_allocate(

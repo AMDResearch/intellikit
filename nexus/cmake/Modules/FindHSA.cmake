@@ -26,7 +26,25 @@
 
 # Search for the HSA include directory with priority given to /opt/rocm
 
+# Prefer an explicitly selected ROCm tree over whatever is installed at
+# /opt/rocm. Without this, building against a second ROCm silently picks up the
+# system headers -- the build succeeds and the binary is compiled against the
+# wrong API.
+set(NEXUS_ROCM_ROOT "")
+foreach(_candidate "${ROCM_PATH}" "$ENV{ROCM_PATH}" "${ROCM_HOME}" "$ENV{ROCM_HOME}")
+    if(_candidate AND EXISTS "${_candidate}/include/hsa/hsa.h")
+        set(NEXUS_ROCM_ROOT "${_candidate}")
+        break()
+    endif()
+endforeach()
+
 file(GLOB ROCM_PATHS "/opt/rocm*/include")
+if(NEXUS_ROCM_ROOT)
+    message(STATUS "nexus/FindHSA: using ROCm tree ${NEXUS_ROCM_ROOT}")
+    set(ROCM_PATHS "${NEXUS_ROCM_ROOT}/include" ${ROCM_PATHS})
+else()
+    message(STATUS "nexus/FindHSA: no ROCM_PATH override, falling back to /opt/rocm*")
+endif()
 
 find_path(HSA_INCLUDE_DIR
     NAMES hsa/hsa.h
@@ -39,7 +57,7 @@ find_path(HSA_INCLUDE_DIR
 # Search for the HSA library with priority given to /opt/rocm
 find_library(HSA_LIBRARY
     NAMES hsa-runtime64
-    PATHS /opt/rocm/lib
+    PATHS "${NEXUS_ROCM_ROOT}/lib" /opt/rocm/lib
     /opt/rocm/lib64
     /usr/local/lib
     /usr/lib

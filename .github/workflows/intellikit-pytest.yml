@@ -42,6 +42,10 @@ jobs:
               - 'metrix/**'
             nexus:
               - 'nexus/**'
+            rocm_mcp:
+              - 'rocm_mcp/**'
+            uprof_mcp:
+              - 'uprof_mcp/**'
             infra:
               - '.github/**'
               - 'apptainer/**'
@@ -52,24 +56,52 @@ jobs:
       - name: Build package matrix
         id: build-matrix
         run: |
-          ALL='["accordo","kerncap","linex","metrix","nexus"]'
+          ALL='["accordo","kerncap","linex","metrix","nexus","rocm_mcp","uprof_mcp"]'
 
           # Infra changes or non-PR events → test everything
           if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
             echo "packages=${ALL}" >> "$GITHUB_OUTPUT"
           else
-            # Filter to only pytest-eligible packages (exclude rocm_mcp, uprof_mcp)
             CHANGED='${{ steps.filter.outputs.changes }}'
-            FILTERED=$(echo "$CHANGED" | jq -c '[.[] | select(. == "accordo" or . == "kerncap" or . == "linex" or . == "metrix" or . == "nexus")]')
+            FILTERED=$(echo "$CHANGED" | jq -c '[.[] | select(. == "accordo" or . == "kerncap" or . == "linex" or . == "metrix" or . == "nexus" or . == "rocm_mcp" or . == "uprof_mcp")]')
             echo "packages=${FILTERED}" >> "$GITHUB_OUTPUT"
           fi
 
   build-container-image:
+    name: build-container-image (rocm${{ matrix.rocm }})
     needs: detect-changes
     if: needs.detect-changes.outputs.packages != '[]'
     runs-on: [self-hosted, mi3xx]
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # ROCm 7 and ROCm 10 are separate base images: there is no rocm/pytorch
+        # tag for ROCm 10, so docker/Dockerfile.rocm10 builds from
+        # rocm/dev-ubuntu-24.04 instead. Both are cached independently.
+        include:
+          - rocm: "7"
+            image: intellikit-dev-rocm7
+            dockerfile: docker/Dockerfile
+          - rocm: "10"
+            image: intellikit-dev-rocm10
+            dockerfile: docker/Dockerfile.rocm10
+    env:
+      DOCKER_IMAGE_NAME: ${{ matrix.image }}
+      DOCKERFILE: ${{ github.workspace }}/${{ matrix.dockerfile }}
     steps:
+      - name: Reset workspace ownership
+        # Containers run as root, so a job that is cancelled, superseded or
+        # killed leaves root-owned build artifacts behind. actions/checkout
+        # wipes the workspace before every run and cannot delete them, so the
+        # NEXT job fails at checkout with EACCES -- on a PR that did nothing
+        # wrong. Reset at the start, where it runs no matter how the previous
+        # job ended; a chown after the command only runs on the happy path.
+        run: |
+          if [ -d "${{ github.workspace }}" ] && command -v docker >/dev/null; then
+            docker run --rm -v "${{ github.workspace }}:/w" alpine:latest \
+              chown -R "$(id -u):$(id -g)" /w 2>/dev/null || true
+          fi
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -78,17 +110,40 @@ jobs:
           bash .github/scripts/container_build.sh
 
   pytest:
-    name: pytest ${{ matrix.install_method }} - ${{ matrix.package }}
+    name: pytest ${{ matrix.install_method }} - ${{ matrix.package }} (rocm${{ matrix.rocm }})
     needs: [detect-changes, build-container-image]
     runs-on: [self-hosted, mi3xx]
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
         install_method: [editable, non-editable]
+        rocm: ["7", "10"]
+        include:
+          - rocm: "7"
+            image: intellikit-dev-rocm7
+            dockerfile: docker/Dockerfile
+          - rocm: "10"
+            image: intellikit-dev-rocm10
+            dockerfile: docker/Dockerfile.rocm10
+    env:
+      DOCKER_IMAGE_NAME: ${{ matrix.image }}
+      DOCKERFILE: ${{ github.workspace }}/${{ matrix.dockerfile }}
 
     steps:
+      - name: Reset workspace ownership
+        # Containers run as root, so a job that is cancelled, superseded or
+        # killed leaves root-owned build artifacts behind. actions/checkout
+        # wipes the workspace before every run and cannot delete them, so the
+        # NEXT job fails at checkout with EACCES -- on a PR that did nothing
+        # wrong. Reset at the start, where it runs no matter how the previous
+        # job ended; a chown after the command only runs on the happy path.
+        run: |
+          if [ -d "${{ github.workspace }}" ] && command -v docker >/dev/null; then
+            docker run --rm -v "${{ github.workspace }}:/w" alpine:latest \
+              chown -R "$(id -u):$(id -g)" /w 2>/dev/null || true
+          fi
       - name: Checkout repository
         uses: actions/checkout@v4
 

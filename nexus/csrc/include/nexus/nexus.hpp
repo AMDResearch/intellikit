@@ -265,6 +265,13 @@ class nexus {
                                        uint32_t private_segment_size,
                                        uint32_t group_segment_size,
                                        hsa_queue_t** queue);
+#ifdef NEXUS_HAS_AMD_QUEUE_CREATE
+  // ROCm 10 routes HIP's compute queue through this entry point instead of
+  // hsa_queue_create. Both slots are hooked; only one fires on a given runtime.
+  static hsa_status_t hsa_amd_queue_create(hsa_agent_t agent,
+                                           hsa_amd_queue_create_desc_t* descs,
+                                           uint32_t num_descs);
+#endif
   static hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t pool,
                                                    size_t size,
                                                    uint32_t flags,
