@@ -45,7 +45,7 @@ LLVM_INSTALL_DIR = {env="LLVM_INSTALL_DIR", default="/opt/rocm/llvm"}
 [tool.setuptools_scm]
 version_scheme = "post-release"   # .postN after last tag
 local_scheme = "node-and-date"    # add commit hash (e.g. +gabc1234) and date (e.g. +20250914)
-fallback_version = "0.1.0"        # used if git metadata unavailable
+fallback_version = "0.1.1"        # used if git metadata unavailable
 root = ".."                       # Look for git repo in parent directory
 
 # ---- Ruff configuration ----

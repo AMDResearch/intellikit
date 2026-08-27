@@ -102,12 +102,20 @@ class TestPackageVersion:
     def test_falls_back_when_distribution_missing(self):
         """An in-tree checkout with no installed dist must still import."""
         import importlib
+        import pathlib
+        import re
 
         from importlib.metadata import PackageNotFoundError
 
         import accordo
 
+        # Derive the expected fallback from the source rather than repeating the
+        # literal here. Hardcoding it meant a version bump failed this test
+        # rather than the code, and the two could disagree unnoticed until then.
+        src = pathlib.Path(accordo.__file__).read_text()
+        expected = re.search(r'__version__ = "([^"]+)"', src).group(1)
+
         with patch("importlib.metadata.version", side_effect=PackageNotFoundError):
             reloaded = importlib.reload(accordo)
-            assert reloaded.__version__ == "0.4.0"
+            assert reloaded.__version__ == expected
         importlib.reload(accordo)  # restore the real version for other tests

@@ -47,7 +47,7 @@ linex-mcp = "linex.mcp.server:main"
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "node-and-date"
-fallback_version = "0.1.0"
+fallback_version = "0.1.1"
 root = ".."
 
 [tool.setuptools]

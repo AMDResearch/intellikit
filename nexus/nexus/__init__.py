@@ -23,7 +23,7 @@ from importlib.metadata import PackageNotFoundError, version as _get_version
 try:
     __version__ = _get_version("nexus")
 except PackageNotFoundError:
-    __version__ = "0.1.0"
+    __version__ = "0.1.1"
 
 
 def _find_nexus_lib() -> Optional[Path]:
