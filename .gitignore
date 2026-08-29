@@ -35,3 +35,11 @@ vector_add_template
 
 # Resources
 resources/
+# Coverage
+.coverage
+.coverage.*
+coverage-*.xml
+htmlcov/
+
+# Virtualenvs
+.venv/

@@ -147,13 +147,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Coverage is collected on the editable leg only. The non-editable leg
+      # installs into site-packages, so measuring both would report two
+      # different source paths for the same package.
       - name: Pytest ${{ matrix.install_method }} - ${{ matrix.package }}
         run: |
           bash .github/scripts/container_exec.sh "
             if [ '${{ matrix.install_method }}' = 'editable' ]; then
               pip install -e ${{ matrix.package }}
+              python3 -m pytest ${{ matrix.package }}/tests -v --tb=short --cov=${{ matrix.package }} --cov-report=term --cov-report=xml:coverage-${{ matrix.package }}.xml
             else
               pip install ./${{ matrix.package }}
+              python3 -m pytest ${{ matrix.package }}/tests -v --tb=short
             fi
-            python3 -m pytest ${{ matrix.package }}/tests -v --tb=short
           "
+
+      # always() so a failing test suite still reports the coverage it reached.
+      - name: Upload coverage report
+        if: always() && matrix.install_method == 'editable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.package }}
+          path: coverage-${{ matrix.package }}.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  coverage-summary:
+    name: Coverage summary
+    needs: [detect-changes, pytest]
+    if: always() && needs.detect-changes.outputs.packages != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage-reports
+          merge-multiple: true
+
+      - name: Report coverage
+        run: |
+          python3 .github/scripts/coverage_summary.py coverage-reports >> "$GITHUB_STEP_SUMMARY"
+          python3 .github/scripts/coverage_summary.py coverage-reports
