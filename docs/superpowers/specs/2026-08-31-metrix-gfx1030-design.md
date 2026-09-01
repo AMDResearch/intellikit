@@ -32,9 +32,13 @@ Failure mode is opaque: rocprofv3 exits without writing output and metrix surfac
 ### 2. Three of five built-in profiles hard-fail on all RDNA parts
 
 `METRIC_PROFILES` (`metrics/catalog.py:22`) is a hardcoded, architecture-agnostic
-list. It contains CDNA-only metrics, so profile expansion produces metrics the
-backend has never heard of and `get_required_counters()` raises
-`ValueError: Unknown metric ...` (`backends/base.py:324`).
+list containing CDNA-only metrics.
+
+The CLI expands it verbatim, so `get_required_counters()` receives metrics the
+backend has never heard of and raises `ValueError: Unknown metric ...`
+(`backends/base.py:324`). The Python API path (`api.py`) already filtered
+unavailable metrics and warned, so only `metrix profile --profile ...` crashes.
+Routing both through one resolver removes the divergence.
 
 | Profile | Missing on gfx1030 / gfx1100 / gfx1151 / gfx1201 |
 | --- | --- |
@@ -84,6 +88,11 @@ def resolve_profile_metrics(
 Both existing expansion sites call it, removing the current duplication:
 `api.py:129` and `cli/profile_cmd.py:52`. Dropped metrics are reported once via
 `logger.warning`, listed by name.
+
+This changes one Python API behaviour: `Metrix.profile(profile=...)` on an
+architecture supporting none of the profile's metrics now raises `ValueError`
+instead of degrading to time-only mode. Silently timing a kernel when the user
+asked for compute metrics hides the problem rather than reporting it.
 
 Resulting behaviour on gfx1030: `memory` collects 8 of 13 metrics, `memory_cache`
 2 of 4, `memory_bandwidth` and `quick` unchanged. `compute` still errors — all

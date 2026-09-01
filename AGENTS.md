@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; kerncap and linex target ROCm 7.0+ workflows. MI300+ GPUs are needed for the full profiling stack, while RDNA support (gfx1151/gfx1201) is available in metrix.
+**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; kerncap and linex target ROCm 7.0+ workflows. MI300+ GPUs are needed for the full profiling stack, while metrix additionally supports RDNA: gfx1030/1031/1032 (RDNA2), gfx1100-1103 (RDNA3), gfx1151 (RDNA 3.5), and gfx1201 (RDNA4). Metric coverage varies by architecture — built-in profiles collect the subset the detected GPU supports.
 
 ## Tool Descriptions
 
@@ -349,12 +349,16 @@ Current implementation pattern:
 ### Adding a New Metric to Metrix
 
 1. Identify the hardware counter(s) needed
-2. Add a method to the appropriate backend (e.g., `metrix/src/metrix/backends/gfx942.py` for MI300, `gfx1151.py` or `gfx1201.py` for RDNA)
+2. Add a method to the appropriate backend (e.g., `metrix/src/metrix/backends/gfx942.py` for MI300, `gfx1030.py`, `gfx1100.py`, `gfx1151.py` or `gfx1201.py` for RDNA)
 3. Use `@metric("category.metric_name")` decorator
 4. Counter names as function parameters (auto-discovery)
 5. Add tests in `metrix/tests/unit/`
 
-**New**: RDNA (gfx1151/gfx1201) support added in commit 0cb3a54.
+Gate each definition in `counter_defs.yaml` on the architectures whose
+`rocprofv3 --list-avail` output actually contains the counters it references.
+A counter the hardware does not expose makes rocprofv3 exit without writing
+output, which surfaces as an unhelpful `No output CSV found`. gfx1030 is
+validated against an RX 6800 XT; gfx1100 has not been checked on hardware.
 
 Example:
 

@@ -137,13 +137,29 @@ def test_profile_default_uses_all_backend_metrics(patched_backend):
 
 
 def test_profile_named_profile_uses_catalog_metrics(patched_backend):
+    """A profile collects the metrics it declares that this backend can compute.
+
+    Metric coverage varies by architecture, so the profile is narrowed to the
+    intersection rather than passed through verbatim.
+    """
     name = next(iter(METRIC_PROFILES))
+    available = set(patched_backend.get_available_metrics())
     profile_command(Args(profile=name))
-    assert patched_backend.profile_calls[0]["metrics"] == METRIC_PROFILES[name]["metrics"]
+    assert patched_backend.profile_calls[0]["metrics"] == [
+        m for m in METRIC_PROFILES[name]["metrics"] if m in available
+    ]
 
 
 def test_profile_unknown_profile_returns_1(patched_backend):
     assert profile_command(Args(profile="does-not-exist")) == 1
+    assert patched_backend.profile_calls == []
+
+
+def test_profile_with_no_available_metrics_returns_1(patched_backend):
+    """A profile whose every metric is missing must fail, not silently time the run."""
+    name = next(iter(METRIC_PROFILES))
+    patched_backend._available = []
+    assert profile_command(Args(profile=name)) == 1
     assert patched_backend.profile_calls == []
 
 

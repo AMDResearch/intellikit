@@ -864,6 +864,23 @@ class TestRDNA2MetricDiscovery:
             assert f"GL2C_EA_RDREQ_{size}_sum" in counters
         assert "GL2C_EA_RDREQ_sum" not in counters
 
+    def test_texture_addresser_counters_are_flat_not_buffer(self, rdna2_backend):
+        """gfx1030 exposes TA_FLAT_* wavefront counters; TA_BUFFER_* do not exist.
+
+        Verified against `rocprofv3 --list-avail` on an RX 6800 XT.
+        """
+        metrics = set(rdna2_backend.get_available_metrics())
+        assert "TA_FLAT_LOAD_WAVEFRONTS_sum" in metrics
+        assert "TA_FLAT_STORE_WAVEFRONTS_sum" in metrics
+        assert "TA_BUFFER_LOAD_WAVEFRONTS_sum" not in metrics
+        assert "TA_BUFFER_STORE_WAVEFRONTS_sum" not in metrics
+
+    def test_occupancy_metric_is_per_cu_not_per_active_cu(self, rdna2_backend):
+        """gfx1030 has MeanOccupancyPerCU only; MeanOccupancyPerActiveCU is absent."""
+        metrics = set(rdna2_backend.get_available_metrics())
+        assert "MeanOccupancyPerCU" in metrics
+        assert "MeanOccupancyPerActiveCU" not in metrics
+
 
 class TestRDNA2VRAMReadBandwidth:
     """gfx1030 sums per-size GL2C_EA_RDREQ buckets (no aggregate _sum exists)"""

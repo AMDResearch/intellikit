@@ -11,7 +11,8 @@ from typing import List, Dict
 from io import StringIO
 
 from ..backends import get_backend, Statistics, detect_or_default
-from ..metrics import METRIC_PROFILES, METRIC_CATALOG
+from ..metrics import METRIC_CATALOG
+from ..metrics.catalog import resolve_profile_metrics
 from ..logger import logger
 
 
@@ -44,12 +45,20 @@ def profile_command(args):
             mode = f"all metrics ({len(metrics_to_compute)} total)"
         else:
             profile_name = args.profile
-            if profile_name not in METRIC_PROFILES:
-                logger.error(f"Unknown profile '{profile_name}'")
-                logger.error(f"Available profiles: {', '.join(METRIC_PROFILES.keys())}")
+            try:
+                metrics_to_compute, dropped = resolve_profile_metrics(
+                    profile_name,
+                    backend.get_available_metrics(),
+                    backend.device_specs.arch,
+                )
+            except ValueError as exc:
+                logger.error(str(exc))
                 return 1
 
-            metrics_to_compute = METRIC_PROFILES[profile_name]["metrics"]
+            for metric_name in dropped:
+                logger.warning(
+                    f"Skipping '{metric_name}' (not available on {backend.device_specs.arch})"
+                )
             mode = f"profile '{profile_name}'"
 
     # Check for unsupported metrics

@@ -15,6 +15,7 @@ from pathlib import Path
 from .backends import get_backend, Statistics, detect_or_default
 from .backends.base import CounterBackend
 from .metrics import METRIC_PROFILES, METRIC_CATALOG
+from .metrics.catalog import resolve_profile_metrics
 from .logger import logger
 
 
@@ -122,11 +123,16 @@ class Metrix:
             metrics_to_compute = metrics
             explicitly_requested = True  # User explicitly specified metrics
         elif profile:
-            if profile not in METRIC_PROFILES:
-                raise ValueError(
-                    f"Unknown profile: {profile}. Available: {list(METRIC_PROFILES.keys())}"
+            metrics_to_compute, dropped = resolve_profile_metrics(
+                profile,
+                self.backend.get_available_metrics(),
+                self.backend.device_specs.arch,
+            )
+            if dropped:
+                logger.warning(
+                    f"Profile '{profile}': skipping {len(dropped)} metric(s) not available "
+                    f"on {self.backend.device_specs.arch}: {', '.join(dropped)}"
                 )
-            metrics_to_compute = METRIC_PROFILES[profile]["metrics"]
         else:
             # Default: all available metrics
             metrics_to_compute = self.backend.get_available_metrics()

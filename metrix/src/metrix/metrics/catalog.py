@@ -4,6 +4,7 @@ Main metric catalog and profiles
 
 from .memory_metrics import MEMORY_METRICS
 from .compute_metrics import COMPUTE_METRICS
+from typing import Iterable, List, Tuple
 
 # ═══════════════════════════════════════════════════════════════════
 # COMPLETE METRIC CATALOG
@@ -120,3 +121,46 @@ def list_all_metrics() -> list:
 def list_all_profiles() -> list:
     """List all available profiles"""
     return list(METRIC_PROFILES.keys())
+
+
+def resolve_profile_metrics(
+    profile_name: str, available: Iterable[str], arch: str
+) -> Tuple[List[str], List[str]]:
+    """
+    Narrow a profile's metric list to what the current architecture supports.
+
+    Profiles are defined once for every GPU, but metric coverage varies by
+    architecture: the CDNA-only entries in ``memory`` have no counterpart on
+    RDNA, for instance. Collecting the intersection lets a profile stay useful
+    on hardware that implements only part of it.
+
+    Args:
+        profile_name: Key into METRIC_PROFILES.
+        available: Metric names the backend can compute on this architecture.
+        arch: Architecture string, used only for error messages.
+
+    Returns:
+        (metrics to collect, metrics dropped as unavailable), both in the
+        order the profile declares them.
+
+    Raises:
+        ValueError: If the profile is unknown, or if no metric in it is
+            available on this architecture.
+    """
+    if profile_name not in METRIC_PROFILES:
+        raise ValueError(
+            f"Unknown profile: {profile_name}. Available: {list(METRIC_PROFILES.keys())}"
+        )
+
+    available = set(available)
+    requested = METRIC_PROFILES[profile_name]["metrics"]
+    selected = [m for m in requested if m in available]
+    dropped = [m for m in requested if m not in available]
+
+    if not selected:
+        raise ValueError(
+            f"Profile '{profile_name}' has no metrics available on {arch}. "
+            f"Unsupported here: {', '.join(dropped)}"
+        )
+
+    return selected, dropped
