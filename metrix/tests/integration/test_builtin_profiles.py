@@ -15,7 +15,6 @@ architecture-generic profile test is why `memory`, `memory_cache`, and
 `compute` shipped broken on every RDNA part.
 """
 
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -24,6 +23,15 @@ import pytest
 from metrix import Metrix
 from metrix.metrics import METRIC_PROFILES
 
+from .test_inline_hip_profiling import _compile_hip
+
+# Every profile except `compute` has at least one metric on every architecture
+# metrix supports, so taking the "nothing available here" branch for any of
+# them is a regression rather than an expected outcome. `compute` is CDNA-only.
+UNIVERSAL_PROFILES = frozenset(METRIC_PROFILES) - {"compute"}
+
+# Larger than the shared vector_add fixture on purpose: the memory profiles
+# need enough traffic for the L2 and VRAM counters to register.
 PROFILE_KERNEL_HIP = """
 #include <hip/hip_runtime.h>
 #include <stdio.h>
@@ -49,50 +57,43 @@ int main() {
 """
 
 
-def _compile_hip(kernel_code: str, name: str, tmp_dir: Path) -> Path:
-    """Write HIP source, compile with hipcc, return path to binary."""
-    src = tmp_dir / f"{name}.hip"
-    bin_path = tmp_dir / name
-    src.write_text(kernel_code)
-    r = subprocess.run(
-        ["hipcc", str(src), "-o", str(bin_path), "-O2"],
-        capture_output=True,
-        text=True,
-        cwd=tmp_dir,
-        timeout=120,
-    )
-    if r.returncode != 0:
-        raise RuntimeError(f"hipcc failed:\n{r.stderr}")
-    return bin_path
+@pytest.fixture(scope="module")
+def saxpy_binary():
+    """Compile the kernel once for the whole module, not once per profile."""
+    with tempfile.TemporaryDirectory(prefix="metrix_profiles_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        yield _compile_hip(PROFILE_KERNEL_HIP, "saxpy", tmp_path), tmp_path
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("profile_name", sorted(METRIC_PROFILES))
-def test_builtin_profile_runs_or_reports_unavailable(profile_name):
+def test_builtin_profile_runs_or_reports_unavailable(profile_name, saxpy_binary):
     """Each built-in profile collects what this GPU supports, or says why it can't."""
-    with tempfile.TemporaryDirectory(prefix="metrix_profiles_") as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        bin_path = _compile_hip(PROFILE_KERNEL_HIP, "saxpy", tmp_path)
-        profiler = Metrix()
-        arch = profiler.backend.device_specs.arch
+    bin_path, tmp_path = saxpy_binary
+    profiler = Metrix()
+    arch = profiler.backend.device_specs.arch
 
-        try:
-            results = profiler.profile(
-                command=str(bin_path),
-                profile=profile_name,
-                num_replays=1,
-                cwd=str(tmp_path),
-                timeout_seconds=120,
-            )
-        except ValueError as exc:
-            # Acceptable only when the profile is wholly unsupported here, and
-            # only with a message the user can act on.
-            message = str(exc)
-            assert arch in message, (
-                f"profile '{profile_name}' failed without naming the architecture: {message}"
-            )
-            assert profile_name in message
-            return
+    try:
+        results = profiler.profile(
+            command=str(bin_path),
+            profile=profile_name,
+            num_replays=1,
+            cwd=str(tmp_path),
+            timeout_seconds=120,
+        )
+    except ValueError as exc:
+        # Acceptable only for a profile with no metric on this architecture,
+        # and only with a message the user can act on.
+        assert profile_name not in UNIVERSAL_PROFILES, (
+            f"profile '{profile_name}' should be supported on every architecture "
+            f"but reported nothing available on {arch}: {exc}"
+        )
+        message = str(exc)
+        assert arch in message, (
+            f"profile '{profile_name}' failed without naming the architecture: {message}"
+        )
+        assert profile_name in message
+        return
 
     user_kernels = [k for k in results.kernels if "saxpy" in k.name]
     assert user_kernels, f"Expected 'saxpy' among {[k.name for k in results.kernels]}"

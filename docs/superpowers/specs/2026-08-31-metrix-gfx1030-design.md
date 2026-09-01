@@ -73,13 +73,20 @@ Add a pure function to `metrix/metrics/catalog.py`:
 ```python
 def resolve_profile_metrics(
     profile_name: str,
-    available: Collection[str],
+    available: Iterable[str],
+    arch: str,
+    unsupported: Iterable[str] = (),
 ) -> tuple[list[str], list[str]]:
-    """Return (metrics to collect, metrics dropped as unavailable on this arch)."""
+    """Return (metrics to collect, metrics dropped as unknown on this arch)."""
 ```
 
-- Takes the available-metric set as an argument; imports no backend. Pure and
-  directly unit-testable.
+- Takes the metric sets as arguments; imports no backend. Pure and directly
+  unit-testable.
+- `arch` is used only for messages. `unsupported` names the metrics the backend
+  rejects with an explicit reason (`unsupported_reason` in the YAML); those are
+  *kept* in the selection so the caller's existing handler can report the reason.
+  `get_available_metrics()` omits them, so filtering on `available` alone would
+  turn "TCC_EA_ATOMIC_LEVEL_sum is broken on MI200" into a bare "not available".
 - Raises `ValueError` for an unknown profile name (preserving today's behaviour).
 - Raises `ValueError` naming the architecture when *no* metric in the profile is
   available, replacing the internal `Unknown metric` traceback.
@@ -154,6 +161,9 @@ hardware-validated and that per-architecture metric coverage varies.
 
 Flagged, not fixed:
 
+- **`--metrics` with an unsupported metric.** Now handled: the CLI checks
+  explicitly requested metrics against the backend before profiling, matching
+  what `api.py` already did. Was previously a `traceback.print_exc()`.
 - **Opaque rocprofv3 failure.** When rocprofv3 rejects a counter it writes no
   output and metrix reports `No output CSV found`. A pre-flight check against
   `--list-avail`, or capturing rocprofv3's stderr, would turn this into an

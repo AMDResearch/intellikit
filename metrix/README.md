@@ -61,6 +61,11 @@ for kernel in results.kernels:
         print(f"  {metric}: {stats.avg:.2f}")
 ```
 
+`profile(profile=...)` collects the preset's metrics that the detected GPU
+supports and warns about the rest. It raises `ValueError` if the preset names
+no metric available on that architecture — `compute` on any RDNA part, for
+instance.
+
 ## Available Metrics
 
 ### Compute

@@ -124,6 +124,7 @@ def test_profile_time_only_collects_no_metrics(patched_backend):
 
 
 def test_profile_explicit_metrics_are_split_and_stripped(patched_backend):
+    patched_backend._available = [KNOWN_METRIC, "memory.l2_hit_rate"]
     profile_command(Args(metrics=f" {KNOWN_METRIC} , memory.l2_hit_rate "))
     assert patched_backend.profile_calls[0]["metrics"] == [
         KNOWN_METRIC,
@@ -142,12 +143,13 @@ def test_profile_named_profile_uses_catalog_metrics(patched_backend):
     Metric coverage varies by architecture, so the profile is narrowed to the
     intersection rather than passed through verbatim.
     """
-    name = next(iter(METRIC_PROFILES))
-    available = set(patched_backend.get_available_metrics())
-    profile_command(Args(profile=name))
-    assert patched_backend.profile_calls[0]["metrics"] == [
-        m for m in METRIC_PROFILES[name]["metrics"] if m in available
-    ]
+    # 'quick' declares hbm_bandwidth_utilization and l2_hit_rate; the fake
+    # backend offers only the former, so only the former may be collected.
+    assert METRIC_PROFILES["quick"]["metrics"] == [KNOWN_METRIC, "memory.l2_hit_rate"]
+    assert patched_backend.get_available_metrics() == [KNOWN_METRIC]
+
+    profile_command(Args(profile="quick"))
+    assert patched_backend.profile_calls[0]["metrics"] == [KNOWN_METRIC]
 
 
 def test_profile_unknown_profile_returns_1(patched_backend):
@@ -157,9 +159,31 @@ def test_profile_unknown_profile_returns_1(patched_backend):
 
 def test_profile_with_no_available_metrics_returns_1(patched_backend):
     """A profile whose every metric is missing must fail, not silently time the run."""
-    name = next(iter(METRIC_PROFILES))
     patched_backend._available = []
-    assert profile_command(Args(profile=name)) == 1
+    assert profile_command(Args(profile="quick")) == 1
+    assert patched_backend.profile_calls == []
+
+
+def test_profile_keeps_unsupported_metrics_so_their_reason_is_reported(patched_backend, caplog):
+    """An unsupported metric must surface its reason, not a bare 'not available'.
+
+    get_available_metrics() omits metrics flagged unsupported, so narrowing a
+    profile to that list alone would replace the actionable reason with a
+    generic message.
+    """
+    reason = "counter is broken on this part"
+    patched_backend._unsupported_metrics = {"memory.l2_hit_rate": reason}
+
+    profile_command(Args(profile="quick"))
+
+    assert reason in caplog.text
+    # ... and it is still excluded from what actually gets collected.
+    assert patched_backend.profile_calls[0]["metrics"] == [KNOWN_METRIC]
+
+
+def test_explicit_unavailable_metric_returns_1_without_traceback(patched_backend):
+    """--metrics with a real catalog metric this arch lacks must fail cleanly."""
+    assert profile_command(Args(metrics="memory.l2_hit_rate")) == 1
     assert patched_backend.profile_calls == []
 
 

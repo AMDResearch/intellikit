@@ -2,9 +2,13 @@
 Unit tests for the high-level Metrix API
 """
 
+from contextlib import contextmanager
+from unittest.mock import patch
+
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
 from metrix.backends import Statistics, get_backend
+from metrix.metrics import METRIC_PROFILES
 from .conftest import requires_arch, requires_metric
 
 
@@ -180,3 +184,83 @@ class TestUnsupportedMetricsAPI:
         assert "memory.atomic_latency" not in filtered
         assert "memory.l2_hit_rate" in filtered
         assert "memory.hbm_bandwidth_utilization" in filtered
+
+
+# --------------------------------------------------------------------------
+# Metrix.profile(profile=...) — GPU-free coverage of profile resolution
+# --------------------------------------------------------------------------
+
+_QUICK_METRICS = METRIC_PROFILES["quick"]["metrics"]
+
+
+class _FakeSpecs:
+    arch = "gfx1030"
+
+
+class _FakeBackend:
+    """Minimal stand-in for the surface Metrix.profile touches."""
+
+    def __init__(self, available, unsupported=None):
+        self.device_specs = _FakeSpecs()
+        self._available = list(available)
+        self._unsupported_metrics = dict(unsupported or {})
+        self._aggregated = {"dispatch_1:k": {"duration_us": Statistics(1.0, 1.0, 1.0, 1.0, "us")}}
+        self.profile_calls = []
+
+    def get_available_metrics(self):
+        return list(self._available)
+
+    def profile(self, **kwargs):
+        self.profile_calls.append(kwargs)
+
+    def get_dispatch_keys(self):
+        return list(self._aggregated)
+
+    def compute_metric_stats(self, dispatch_key, metric):
+        return Statistics(1.0, 1.0, 1.0, 1.0, "percent")
+
+
+@contextmanager
+def _patched(backend):
+    with (
+        patch("metrix.api.detect_or_default", return_value=backend.device_specs.arch),
+        patch("metrix.api.get_backend", return_value=backend),
+    ):
+        yield Metrix()
+
+
+class TestProfileResolutionAPI:
+    """Metrix.profile narrows a preset to what the architecture supports."""
+
+    def test_partly_supported_profile_collects_the_supported_subset(self, caplog):
+        backend = _FakeBackend(available=[_QUICK_METRICS[0]])
+        with _patched(backend) as profiler:
+            profiler.profile("./app", profile="quick")
+
+        assert backend.profile_calls[0]["metrics"] == [_QUICK_METRICS[0]]
+        assert _QUICK_METRICS[1] in caplog.text
+
+    def test_wholly_unsupported_profile_raises_naming_the_architecture(self):
+        backend = _FakeBackend(available=["memory.l2_hit_rate"])
+        with _patched(backend) as profiler:
+            with pytest.raises(ValueError, match="gfx1030"):
+                profiler.profile("./app", profile="compute")
+        assert backend.profile_calls == []
+
+    def test_unknown_profile_raises(self):
+        backend = _FakeBackend(available=list(_QUICK_METRICS))
+        with _patched(backend) as profiler:
+            with pytest.raises(ValueError, match="Unknown profile"):
+                profiler.profile("./app", profile="does-not-exist")
+
+    def test_unsupported_metric_in_profile_reports_its_reason(self, caplog):
+        reason = "counter is broken on this part"
+        backend = _FakeBackend(
+            available=[_QUICK_METRICS[0]],
+            unsupported={_QUICK_METRICS[1]: reason},
+        )
+        with _patched(backend) as profiler:
+            profiler.profile("./app", profile="quick")
+
+        assert reason in caplog.text
+        assert backend.profile_calls[0]["metrics"] == [_QUICK_METRICS[0]]

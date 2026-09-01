@@ -14,8 +14,7 @@ from pathlib import Path
 
 from .backends import get_backend, Statistics, detect_or_default
 from .backends.base import CounterBackend
-from .metrics import METRIC_PROFILES, METRIC_CATALOG
-from .metrics.catalog import resolve_profile_metrics
+from .metrics import METRIC_PROFILES, METRIC_CATALOG, resolve_profile_metrics
 from .logger import logger
 
 
@@ -113,6 +112,14 @@ class Metrix:
 
         Returns:
             ProfilingResults object with all collected data
+
+        Raises:
+            ValueError: If ``profile`` names an unknown preset, or names a preset
+                none of whose metrics exist on this architecture (for example
+                "compute" on RDNA). A preset that is only partly supported
+                collects the supported subset and warns about the rest.
+            ValueError: If a metric in ``metrics`` is unsupported or unavailable
+                on this architecture.
         """
 
         # Determine what to collect
@@ -127,11 +134,11 @@ class Metrix:
                 profile,
                 self.backend.get_available_metrics(),
                 self.backend.device_specs.arch,
+                self.backend._unsupported_metrics,
             )
-            if dropped:
+            for metric_name in dropped:
                 logger.warning(
-                    f"Profile '{profile}': skipping {len(dropped)} metric(s) not available "
-                    f"on {self.backend.device_specs.arch}: {', '.join(dropped)}"
+                    f"Skipping '{metric_name}' (not available on {self.backend.device_specs.arch})"
                 )
         else:
             # Default: all available metrics

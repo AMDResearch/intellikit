@@ -88,9 +88,17 @@ class TestListAvailableMetrics:
         their native names (VALUInsts, ALUStalledByLDS, ...), which carry no
         category prefix.
         """
+        from metrix.backends import detect_or_default, get_backend
+
+        backend_metrics = set(get_backend(detect_or_default(None)).get_available_metrics())
+
         result = list_available_metrics()
         for metric in result["metrics"]:
             if "." not in metric:
-                continue  # passthrough SDK counter, exposed under its native name
+                # Passthrough counters are exposed under their native SDK name,
+                # so the only thing that makes one legitimate is the backend
+                # actually offering it.
+                assert metric in backend_metrics, f"Unrecognized passthrough metric {metric}"
+                continue
             category = metric.split(".", 1)[0]
             assert category in ("compute", "memory"), f"Unknown category in {metric}"

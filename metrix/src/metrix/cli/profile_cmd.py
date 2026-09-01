@@ -11,8 +11,7 @@ from typing import List, Dict
 from io import StringIO
 
 from ..backends import get_backend, Statistics, detect_or_default
-from ..metrics import METRIC_CATALOG
-from ..metrics.catalog import resolve_profile_metrics
+from ..metrics import METRIC_CATALOG, resolve_profile_metrics
 from ..logger import logger
 
 
@@ -50,6 +49,7 @@ def profile_command(args):
                     profile_name,
                     backend.get_available_metrics(),
                     backend.device_specs.arch,
+                    backend._unsupported_metrics,
                 )
             except ValueError as exc:
                 logger.error(str(exc))
@@ -84,6 +84,19 @@ def profile_command(args):
                     f"Skipping '{metric_name}' (not supported on {backend.device_specs.arch}): {reason}"
                 )
             metrics_to_compute = [m for m in metrics_to_compute if m not in unsupported]
+
+    # Explicitly requested metrics that this architecture simply does not define.
+    # Without this the name reaches get_required_counters() and surfaces as a
+    # traceback rather than a message naming the architecture.
+    if explicitly_requested:
+        available = set(backend.get_available_metrics())
+        missing = [m for m in metrics_to_compute if m not in available]
+        if missing:
+            logger.error(
+                f"ERROR: Metric '{missing[0]}' is not available on {backend.device_specs.arch}"
+            )
+            logger.error(f"Available metrics: {', '.join(sorted(available))}")
+            return 1
 
     # Log configuration
     logger.info(f"{'=' * 80}")
