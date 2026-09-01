@@ -356,8 +356,8 @@ Current implementation pattern:
 
 Gate each definition in `counter_defs.yaml` on the architectures whose
 `rocprofv3 --list-avail` output actually contains the counters it references.
-A counter the hardware does not expose makes rocprofv3 exit without writing
-output, which surfaces as an unhelpful `No output CSV found`. gfx1030 is
+A counter the hardware does not expose makes rocprofv3 exit 0 without writing
+any output; metrix detects this and names the missing counters. gfx1030 is
 validated against an RX 6800 XT; gfx1100 has not been checked on hardware.
 
 Example:

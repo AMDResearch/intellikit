@@ -164,10 +164,13 @@ Flagged, not fixed:
 - **`--metrics` with an unsupported metric.** Now handled: the CLI checks
   explicitly requested metrics against the backend before profiling, matching
   what `api.py` already did. Was previously a `traceback.print_exc()`.
-- **Opaque rocprofv3 failure.** When rocprofv3 rejects a counter it writes no
-  output and metrix reports `No output CSV found`. A pre-flight check against
-  `--list-avail`, or capturing rocprofv3's stderr, would turn this into an
-  actionable message. Affects all architectures.
+- **Opaque rocprofv3 failure.** Now handled. When a counter is absent rocprofv3
+  exits 0, writes nothing, and logs
+  `Unable to find all counters for agent 1 (gpu-0, gfx1030) ... Missing: [X]`
+  to stderr. The wrapper logged that only at DEBUG and then raised
+  `No output CSV found`. It now parses the warning and names the counters. A
+  pre-flight `--list-avail` check was considered and rejected: it would cost an
+  extra subprocess on every profile to learn what rocprofv3 already tells us.
 - **Integration coverage on non-CDNA hardware.** 29 of 44 integration tests skip
   on gfx1030, gated on `requires_cdna()` or on metrics RDNA lacks. Item D adds
   one architecture-generic test; broadening the rest is a larger effort.
