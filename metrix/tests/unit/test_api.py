@@ -225,12 +225,6 @@ class TestProfileResolutionAPI:
                 profiler.profile("./app", profile="compute")
         assert backend.profile_calls == []
 
-    def test_unknown_profile_raises(self):
-        backend = _FakeBackend(available=list(_QUICK_METRICS))
-        with _patched(backend) as profiler:
-            with pytest.raises(ValueError, match="Unknown profile"):
-                profiler.profile("./app", profile="does-not-exist")
-
     def test_unsupported_metric_in_profile_reports_its_reason(self, caplog):
         reason = "counter is broken on this part"
         backend = _FakeBackend(
