@@ -8,7 +8,11 @@ import tempfile
 import csv
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from metrix.profiler.rocprof_wrapper import ROCProfV3Wrapper, ProfileResult
+from metrix.profiler.rocprof_wrapper import (
+    ROCProfV3Wrapper,
+    ProfileResult,
+    _extract_missing_counters,
+)
 
 
 class TestProfileResult:
@@ -510,13 +514,9 @@ class TestMissingCounterDiagnostics:
     )
 
     def test_missing_counters_are_extracted_from_stderr(self):
-        from metrix.profiler.rocprof_wrapper import _extract_missing_counters
-
         assert _extract_missing_counters(self.STDERR) == ["MeanOccupancyPerActiveCU"]
 
     def test_several_missing_counters_are_all_reported(self):
-        from metrix.profiler.rocprof_wrapper import _extract_missing_counters
-
         stderr = "tool.cpp:1189] ... Found: [SQ_WAVES]. Missing: [TA_BUFFER_LOAD_WAVEFRONTS_sum, GRBM_FOO]\n"
         assert _extract_missing_counters(stderr) == [
             "TA_BUFFER_LOAD_WAVEFRONTS_sum",
@@ -524,8 +524,6 @@ class TestMissingCounterDiagnostics:
         ]
 
     def test_unremarkable_stderr_yields_no_counters(self):
-        from metrix.profiler.rocprof_wrapper import _extract_missing_counters
-
         assert _extract_missing_counters("HSA version 8.20.3 initialized\n") == []
         assert _extract_missing_counters("") == []
 

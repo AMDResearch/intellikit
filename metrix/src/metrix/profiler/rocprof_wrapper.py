@@ -36,6 +36,25 @@ def _extract_missing_counters(stderr: str) -> List[str]:
     return found
 
 
+def _no_output_message(output_dir: Path, stderr: str, arch: Optional[str]) -> str:
+    """Explain an empty rocprofv3 output directory as specifically as possible."""
+    missing = _extract_missing_counters(stderr)
+    if missing:
+        on_arch = f" on {arch}" if arch else ""
+        return (
+            f"rocprofv3 collected no data: counter(s) not available{on_arch}: "
+            f"{', '.join(missing)}. "
+            f"Run 'rocprofv3 --list-avail' to see the counters this GPU exposes."
+        )
+
+    base = f"No output CSV found in {output_dir}"
+    if stderr and stderr.strip():
+        # rocprofv3 exited 0, so its own log is the only account we have.
+        tail = "\n".join(stderr.strip().splitlines()[-20:])
+        return f"{base}. rocprofv3 stderr:\n{tail}"
+    return base
+
+
 class ROCProfV3Wrapper:
     """
     Clean wrapper around rocprofv3
@@ -381,25 +400,6 @@ class ROCProfV3Wrapper:
 
         return input_file
 
-    @staticmethod
-    def _no_output_message(output_dir: Path, stderr: str, arch: Optional[str]) -> str:
-        """Explain an empty rocprofv3 output directory as specifically as possible."""
-        missing = _extract_missing_counters(stderr)
-        if missing:
-            on_arch = f" on {arch}" if arch else ""
-            return (
-                f"rocprofv3 collected no data: counter(s) not available{on_arch}: "
-                f"{', '.join(missing)}. "
-                f"Run 'rocprofv3 --list-avail' to see the counters this GPU exposes."
-            )
-
-        base = f"No output CSV found in {output_dir}"
-        if stderr and stderr.strip():
-            # rocprofv3 exited 0, so its own log is the only account we have.
-            tail = "\n".join(stderr.strip().splitlines()[-20:])
-            return f"{base}. rocprofv3 stderr:\n{tail}"
-        return base
-
     def _parse_output(
         self,
         output_dir: Path,
@@ -432,7 +432,7 @@ class ROCProfV3Wrapper:
             if trace_files:
                 return self._parse_kernel_trace(trace_files[0])
 
-            raise RuntimeError(self._no_output_message(output_dir, stderr, arch))
+            raise RuntimeError(_no_output_message(output_dir, stderr, arch))
 
         csv_file = counter_files[0]
 

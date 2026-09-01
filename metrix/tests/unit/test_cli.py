@@ -32,53 +32,14 @@ from metrix.cli.profile_cmd import (
     profile_command,
 )
 from metrix.metrics import METRIC_CATALOG, METRIC_PROFILES
+from .conftest import DEFAULT_FAKE_METRIC, FakeBackend, fake_stats
 
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
 
-KNOWN_METRIC = "memory.hbm_bandwidth_utilization"
-
-
-def _stats(avg: float = 50.0, unit: str = "%") -> Statistics:
-    """A real Statistics instance, not a mock."""
-    return Statistics(min=avg / 2, max=avg * 2, avg=avg, count=3, unit=unit)
-
-
-class FakeDeviceSpecs:
-    arch = "gfx942"
-
-
-class FakeBackend:
-    """Minimal stand-in for a CounterBackend.
-
-    Implements only the surface ``profile_command`` actually touches.
-    """
-
-    def __init__(self, dispatch_keys=None, unsupported=None, available=None):
-        self.device_specs = FakeDeviceSpecs()
-        self._unsupported_metrics = unsupported or {}
-        self._available = available or [KNOWN_METRIC]
-        self._keys = ["dispatch_1:gemm_kernel"] if dispatch_keys is None else dispatch_keys
-        self._aggregated = {
-            key: {"duration_us": _stats(100.0 + i * 50, "us")} for i, key in enumerate(self._keys)
-        }
-        self.profile_calls = []
-
-    def get_available_metrics(self):
-        return list(self._available)
-
-    def profile(self, **kwargs):
-        self.profile_calls.append(kwargs)
-
-    def get_dispatch_keys(self):
-        return list(self._keys)
-
-    def compute_metric_stats(self, dispatch_key, metric):
-        return _stats()
-
-    def get_metric_counters(self, metric_name):
-        return ["TCC_HIT_sum", "TCC_MISS_sum"]
+KNOWN_METRIC = DEFAULT_FAKE_METRIC
+_stats = fake_stats
 
 
 class Args:

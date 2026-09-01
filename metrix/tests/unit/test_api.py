@@ -9,7 +9,7 @@ import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
 from metrix.backends import Statistics, get_backend
 from metrix.metrics import METRIC_PROFILES
-from .conftest import requires_arch, requires_metric
+from .conftest import FakeBackend, requires_arch, requires_metric
 
 
 class TestMetrixInit:
@@ -193,31 +193,9 @@ class TestUnsupportedMetricsAPI:
 _QUICK_METRICS = METRIC_PROFILES["quick"]["metrics"]
 
 
-class _FakeSpecs:
-    arch = "gfx1030"
-
-
-class _FakeBackend:
-    """Minimal stand-in for the surface Metrix.profile touches."""
-
-    def __init__(self, available, unsupported=None):
-        self.device_specs = _FakeSpecs()
-        self._available = list(available)
-        self._unsupported_metrics = dict(unsupported or {})
-        self._aggregated = {"dispatch_1:k": {"duration_us": Statistics(1.0, 1.0, 1.0, 1.0, "us")}}
-        self.profile_calls = []
-
-    def get_available_metrics(self):
-        return list(self._available)
-
-    def profile(self, **kwargs):
-        self.profile_calls.append(kwargs)
-
-    def get_dispatch_keys(self):
-        return list(self._aggregated)
-
-    def compute_metric_stats(self, dispatch_key, metric):
-        return Statistics(1.0, 1.0, 1.0, 1.0, "percent")
+def _FakeBackend(available, unsupported=None):
+    """The shared fake, pinned to the RDNA2 arch these tests talk about."""
+    return FakeBackend(available=available, unsupported=unsupported, arch="gfx1030")
 
 
 @contextmanager
