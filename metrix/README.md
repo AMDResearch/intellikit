@@ -61,10 +61,15 @@ for kernel in results.kernels:
         print(f"  {metric}: {stats.avg:.2f}")
 ```
 
+`profile(profile=...)` collects the preset's metrics that the detected GPU
+supports and warns about the rest. It raises `ValueError` if the preset names
+no metric available on that architecture — `compute` on any RDNA part, for
+instance.
+
 ## Available Metrics
 
 ### Compute
-- `compute.gpu_utilization` - GPU utilization (%). *gfx1201/gfx1151 only.*
+- `compute.gpu_utilization` - GPU utilization (%). *RDNA only (gfx1030/gfx1100/gfx1151/gfx1201).*
 - `compute.total_flops` - Total floating-point operations performed
 - `compute.hbm_gflops` - Compute throughput (GFLOP/s)
 - `compute.hbm_arithmetic_intensity` - Ratio of FLOPs to HBM bytes (FLOPs/Byte)
@@ -106,6 +111,11 @@ metrix profile [options] <target>
 
   --profile, -p      Metric profile: quick | memory | memory_bandwidth |
                      memory_cache | compute (default: all metrics if omitted)
+                     A profile collects the metrics it declares that the
+                     detected GPU supports; anything unavailable on that
+                     architecture is skipped with a warning. If none of a
+                     profile's metrics are available, the run fails and names
+                     the architecture.
   --metrics, -m      Comma-separated list of metrics (mutually exclusive with -p / --time-only)
   --time-only        Only collect timing, no hardware counters
   --kernel, -k       Filter kernels by name (regular expression, passed to rocprofv3)

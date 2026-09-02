@@ -8,7 +8,11 @@ import tempfile
 import csv
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from metrix.profiler.rocprof_wrapper import ROCProfV3Wrapper, ProfileResult
+from metrix.profiler.rocprof_wrapper import (
+    ROCProfV3Wrapper,
+    ProfileResult,
+    _extract_missing_counters,
+)
 
 
 class TestProfileResult:
@@ -492,3 +496,59 @@ class TestCSVParsingRobustness:
 
             result = wrapper._parse_csv_row(row)
             assert result.grid_size == expected
+
+
+class TestMissingCounterDiagnostics:
+    """rocprofv3 exits 0 and writes nothing when a counter is unavailable.
+
+    The only signal is a warning on stderr; without it the failure surfaces as
+    a bare 'No output CSV found', which says nothing about the cause.
+    """
+
+    # Verbatim from rocprofv3 (ROCm 7.2.3) on a gfx1030 agent.
+    STDERR = (
+        "W20260901 13:55:05.889322 127091653975872 tool.cpp:2422] HSA version 8.20.3 initialized\n"
+        "W20260901 13:55:05.921218 127091653975872 tool.cpp:1189] Unable to find all counters "
+        "for agent 1 (gpu-0, gfx1030) in [MeanOccupancyPerActiveCU]. "
+        "Found: []. Missing: [MeanOccupancyPerActiveCU]\n"
+    )
+
+    def test_missing_counters_are_extracted_from_stderr(self):
+        assert _extract_missing_counters(self.STDERR) == ["MeanOccupancyPerActiveCU"]
+
+    def test_several_missing_counters_are_all_reported(self):
+        stderr = "tool.cpp:1189] ... Found: [SQ_WAVES]. Missing: [TA_BUFFER_LOAD_WAVEFRONTS_sum, GRBM_FOO]\n"
+        assert _extract_missing_counters(stderr) == [
+            "TA_BUFFER_LOAD_WAVEFRONTS_sum",
+            "GRBM_FOO",
+        ]
+
+    def test_unremarkable_stderr_yields_no_counters(self):
+        assert _extract_missing_counters("HSA version 8.20.3 initialized\n") == []
+        assert _extract_missing_counters("") == []
+
+    def test_error_names_the_missing_counter_not_just_the_directory(self):
+        wrapper = ROCProfV3Wrapper()
+        with tempfile.TemporaryDirectory() as tmp:
+            with pytest.raises(RuntimeError) as exc:
+                wrapper._parse_output(Path(tmp), stderr=self.STDERR, arch="gfx1030")
+
+        message = str(exc.value)
+        assert "MeanOccupancyPerActiveCU" in message
+        assert "gfx1030" in message
+        assert "--list-avail" in message, "should point at how to find valid names"
+
+    def test_error_falls_back_to_stderr_when_no_pattern_matches(self):
+        """An unrecognized failure must still surface rocprofv3's own output."""
+        wrapper = ROCProfV3Wrapper()
+        with tempfile.TemporaryDirectory() as tmp:
+            with pytest.raises(RuntimeError) as exc:
+                wrapper._parse_output(Path(tmp), stderr="something else went wrong\n")
+
+        assert "something else went wrong" in str(exc.value)
+
+    def test_error_without_stderr_still_reports_the_directory(self):
+        wrapper = ROCProfV3Wrapper()
+        with tempfile.TemporaryDirectory() as tmp:
+            with pytest.raises(RuntimeError, match="No output CSV found"):
+                wrapper._parse_output(Path(tmp))

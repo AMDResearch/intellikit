@@ -82,9 +82,23 @@ class TestListAvailableMetrics:
                 assert m in flat
 
     def test_returned_metrics_are_known(self):
-        """All returned metrics should be recognized by the catalog or follow the naming convention"""
+        """All returned metrics should be recognized by the catalog or follow the naming convention
+
+        RDNA backends also expose rocprofiler-sdk passthrough counters under
+        their native names (VALUInsts, ALUStalledByLDS, ...), which carry no
+        category prefix.
+        """
+        from metrix.backends import detect_or_default, get_backend
+
+        backend_metrics = set(get_backend(detect_or_default(None)).get_available_metrics())
+
         result = list_available_metrics()
         for metric in result["metrics"]:
-            assert "." in metric, f"Metric {metric} missing category prefix"
+            if "." not in metric:
+                # Passthrough counters are exposed under their native SDK name,
+                # so the only thing that makes one legitimate is the backend
+                # actually offering it.
+                assert metric in backend_metrics, f"Unrecognized passthrough metric {metric}"
+                continue
             category = metric.split(".", 1)[0]
             assert category in ("compute", "memory"), f"Unknown category in {metric}"

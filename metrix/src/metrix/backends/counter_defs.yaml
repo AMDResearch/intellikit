@@ -126,22 +126,37 @@ rocprofiler-sdk:
     - name: MeanOccupancyPerActiveCU
       unit: Percent
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+        # gfx1030: not exposed by rocprofv3 --list-avail on RDNA2;
+        # MeanOccupancyPerCU covers the same ground there.
+        - architectures: [gfx1201, gfx1100, gfx1151]
 
     - name: TA_BUSY_avr
       unit: Cycles
       definitions:
         - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
 
+    # gfx1030 exposes only the TA_FLAT_* wavefront counters, not TA_BUFFER_*.
+    # HIP kernels emit flat/global memory instructions rather than buffer
+    # instructions, so TA_FLAT_* is the meaningful signal on RDNA2.
     - name: TA_BUFFER_LOAD_WAVEFRONTS_sum
       unit: Count
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+        - architectures: [gfx1201, gfx1100, gfx1151]
 
     - name: TA_BUFFER_STORE_WAVEFRONTS_sum
       unit: Count
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+        - architectures: [gfx1201, gfx1100, gfx1151]
+
+    - name: TA_FLAT_LOAD_WAVEFRONTS_sum
+      unit: Count
+      definitions:
+        - architectures: [gfx1030]
+
+    - name: TA_FLAT_STORE_WAVEFRONTS_sum
+      unit: Count
+      definitions:
+        - architectures: [gfx1030]
 
     # --- Cache hit rates ---
     # L2 (TCC): hits / (hits + misses). L1 (TCP): misses go to L2 via TCC_READ_REQ.

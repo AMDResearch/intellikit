@@ -13,6 +13,7 @@ from metrix.metrics.catalog import (
     get_metrics_by_category,
     list_all_metrics,
     list_all_profiles,
+    resolve_profile_metrics,
 )
 from metrix.profiler.engine import Profiler
 from metrix.profiler.result import CollectionResult, KernelDispatch
@@ -58,6 +59,50 @@ def test_every_profile_references_only_real_metrics():
     for name, definition in METRIC_PROFILES.items():
         for metric in definition["metrics"]:
             assert metric in METRIC_CATALOG, f"profile '{name}' references unknown '{metric}'"
+
+
+# --------------------------------------------------------------------------
+# resolve_profile_metrics
+# --------------------------------------------------------------------------
+
+# Copied, not aliased: METRIC_PROFILES is shared across the whole session.
+_QUICK = tuple(METRIC_PROFILES["quick"]["metrics"])
+
+
+def test_resolve_profile_keeps_available_metrics_in_declared_order():
+    # Declared order is hbm_bandwidth_utilization then l2_hit_rate; passing the
+    # reversed set must not reorder the result.
+    assert _QUICK == ("memory.hbm_bandwidth_utilization", "memory.l2_hit_rate")
+    selected, dropped = resolve_profile_metrics("quick", list(reversed(_QUICK)), "gfx942")
+    assert selected == ["memory.hbm_bandwidth_utilization", "memory.l2_hit_rate"]
+    assert dropped == []
+
+
+def test_resolve_profile_drops_metrics_the_architecture_lacks():
+    # Only the first metric of the profile is available on this imaginary arch.
+    selected, dropped = resolve_profile_metrics("quick", {_QUICK[0]}, "gfx1030")
+    assert selected == [_QUICK[0]]
+    assert dropped == list(_QUICK[1:])
+
+
+def test_resolve_profile_keeps_unsupported_metrics_for_the_caller_to_explain():
+    # Unsupported metrics carry an actionable reason the caller reports; they
+    # must not be silently reclassified as merely unavailable.
+    selected, dropped = resolve_profile_metrics("quick", set(), "gfx90a", set(_QUICK))
+    assert selected == list(_QUICK)
+    assert dropped == []
+
+
+def test_resolve_profile_rejects_unknown_profile_name():
+    with pytest.raises(ValueError, match="Unknown profile"):
+        resolve_profile_metrics("no_such_profile", set(METRIC_CATALOG), "gfx942")
+
+
+def test_resolve_profile_names_the_architecture_when_nothing_survives():
+    # A profile whose every metric is unavailable must fail with an actionable
+    # message rather than letting an unknown metric reach the backend.
+    with pytest.raises(ValueError, match="gfx1030"):
+        resolve_profile_metrics("compute", set(), "gfx1030")
 
 
 # --------------------------------------------------------------------------

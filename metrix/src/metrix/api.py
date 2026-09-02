@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .backends import get_backend, Statistics, detect_or_default
 from .backends.base import CounterBackend
-from .metrics import METRIC_PROFILES, METRIC_CATALOG
+from .metrics import METRIC_PROFILES, METRIC_CATALOG, resolve_profile_metrics
 from .logger import logger
 
 
@@ -112,6 +112,14 @@ class Metrix:
 
         Returns:
             ProfilingResults object with all collected data
+
+        Raises:
+            ValueError: If ``profile`` names an unknown preset, or names a preset
+                none of whose metrics exist on this architecture (for example
+                "compute" on RDNA). A preset that is only partly supported
+                collects the supported subset and warns about the rest.
+            ValueError: If a metric in ``metrics`` is unsupported or unavailable
+                on this architecture.
         """
 
         # Determine what to collect
@@ -122,20 +130,24 @@ class Metrix:
             metrics_to_compute = metrics
             explicitly_requested = True  # User explicitly specified metrics
         elif profile:
-            if profile not in METRIC_PROFILES:
-                raise ValueError(
-                    f"Unknown profile: {profile}. Available: {list(METRIC_PROFILES.keys())}"
+            metrics_to_compute, dropped = resolve_profile_metrics(
+                profile,
+                self.backend.get_available_metrics(),
+                self.backend.device_specs.arch,
+                self.backend.get_unsupported_metrics(),
+            )
+            for metric_name in dropped:
+                logger.warning(
+                    f"Skipping '{metric_name}' (not available on {self.backend.device_specs.arch})"
                 )
-            metrics_to_compute = METRIC_PROFILES[profile]["metrics"]
         else:
             # Default: all available metrics
             metrics_to_compute = self.backend.get_available_metrics()
 
         # Check for unsupported metrics (explicitly marked with a reason)
+        backend_unsupported = self.backend.get_unsupported_metrics()
         unsupported = {
-            m: self.backend._unsupported_metrics[m]
-            for m in metrics_to_compute
-            if m in self.backend._unsupported_metrics
+            m: backend_unsupported[m] for m in metrics_to_compute if m in backend_unsupported
         }
 
         # Check for unavailable metrics (no definition for this architecture)

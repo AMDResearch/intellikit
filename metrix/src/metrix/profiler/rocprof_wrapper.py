@@ -17,6 +17,43 @@ from typing import List, Dict, Optional
 from ..backends.base import ProfileResult
 from ..logger import logger
 
+# rocprofv3 does not fail when a requested counter is absent on the agent: it
+# exits 0, writes no CSV, and logs this warning. Without parsing it the only
+# symptom is an empty output directory.
+#   tool.cpp:1189] Unable to find all counters for agent 1 (gpu-0, gfx1030)
+#   in [MeanOccupancyPerActiveCU]. Found: []. Missing: [MeanOccupancyPerActiveCU]
+_MISSING_COUNTERS_RE = re.compile(r"Missing:\s*\[([^\]]*)\]")
+
+
+def _extract_missing_counters(stderr: str) -> List[str]:
+    """Return the counter names rocprofv3 reported as missing, in order seen."""
+    found: List[str] = []
+    for match in _MISSING_COUNTERS_RE.finditer(stderr or ""):
+        for name in match.group(1).split(","):
+            name = name.strip()
+            if name and name not in found:
+                found.append(name)
+    return found
+
+
+def _no_output_message(output_dir: Path, stderr: str, arch: Optional[str]) -> str:
+    """Explain an empty rocprofv3 output directory as specifically as possible."""
+    missing = _extract_missing_counters(stderr)
+    if missing:
+        on_arch = f" on {arch}" if arch else ""
+        return (
+            f"rocprofv3 collected no data: counter(s) not available{on_arch}: "
+            f"{', '.join(missing)}. "
+            f"Run 'rocprofv3 --list-avail' to see the counters this GPU exposes."
+        )
+
+    base = f"No output CSV found in {output_dir}"
+    if stderr and stderr.strip():
+        # rocprofv3 exited 0, so its own log is the only account we have.
+        tail = "\n".join(stderr.strip().splitlines()[-20:])
+        return f"{base}. rocprofv3 stderr:\n{tail}"
+    return base
+
 
 class ROCProfV3Wrapper:
     """
@@ -223,7 +260,7 @@ class ROCProfV3Wrapper:
 
             # Parse output CSV files
             logger.debug(f"Parsing CSV files from {output_dir}")
-            results = self._parse_output(output_dir)
+            results = self._parse_output(output_dir, stderr=result.stderr, arch=arch)
             logger.info(f"Successfully parsed {len(results)} kernel dispatch(es)")
 
             # rocprofv3 --kernel-trace ignores kernel_include_regex, so filter here
@@ -363,10 +400,22 @@ class ROCProfV3Wrapper:
 
         return input_file
 
-    def _parse_output(self, output_dir: Path) -> List[ProfileResult]:
+    def _parse_output(
+        self,
+        output_dir: Path,
+        stderr: str = "",
+        arch: Optional[str] = None,
+    ) -> List[ProfileResult]:
         """
         Parse rocprofv3 CSV output
         Uses csv module - NO REGEX!
+
+        Args:
+            output_dir: Directory rocprofv3 wrote its CSVs to.
+            stderr: rocprofv3's stderr, used to explain an empty output
+                directory. rocprofv3 exits 0 in that case, so its own output is
+                the only account of what went wrong.
+            arch: Architecture string, for the error message.
         """
 
         # Try counter collection first
@@ -383,7 +432,7 @@ class ROCProfV3Wrapper:
             if trace_files:
                 return self._parse_kernel_trace(trace_files[0])
 
-            raise RuntimeError(f"No output CSV found in {output_dir}")
+            raise RuntimeError(_no_output_message(output_dir, stderr, arch))
 
         csv_file = counter_files[0]
 

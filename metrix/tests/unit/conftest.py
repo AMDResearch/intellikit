@@ -79,3 +79,60 @@ def requires_metric(*metric_names: str):
         len(missing) > 0,
         reason=f"requires metric(s) {', '.join(missing)} but {HW_ARCH} does not support them",
     )
+
+
+# --------------------------------------------------------------------------
+# GPU-free test doubles
+# --------------------------------------------------------------------------
+
+DEFAULT_FAKE_METRIC = "memory.hbm_bandwidth_utilization"
+
+
+def fake_stats(avg: float = 50.0, unit: str = "%"):
+    """A real Statistics instance, not a mock."""
+    from metrix.backends import Statistics
+
+    return Statistics(min=avg / 2, max=avg * 2, avg=avg, count=3, unit=unit)
+
+
+class FakeDeviceSpecs:
+    def __init__(self, arch: str = "gfx942"):
+        self.arch = arch
+
+
+class FakeBackend:
+    """Minimal stand-in for a CounterBackend.
+
+    Implements only the surface the CLI's ``profile_command`` and the
+    ``Metrix.profile`` API actually touch, so both can be exercised without a
+    GPU.
+    """
+
+    def __init__(self, dispatch_keys=None, unsupported=None, available=None, arch="gfx942"):
+        self.device_specs = FakeDeviceSpecs(arch)
+        self._unsupported_metrics = dict(unsupported or {})
+        self._available = list(available) if available is not None else [DEFAULT_FAKE_METRIC]
+        self._keys = ["dispatch_1:gemm_kernel"] if dispatch_keys is None else dispatch_keys
+        self._aggregated = {
+            key: {"duration_us": fake_stats(100.0 + i * 50, "us")}
+            for i, key in enumerate(self._keys)
+        }
+        self.profile_calls = []
+
+    def get_available_metrics(self):
+        return list(self._available)
+
+    def get_unsupported_metrics(self):
+        return dict(self._unsupported_metrics)
+
+    def profile(self, **kwargs):
+        self.profile_calls.append(kwargs)
+
+    def get_dispatch_keys(self):
+        return list(self._keys)
+
+    def compute_metric_stats(self, dispatch_key, metric):
+        return fake_stats()
+
+    def get_metric_counters(self, metric_name):
+        return ["TCC_HIT_sum", "TCC_MISS_sum"]

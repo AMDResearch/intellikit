@@ -111,6 +111,16 @@ class CounterBackend(ABC):
         """Get list of all metrics supported by this backend"""
         return list(self._metrics.keys())
 
+    def get_unsupported_metrics(self) -> Dict[str, str]:
+        """Metrics this architecture defines but cannot collect, mapped to why.
+
+        Distinct from "not available": these have a definition gated on this
+        architecture with an explicit ``unsupported_reason``, e.g. a counter
+        known to be broken on the part. Callers report the reason rather than
+        a bare "not available", so keep them distinguishable.
+        """
+        return dict(self._unsupported_metrics)
+
     def _load_yaml_metrics_if_available(self):
         """
         Load metrics from counter_defs.yaml if it exists.

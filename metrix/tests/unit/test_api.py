@@ -2,10 +2,14 @@
 Unit tests for the high-level Metrix API
 """
 
+from contextlib import contextmanager
+from unittest.mock import patch
+
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
-from metrix.backends import Statistics, get_backend
-from .conftest import requires_arch, requires_metric
+from metrix.backends import Statistics
+from metrix.metrics import METRIC_PROFILES
+from .conftest import FakeBackend, requires_arch, requires_metric
 
 
 class TestMetrixInit:
@@ -180,3 +184,55 @@ class TestUnsupportedMetricsAPI:
         assert "memory.atomic_latency" not in filtered
         assert "memory.l2_hit_rate" in filtered
         assert "memory.hbm_bandwidth_utilization" in filtered
+
+
+# --------------------------------------------------------------------------
+# Metrix.profile(profile=...) — GPU-free coverage of profile resolution
+# --------------------------------------------------------------------------
+
+_QUICK_METRICS = METRIC_PROFILES["quick"]["metrics"]
+
+
+def _FakeBackend(available, unsupported=None):
+    """The shared fake, pinned to the RDNA2 arch these tests talk about."""
+    return FakeBackend(available=available, unsupported=unsupported, arch="gfx1030")
+
+
+@contextmanager
+def _patched(backend):
+    with (
+        patch("metrix.api.detect_or_default", return_value=backend.device_specs.arch),
+        patch("metrix.api.get_backend", return_value=backend),
+    ):
+        yield Metrix()
+
+
+class TestProfileResolutionAPI:
+    """Metrix.profile narrows a preset to what the architecture supports."""
+
+    def test_partly_supported_profile_collects_the_supported_subset(self, caplog):
+        backend = _FakeBackend(available=[_QUICK_METRICS[0]])
+        with _patched(backend) as profiler:
+            profiler.profile("./app", profile="quick")
+
+        assert backend.profile_calls[0]["metrics"] == [_QUICK_METRICS[0]]
+        assert _QUICK_METRICS[1] in caplog.text
+
+    def test_wholly_unsupported_profile_raises_naming_the_architecture(self):
+        backend = _FakeBackend(available=["memory.l2_hit_rate"])
+        with _patched(backend) as profiler:
+            with pytest.raises(ValueError, match="gfx1030"):
+                profiler.profile("./app", profile="compute")
+        assert backend.profile_calls == []
+
+    def test_unsupported_metric_in_profile_reports_its_reason(self, caplog):
+        reason = "counter is broken on this part"
+        backend = _FakeBackend(
+            available=[_QUICK_METRICS[0]],
+            unsupported={_QUICK_METRICS[1]: reason},
+        )
+        with _patched(backend) as profiler:
+            profiler.profile("./app", profile="quick")
+
+        assert reason in caplog.text
+        assert backend.profile_calls[0]["metrics"] == [_QUICK_METRICS[0]]
