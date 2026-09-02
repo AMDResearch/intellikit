@@ -134,7 +134,7 @@ class Metrix:
                 profile,
                 self.backend.get_available_metrics(),
                 self.backend.device_specs.arch,
-                self.backend._unsupported_metrics,
+                self.backend.get_unsupported_metrics(),
             )
             for metric_name in dropped:
                 logger.warning(
@@ -145,10 +145,9 @@ class Metrix:
             metrics_to_compute = self.backend.get_available_metrics()
 
         # Check for unsupported metrics (explicitly marked with a reason)
+        backend_unsupported = self.backend.get_unsupported_metrics()
         unsupported = {
-            m: self.backend._unsupported_metrics[m]
-            for m in metrics_to_compute
-            if m in self.backend._unsupported_metrics
+            m: backend_unsupported[m] for m in metrics_to_compute if m in backend_unsupported
         }
 
         # Check for unavailable metrics (no definition for this architecture)

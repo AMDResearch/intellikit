@@ -122,6 +122,9 @@ class FakeBackend:
     def get_available_metrics(self):
         return list(self._available)
 
+    def get_unsupported_metrics(self):
+        return dict(self._unsupported_metrics)
+
     def profile(self, **kwargs):
         self.profile_calls.append(kwargs)
 

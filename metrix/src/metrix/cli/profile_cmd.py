@@ -49,7 +49,7 @@ def profile_command(args):
                     profile_name,
                     backend.get_available_metrics(),
                     backend.device_specs.arch,
-                    backend._unsupported_metrics,
+                    backend.get_unsupported_metrics(),
                 )
             except ValueError as exc:
                 logger.error(str(exc))
@@ -62,10 +62,9 @@ def profile_command(args):
             mode = f"profile '{profile_name}'"
 
     # Check for unsupported metrics
+    backend_unsupported = backend.get_unsupported_metrics()
     unsupported = {
-        m: backend._unsupported_metrics[m]
-        for m in metrics_to_compute
-        if m in backend._unsupported_metrics
+        m: backend_unsupported[m] for m in metrics_to_compute if m in backend_unsupported
     }
     if unsupported:
         if explicitly_requested:

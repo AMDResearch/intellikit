@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
-from metrix.backends import Statistics, get_backend
+from metrix.backends import Statistics
 from metrix.metrics import METRIC_PROFILES
 from .conftest import FakeBackend, requires_arch, requires_metric
 
