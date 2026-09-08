@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omniprobe-ik"
+dynamic = ["version"]
+description = "Omniprobe: GPU Memory Coalescing and Basic-Block Timing Analysis"
+authors = [
+    { name = "AMD Research", email = "dl.amd.intellikit@amd.com" },
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=2.0.0",
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Profiling",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/AMDResearch/intellikit/tree/main/omniprobe"
+Repository = "https://github.com/AMDResearch/intellikit/tree/main/omniprobe"
+Documentation = "https://github.com/AMDResearch/intellikit/blob/main/omniprobe/README.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+omniprobe-ik = "omniprobe_ik.cli.main:main"
+omniprobe-mcp = "omniprobe_ik.mcp.server:main"
+
+# ---- setuptools-scm versioning ----
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-date"
+fallback_version = "0.1.1"
+root = ".."
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ---- Ruff configuration ----
+[tool.ruff]
+extend = "../ruff.toml"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E731", "E741"]
