@@ -12,7 +12,7 @@
 
 </div>
 
-IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, **amd-smi**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
+IntelliKit is a set of Python tools for **AMD-focused** performance and validation. Most of the stack targets **GPUs through ROCm**, turning hardware counters, traces, and dispatch data into **clear APIs** you can use from Python. **`uprof_mcp`** adds **AMD uProf** for **host-side CPU** hotspot analysis in the same toolbox. For LLM-style workflows you also get **Model Context Protocol (MCP)** servers (profiling, HIP compile, HIP docs, **rocminfo**, **amd-smi**, …) and **agent skills** — installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, Omniprobe, and Accordo (`install/skills/install.sh`). Use the stack from a notebook, a script, an MCP client, or Cursor / Claude / Codex.
 
 ---
 
@@ -25,12 +25,13 @@ Rough workflow: **isolate** a kernel → **profile** it (counters and/or source 
 | **[Kerncap](kerncap/)** | **Isolate** — capture dispatches and build **standalone reproducers** (HIP, Triton). | [README](kerncap/README.md) · [examples](kerncap/examples/) |
 | **[Metrix](metrix/)** | **Profile** — **human-readable** metrics from hardware counters (bandwidth, cache, etc.). | [README](metrix/README.md) · [examples](metrix/examples/) |
 | **[Linex](linex/)** | **Profile** — **source-line** timing and stalls (compile with `-g` for file:line mapping). | [README](linex/README.md) · [examples](linex/examples/) |
+| **[Omniprobe](omniprobe/)** | **Profile** — **memory coalescing** and **basic-block** timing, attributed to `file:line:column`. | [README](omniprobe/README.md) · [examples](omniprobe/examples/) |
 | **[Nexus](nexus/)** | **Inspect** — from **HSA packets**, see what ran: source and assembly. | [README](nexus/README.md) · [examples](nexus/examples/) |
 | **[rocm_mcp](rocm_mcp/)** | **MCP** — HIP compile, HIP docs, **rocminfo**, **amd-smi**, and related servers for agents. | [README](rocm_mcp/README.md) · [examples](rocm_mcp/examples/) |
 | **[uprof_mcp](uprof_mcp/)** | **CPU** — MCP bridge to **AMD uProf** for host-side hotspots. | [README](uprof_mcp/README.md) · [examples](uprof_mcp/examples/) |
 | **[Accordo](accordo/)** | **Validate** — prove an optimized kernel still matches a reference. | [README](accordo/README.md) · [examples](accordo/examples/) |
 
-**Idea in one line:** pull a kernel out with Kerncap, understand it with Metrix and Linex, dig into execution with Nexus, wire agents with **MCP** and **skills**, add **uProf** when you care about the host, then lock in correctness with Accordo.
+**Idea in one line:** pull a kernel out with Kerncap, understand it with Metrix and Linex, find the accesses wasting bandwidth with Omniprobe, dig into execution with Nexus, wire agents with **MCP** and **skills**, add **uProf** when you care about the host, then lock in correctness with Accordo.
 
 ---
 
@@ -42,7 +43,7 @@ Rough workflow: **isolate** a kernel → **profile** it (counters and/or source 
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/tools/install.sh | bash
 ```
 
-**Skills** — agent skill files for Kerncap, Metrix, Linex, Nexus, and Accordo (`install/skills/install.sh`):
+**Skills** — agent skill files for Kerncap, Metrix, Linex, Nexus, Omniprobe, and Accordo (`install/skills/install.sh`):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
@@ -57,10 +58,11 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 | Requirement | Notes |
 |-------------|--------|
 | Python | 3.10 or newer |
-| ROCm | 6.0+ for GPU packages (use **7.0+** for Linex); skip if you only use host-side tools like `uprof_mcp` |
+| ROCm | 6.0+ for GPU packages (use **7.0+** for Linex and Omniprobe); skip if you only use host-side tools like `uprof_mcp` |
 | GPU | **MI300+** for the full GPU experience; some pieces vary by tool — see each package’s README |
 | cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** only (C++ build via KernelDB) |
 | uProf | **AMD uProf** on **x86** for `uprof_mcp` only — see that README |
+| Omniprobe | The **`omniprobe`** tool installed separately and on `PATH`, for the `omniprobe` package only — it drives an existing install rather than bundling one. See that [README](omniprobe/README.md) |
 
 > **System packages for accordo / nexus:** These tools compile C++ code (via [KernelDB](https://github.com/AMDResearch/KernelDB)) during `pip install`. Install `cmake`, `libdwarf-dev`, and `libzstd-dev` (`libdwarf-devel`/`libzstd-devel` on Fedora/RHEL) first, or the build will fail. The [IntelliKit Docker image](docker/Dockerfile) includes these packages; `install.sh` checks for them and exits with an error if missing. See [docs](https://amdresearch.github.io/intellikit/getting-started/installation/) for details.
 
@@ -142,7 +144,7 @@ More servers and examples: [rocm_mcp/README.md](rocm_mcp/README.md), [AGENTS.md]
 
 ```bash
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"
-# accordo, kerncap, linex, nexus, rocm_mcp, uprof_mcp — same pattern
+# accordo, kerncap, linex, nexus, omniprobe, rocm_mcp, uprof_mcp — same pattern
 ```
 
 **Editable from clone**

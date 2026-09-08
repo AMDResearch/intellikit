@@ -2,7 +2,7 @@
 myst:
     html_meta:
         "description": "Install IntelliKit tools and agent skills from Git or using pip. Covers system requirements, quick install, individual packages, and install script options."
-        "keywords": "IntelliKit, install, ROCm, AMD Instinct, GPU, pip, uv, Python, Kerncap, Metrix, Linex, Nexus, Accordo"
+        "keywords": "IntelliKit, install, ROCm, AMD Instinct, GPU, pip, uv, Python, Kerncap, Metrix, Linex, Omniprobe, Nexus, Accordo"
 ---
 
 # Install IntelliKit
@@ -30,6 +30,23 @@ sudo dnf install -y cmake libdwarf-devel libzstd-devel
 If these packages are missing, the installation script (`install/tools/install.sh`) will exit with an error listing the missing packages. For convenience, the
 [IntelliKit Docker image](https://github.com/AMDResearch/intellikit/blob/main/docker/Dockerfile) already includes these dependencies.
 
+### External tool for Omniprobe
+
+Omniprobe, like uProf MCP, depends on a tool installed separately: it drives a separate tool of the
+same name rather than bundling one. Installing the IntelliKit package does not install
+[Omniprobe](https://github.com/AMDResearch/omniprobe), and nothing fails at install time if it is
+absent — the package only reports the problem when you ask it to analyze something.
+
+Before using the `omniprobe` package, make sure that:
+
+- the `omniprobe` executable is on your `PATH`, and
+- Omniprobe's Python API is importable, so that `from omniprobe.api import Omniprobe` succeeds —
+  the Omniprobe repository must be on `PYTHONPATH` or installed.
+
+Constructing the analyzer raises `ImportError` with a message naming `PYTHONPATH` when the Python
+API is missing, so that condition is easy to recognize. Locating the executable is delegated to
+Omniprobe's own API, which reports a missing binary itself.
+
 ## Quick install
 
 You can quickly install all IntelliKit tools directly from Git:
@@ -50,7 +67,7 @@ To install a single IntelliKit package from Git:
 
 ```bash
 pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"
-# Also: accordo, kerncap, linex, nexus, rocm_mcp, uprof_mcp
+# Also: accordo, kerncap, linex, nexus, omniprobe, rocm_mcp, uprof_mcp
 ```
 
 ## Editable install (development)

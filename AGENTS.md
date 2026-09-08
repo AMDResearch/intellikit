@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD ROCm. It provides clean Python abstractions over complex GPU internals with MCP (Model Context Protocol) server support for LLM integration.
 
-**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; kerncap and linex target ROCm 7.0+ workflows. MI300+ GPUs are needed for the full profiling stack, while metrix additionally supports RDNA: gfx1030/1031/1032 (RDNA2), gfx1100-1103 (RDNA3), gfx1150/1151 (RDNA 3.5), and gfx1201 (RDNA4). Metric coverage varies by architecture — built-in profiles collect the subset the detected GPU supports. Only the eight architectures listed in `counter_defs.yaml` have counter-based metrics; the other accepted arch strings (gfx1031, gfx1032, gfx1101, gfx1102, gfx1103) resolve to device specs and kernel durations only. For gfx1103 (Phoenix / Radeon 780M) that is permanent — ROCm 7.2.4 ships no hardware-counter definitions for it at all — while the rest are simply unvalidated gaps.
+**Requirements:** The repo-level `install/tools/install.sh` script enforces Python >= 3.10, but individual packages have lower minimums: `accordo`, `linex`, and `nexus` require Python >= 3.8; `metrix` requires Python >= 3.9; `kerncap`, `omniprobe`, `rocm_mcp`, and `uprof_mcp` require Python >= 3.10. ROCm >= 6.0 is the general baseline; kerncap, linex, and omniprobe target ROCm 7.0+ workflows. `omniprobe` additionally requires the separate [Omniprobe](https://github.com/AMDResearch/omniprobe) tool on `PATH` with its Python API importable — the package drives an existing installation and neither bundles nor builds it. MI300+ GPUs are needed for the full profiling stack, while metrix additionally supports RDNA: gfx1030/1031/1032 (RDNA2), gfx1100-1103 (RDNA3), gfx1150/1151 (RDNA 3.5), and gfx1201 (RDNA4). Metric coverage varies by architecture — built-in profiles collect the subset the detected GPU supports. Only the eight architectures listed in `counter_defs.yaml` have counter-based metrics; the other accepted arch strings (gfx1031, gfx1032, gfx1101, gfx1102, gfx1103) resolve to device specs and kernel durations only. For gfx1103 (Phoenix / Radeon 780M) that is permanent — ROCm 7.2.4 ships no hardware-counter definitions for it at all — while the rest are simply unvalidated gaps.
 
 ## Tool Descriptions
 
@@ -17,6 +17,7 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 | **linex** | Source-line profiling | Map cycle-level timing and stall analysis to source code lines (MCP-only) |
 | **metrix** | Hardware counter metrics | Profile GPU kernels with human-readable performance insights (CLI + MCP) |
 | **nexus** | HSA packet interception | Capture GPU kernel launches and memory operations (MCP-only) |
+| **omniprobe** | Memory coalescing and basic-block timing | Attribute wasted bandwidth and per-block cycle counts to `file:line:column` (CLI + MCP) |
 | **rocm_mcp** | ROCm MCP servers | LLM-accessible HIP compilation, docs, system info, and GPU management (amd-smi) |
 | **uprof_mcp** | uProf MCP server | LLM-accessible AMD uProf CPU profiling |
 
@@ -31,7 +32,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 #   ./install/tools/install.sh [--tools ...] [--pip-cmd ...] [--repo-url ...] [--ref ...] [--dry-run]
 
 # Editable installs for development (any subset; from repo root)
-pip install -e accordo/ -e kerncap/ -e linex/ -e metrix/ -e nexus/ -e rocm_mcp/ -e uprof_mcp/
+pip install -e accordo/ -e kerncap/ -e linex/ -e metrix/ -e nexus/ -e omniprobe/ -e rocm_mcp/ -e uprof_mcp/
 
 # Install individual tools
 pip install -e metrix/
@@ -55,6 +56,7 @@ Most tools have pytest-based test suites under `tests/`:
 - **linex**: `tests/` directory
 - **metrix**: `tests/unit/` and `tests/integration/` with pytest markers (`unit`, `integration`, `e2e`, `slow`)
 - **nexus**: `tests/` directory
+- **omniprobe**: `tests/` directory (unit tests mock the Omniprobe subprocess, so they need no GPU) and `tests/integration/`
 - **rocm_mcp**: `tests/` directory
 - **uprof_mcp**: no `tests/` directory yet; rely on examples/manual validation
 
@@ -66,6 +68,7 @@ cd metrix && pytest
 cd accordo && pytest
 cd nexus && pytest
 cd linex && pytest
+cd omniprobe && pytest
 
 # Run specific test file
 pytest metrix/tests/unit/test_api.py
@@ -115,6 +118,7 @@ Each tool is a standalone Python package with its own `pyproject.toml`:
 | **linex** | setuptools, setuptools-scm | Source-level SQTT profiling (`src/` layout), MCP-only |
 | **metrix** | setuptools, setuptools-scm | Hardware counter profiling (`src/` layout), CLI + MCP, RDNA support |
 | **nexus** | scikit-build-core (CMake), setuptools-scm | HSA packet interception, C++ shared library, MCP-only |
+| **omniprobe** | setuptools, setuptools-scm | Memory coalescing and basic-block timing (`src/` layout), CLI + MCP, wraps the external Omniprobe tool |
 | **rocm_mcp** | setuptools | MCP servers for ROCm tools (`src/` layout) |
 | **uprof_mcp** | setuptools | MCP server for AMD uProf CPU profiling (`src/` layout) |
 
@@ -145,7 +149,7 @@ def _l2_hit_rate(self, TCC_HIT_sum, TCC_MISS_sum):
 All current MCP server implementations use `FastMCP`, and all tool packages now declare `fastmcp>=2.0.0` directly.
 - Entry points defined in `pyproject.toml` `[project.scripts]`
 - Server implementations in `<tool>/mcp/server.py` or `<tool>_mcp.py`
-- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `amd-smi-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
+- MCP servers: `accordo-mcp`, `kerncap-mcp`, `linex-mcp`, `metrix-mcp`, `nexus-mcp`, `omniprobe-mcp`, `hip-compiler-mcp`, `hip-docs-mcp`, `amd-smi-mcp`, `rocminfo-mcp`, `uprof-profiler-mcp`
 - `accordo` and `kerncap` both include lightweight pytest MCP entrypoint tests that stub `FastMCP` and verify CLI transport mapping (`stdio` vs `streamable-http`) without needing GPU or ROCm runtime access
 
 ### Nexus C++ Integration
@@ -183,13 +187,14 @@ Not all tools follow the same directory structure:
 |------|--------|------------------|------------|-------|--------|-----|
 | **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skill/` | Yes |
 | **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skill/` | No |
+| **omniprobe** | `src/` layout | `omniprobe/src/omniprobe_ik/` | N/A | `omniprobe/tests/` | `omniprobe/skill/` | Yes |
 | **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A | No |
 | **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | none yet | N/A | No |
 | **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` | Yes |
 | **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skill/` | Yes |
 | **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` | No |
 
-This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skill/` directory containing `SKILL.md` files for AI agent integration.
+This affects import paths and where to find source code. Note that `omniprobe` is the only tool that imports under a different name than its directory: the directory is `omniprobe/` and the module imports as `omniprobe_ik` (the distribution is `omniprobe-ik`; `rocm_mcp` and `uprof_mcp` likewise hyphenate their distribution names, but import under their directory names). The suffix exists so the package does not collide with upstream Omniprobe's own `omniprobe` namespace, which must be importable at the same time. Tools with CLI support (`accordo`, `kerncap`, `metrix`, `omniprobe`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skill/` directory containing `SKILL.md` files for AI agent integration.
 
 ## Dependency Management
 
@@ -211,7 +216,7 @@ This affects import paths and where to find source code. Tools with CLI support 
   - Editable install: `pip install -e <tool>/`
   - Non-editable install: `pip install ./<tool>/`
   - GitHub install: `pip install 'git+https://github.com/AMDResearch/intellikit.git@<sha>#subdirectory=<tool>'`
-- **Pytest testing** (`intellikit-pytest.yml`): Currently runs `pytest` for `accordo`, `kerncap`, `linex`, `metrix`, and `nexus`
+- **Pytest testing** (`intellikit-pytest.yml`): Currently runs `pytest` for `accordo`, `kerncap`, `linex`, `metrix`, `nexus`, and `omniprobe`
 - **Lint** (`lint.yml`): Runs `ruff check` and `ruff format` on changed files
 
 ### Linting Enforcement
@@ -245,6 +250,8 @@ kerncap-mcp = "kerncap.mcp.server:main"
 linex-mcp = "linex.mcp.server:main"
 metrix-mcp = "metrix.mcp.server:main"
 nexus-mcp = "nexus.mcp.server:main"
+omniprobe-ik = "omniprobe_ik.cli.main:main"
+omniprobe-mcp = "omniprobe_ik.mcp.server:main"
 hip-compiler-mcp = "rocm_mcp.compile.hip_compiler_mcp:main"
 hip-docs-mcp = "rocm_mcp.doc.hip_docs_mcp:main"
 amd-smi-mcp = "rocm_mcp.sysinfo.amd_smi_mcp:main"
@@ -272,6 +279,7 @@ Repo-local default HTTP paths:
 | `linex-mcp` | `/linex` |
 | `metrix-mcp` | `/metrix` |
 | `nexus-mcp` | `/nexus` |
+| `omniprobe-mcp` | `/omniprobe` |
 | `uprof-profiler-mcp` | `/uprof_mcp` |
 | `hip-compiler-mcp` | `/rocm_mcp/hip_compiler` |
 | `hip-docs-mcp` | `/rocm_mcp/hip_docs` |
@@ -297,6 +305,7 @@ linex-mcp --transport http --port 8004
 hip-compiler-mcp --transport http --port 8005
 amd-smi-mcp --transport http --port 8006
 uprof-profiler-mcp --transport http --port 8007
+omniprobe-mcp --transport http --port 8008
 
 # Or from the package directory with uv
 cd metrix && uv run metrix-mcp
@@ -446,6 +455,10 @@ pytest -m unit         # No GPU required
 cd accordo && pytest -v
 cd linex && pytest -v
 cd nexus && pytest -v
+
+# omniprobe: unit tests mock the subprocess and need no GPU; the integration
+# tests skip themselves unless the omniprobe binary is on PATH
+cd omniprobe && pytest -v
 ```
 
 ### Working with Agent Skills
@@ -459,6 +472,7 @@ kerncap/skill/SKILL.md
 linex/skill/SKILL.md
 metrix/skill/SKILL.md
 nexus/skill/SKILL.md
+omniprobe/skill/SKILL.md
 
 # Install skills for AI agents using the install script
 ./install/skills/install.sh                    # local: ./.agents/skills/

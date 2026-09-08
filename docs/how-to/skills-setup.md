@@ -7,7 +7,7 @@ myst:
 
 # Set up skills in IntelliKit
 
-IntelliKit ships `SKILL.md` playbooks for five tools: Metrix, Accordo, Nexus, Linex, and Kerncap. These playbooks provide AI coding assistants with step-by-step instructions for profiling, inspecting, and validating GPU kernels.
+IntelliKit ships `SKILL.md` playbooks for six tools: Metrix, Accordo, Nexus, Linex, Omniprobe, and Kerncap. These playbooks provide AI coding assistants with step-by-step instructions for profiling, inspecting, and validating GPU kernels.
 
 ## What are skills?
 
@@ -27,12 +27,13 @@ IntelliKit includes the following skills and their trigger conditions.
 | `metrix-profiling` | Metrix | Performance analysis, GPU metrics, bandwidth, cache hit rates |
 | `test-kerncap` | Kerncap | Kernel extraction, reproducer validation, HIP/Triton isolation |
 | `linex-profiling` | Linex | Source-line profiling, stall analysis, cycle mapping |
+| `omniprobe-analysis` | Omniprobe | Uncoalesced memory accesses, LDS bank conflicts, basic-block ISA timing |
 | `nexus-trace` | Nexus | GPU execution inspection, HSA packet tracing, assembly extraction |
 | `accordo-validation` | Accordo | Kernel correctness checking, output comparison |
 
 ## Quick install
 
-Run the following command to install all five skills into `.agents/skills/` in the current directory (the default target):
+Run the following command to install all six skills into `.agents/skills/` in the current directory (the default target):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash
@@ -115,6 +116,7 @@ After installation, each tool gets its own `SKILL.md` file:
 ├── kerncap/SKILL.md
 ├── linex/SKILL.md
 ├── nexus/SKILL.md
+├── omniprobe/SKILL.md
 └── accordo/SKILL.md
 ```
 

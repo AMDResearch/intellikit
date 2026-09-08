@@ -35,6 +35,8 @@ subtrees:
     title: Metrix
   - file: tools/linex
     title: Linex
+  - file: tools/omniprobe
+    title: Omniprobe
   - file: tools/nexus
     title: Nexus
   - file: tools/accordo

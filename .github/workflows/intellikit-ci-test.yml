@@ -41,6 +41,8 @@ jobs:
               - 'metrix/**'
             nexus:
               - 'nexus/**'
+            omniprobe:
+              - 'omniprobe/**'
             rocm_mcp:
               - 'rocm_mcp/**'
             uprof_mcp:
@@ -57,7 +59,7 @@ jobs:
         run: |
           # Infra changes or non-PR events → test everything
           if [[ "${{ steps.filter.outputs.infra }}" == "true" || "${{ github.event_name }}" != "pull_request" ]]; then
-            echo 'packages=["accordo","kerncap","linex","metrix","nexus","rocm_mcp","uprof_mcp"]' >> "$GITHUB_OUTPUT"
+            echo 'packages=["accordo","kerncap","linex","metrix","nexus","omniprobe","rocm_mcp","uprof_mcp"]' >> "$GITHUB_OUTPUT"
           else
             CHANGES='${{ steps.filter.outputs.changes }}'
             echo "packages=${CHANGES}" >> "$GITHUB_OUTPUT"

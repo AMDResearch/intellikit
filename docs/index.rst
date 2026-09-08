@@ -28,6 +28,7 @@ The IntelliKit source code is hosted in the `AMDResearch/intellikit <https://git
       * :doc:`Kerncap <tools/kerncap>`
       * :doc:`Metrix <tools/metrix>`
       * :doc:`Linex <tools/linex>`
+      * :doc:`Omniprobe <tools/omniprobe>`
       * :doc:`Nexus <tools/nexus>`
       * :doc:`Accordo <tools/accordo>`
       * :doc:`ROCm MCP <tools/rocm-mcp>`

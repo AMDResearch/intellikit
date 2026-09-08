@@ -17,6 +17,7 @@ Before configuring MCP servers, ensure you have the following installed.
 - `uv` (recommended) or `pip`
 - [ROCm installation](https://rocm.docs.amd.com/projects/install-on-linux/en/docs-7.2.0/) for GPU-related MCP servers
 - AMD uProf for `uprof-profiler-mcp`
+- The [Omniprobe](https://github.com/AMDResearch/omniprobe) tool on `PATH`, with its Python API importable, for `omniprobe-mcp`
 
 ## Full configuration
 
@@ -48,6 +49,10 @@ To configure MCP servers using `uv` and a cloned IntelliKit repository, set up y
     "uprof-profiler-mcp": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/uprof_mcp", "uprof-profiler-mcp"]
+    },
+    "omniprobe-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/intellikit/omniprobe", "omniprobe-mcp"]
     }
   }
 }
@@ -87,10 +92,11 @@ IntelliKit provides the following MCP servers.
 | `hip-docs-mcp` | `rocm_mcp` | Accesses HIP documentation|
 | `rocminfo-mcp` | `rocm_mcp` | Queries GPU hardware topology|
 | `uprof-profiler-mcp` | `uprof_mcp` | Profiles CPU hotspots using AMD uProf|
+| `omniprobe-mcp` | `omniprobe` | Analyzes memory coalescing and basic-block timing; exposes `analyze_memory`, `analyze_basic_blocks`, and `list_analyzers`|
 
 ## Agent skills
 
-IntelliKit provides installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, and Accordo:
+IntelliKit provides installable `SKILL.md` playbooks for Kerncap, Metrix, Linex, Nexus, Omniprobe, and Accordo:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh | bash

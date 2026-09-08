@@ -1,8 +1,8 @@
 ---
 myst:
     html_meta:
-        "description": "Walk through the full IntelliKit workflow: profile a GPU application, inspect execution, optimize a kernel, and validate correctness using Metrix, Nexus, Linex, Kerncap, and Accordo."
-        "keywords": "IntelliKit, GPU workflow, ROCm, HIP, Metrix, Nexus, Linex, Kerncap, Accordo, kernel optimization"
+        "description": "Walk through the full IntelliKit workflow: profile a GPU application, inspect execution, optimize a kernel, and validate correctness using Metrix, Nexus, Linex, Omniprobe, Kerncap, and Accordo."
+        "keywords": "IntelliKit, GPU workflow, ROCm, HIP, Metrix, Nexus, Linex, Omniprobe, Kerncap, Accordo, kernel optimization"
 ---
 
 # Use IntelliKit end to end
@@ -18,7 +18,7 @@ Isolate → Profile → Inspect → Optimize → Validate
 ```
 
 1. **Isolate** a kernel with Kerncap
-2. **Profile** it with Metrix (hardware counters) and Linex (source-line timing)
+2. **Profile** it with Metrix (hardware counters), Linex (source-line timing), and Omniprobe (memory access patterns)
 3. **Inspect** execution details with Nexus (assembly + HIP source)
 4. **Optimize** the kernel in isolation
 5. **Validate** correctness with Accordo
@@ -66,6 +66,35 @@ profiler.profile("./my_app", kernel_filter="target_kernel")
 for line in profiler.source_lines[:5]:
     print(f"{line.file}:{line.line_number}")
     print(f"  {line.total_cycles:,} cycles ({line.stall_percent:.1f}% stalled)")
+```
+
+### Find the accesses wasting bandwidth
+
+Linex tells you which lines are slow. Omniprobe tells you which accesses are moving more data than
+they need to, and how much that costs. Compile with `-g` here as well — without it the counts are
+still correct, but they cannot be mapped back to source.
+
+```python
+from omniprobe_ik import Omniprobe
+
+probe = Omniprobe()
+result = probe.analyze_memory("./my_app", kernel_filter="target_kernel")
+
+for kernel in result.kernels:
+    worst = sorted(kernel.accesses, key=lambda a: a.excess_cache_lines, reverse=True)
+    for access in worst[:5]:
+        print(f"{access.source_file}:{access.line}:{access.column}")
+        print(f"  {access.excess_cache_lines} excess cache lines, "
+              f"{access.bank_conflicts} bank conflicts")
+```
+
+Omniprobe also reports per-basic-block cycle counts as a distribution through
+`analyze_basic_blocks`, so a block whose `p99` sits far above its `p50` stands out as one being
+reached under very different conditions — something an average hides.
+
+```{note}
+Omniprobe drives a separate tool of the same name. The `omniprobe` executable must be on `PATH`
+and its Python API importable; see [Install IntelliKit](../getting-started/installation.md).
 ```
 
 ## Step 4: Isolate and optimize the kernel

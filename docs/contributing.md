@@ -42,6 +42,9 @@ PYTHONPATH=kerncap pytest kerncap/tests/unit/ -v
 
 # Kerncap integration tests (requires ROCm + AMD GPU)
 PYTHONPATH=kerncap pytest kerncap/tests/integration/ -v
+
+# Omniprobe unit tests (no GPU required — they mock the Omniprobe subprocess)
+python3 -m pytest omniprobe/tests/ -v
 ```
 
 ## Project structure
@@ -55,6 +58,7 @@ intellikit/
 ├── linex/          Source-line GPU profiling
 ├── metrix/         Human-readable GPU metrics
 ├── nexus/          HSA packet source extraction
+├── omniprobe/      Memory coalescing and basic-block timing
 ├── rocm_mcp/       ROCm MCP servers
 ├── uprof_mcp/      AMD uProf MCP server
 ├── install/        Install scripts (tools + skills)

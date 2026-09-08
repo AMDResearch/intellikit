@@ -2,6 +2,10 @@
 
 This topic summarizes the features included in each IntelliKit release.
 
+## Unreleased
+
+- **Omniprobe** — new tool for GPU memory coalescing analysis and basic-block ISA timing. It attributes wasted memory bandwidth to a source file, line, and column, reporting excess cache lines and LDS bank conflicts per access, and reports per-basic-block cycle counts as a distribution rather than an average. Available through the Python API, the `omniprobe-ik` CLI, the `omniprobe-mcp` server, and an agent skill.
+
 ## IntelliKit 0.1.1
 
 - **ROCm 10 support** — Nexus, Accordo and Kerncap now hook `hsa_amd_queue_create`, the entry point HIP creates its compute queue through on ROCm 10. Previously all three attached to the runtime successfully and then captured no kernels, reporting no error while doing so. ROCm 7.2.x is unaffected and continues to work.
