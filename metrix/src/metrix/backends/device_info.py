@@ -123,6 +123,42 @@ def _run_gpu_query(device_id: Optional[int] = None) -> List[dict]:
 
 
 # ---------------------------------------------------------------------------
+# APU system-memory type
+# ---------------------------------------------------------------------------
+# APUs share system memory with the CPU, and the same part ships with either
+# DDR5 or LPDDR5X: the Ryzen 9 7940HS (gfx1103) lists its system memory types
+# as "DDR5 (FP7r2), LPDDR5X (FP7-FP8)", and Strix Point/Halo are likewise
+# board-dependent. HIP exposes no memory-type field, but the reported MCLK
+# tells the two apart, because for the same data rate they clock the command
+# bus very differently:
+#   DDR5-4000..8800      -> MCLK = rate / 2 = 2000..4400 MHz -> 2x multiplier
+#   LPDDR5/5X-4800..8533 -> MCLK = rate / 8 =  600..1066 MHz -> 8x multiplier
+# No JEDEC DDR5 bin clocks below 2000 MHz and no LPDDR5X bin above ~1066, so
+# the gap is wide and a 1500 MHz split is unambiguous for either standard.
+#
+# This test is only valid *within* the APU set; it cannot be applied globally.
+# A discrete gfx1030 (RX 6800 XT, GDDR6) reports exactly 1000 MHz -- the same
+# MCLK as a gfx1151 Strix Halo on LPDDR5X -- yet needs the 16x GDDR6
+# multiplier. Arch still selects the memory family; MCLK only picks DDR5 vs
+# LPDDR5X inside it.
+#
+# Validated: gfx1151 Strix Halo, 1000 MHz x 8 x 256-bit / 8 = 256 GB/s;
+#            gfx1150 Strix Point,  937 MHz x 8 x 128-bit / 8 = 120 GB/s;
+#            gfx1103 Phoenix,     2800 MHz x 2 x 128-bit / 8 = 89.6 GB/s, with
+#            dmidecode confirming 2 x DDR5-5600 and a copy kernel sustaining
+#            71.8-72.3 GB/s over 5 runs (80-81% of peak).
+_APU_ARCHS = ("gfx1103", "gfx1150", "gfx1151")
+_LPDDR5X_MCLK_MAX_KHZ = 1_500_000
+
+
+def _apu_mem_multiplier(mem_clock_khz: int) -> float:
+    """MCLK -> data-rate multiplier for an APU's system memory (DDR5 or LPDDR5X)."""
+    if mem_clock_khz <= _LPDDR5X_MCLK_MAX_KHZ:
+        return 8.0  # LPDDR5X: MCLK = CK, 8:1 DQ:CK ratio
+    return 2.0  # DDR5: MCLK = half the data rate (DDR)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
@@ -163,11 +199,8 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
     #   HBM3 (gfx94x):           MCLK = CK (command clock) = half the data strobe → 4x
     #   HBM3e (gfx95x):          same as HBM3 → 4x
     #   GDDR6 (discrete RDNA):   MCLK = base CK; 16n prefetch → 16x multiplier
-    #   LPDDR5X (RDNA 3.5 APUs): MCLK = CK; 8:1 DQ:CK ratio → 8x multiplier
-    #     e.g. gfx1151 / Strix Halo: 1 GHz × 8 = 8 GT/s × 256-bit / 8 ≈ 256 GB/s
-    #          gfx1150 / Strix Point: 937 MHz × 8 = 7.5 GT/s × 128-bit / 8 ≈ 120 GB/s
-    #   DDR5 (RDNA3 Phoenix APU):  MCLK = half the data rate, DDR → 2x multiplier
-    #     e.g. gfx1103 / Phoenix: 2.8 GHz × 2 = 5.6 GT/s × 128-bit / 8 ≈ 89.6 GB/s
+    #   System memory (APUs):    DDR5 or LPDDR5X, told apart by MCLK rather
+    #                            than by arch -- see _apu_mem_multiplier().
     mem_clock = gpu["memory_clock_rate_khz"]
     bus_width = gpu["memory_bus_width_bits"]
     if mem_clock <= 0 or bus_width <= 0:
@@ -177,21 +210,8 @@ def query_device_specs(arch: str, device_id: int = 0) -> "DeviceSpecs":
         )
     if arch.startswith(("gfx94", "gfx95")):
         mem_multiplier = 4.0  # HBM3/HBM3e: CK → 4x
-    elif arch in ("gfx1150", "gfx1151"):
-        # Assumes LPDDR5X, validated on Strix Point/Halo APUs. Like every
-        # other branch here, this infers memory technology from arch rather
-        # than detecting it — HIP doesn't expose a memory-type field to check.
-        # A tool like dmidecode (memory device type/speed) could detect the
-        # installed memory directly, but that's a separate, more invasive
-        # dependency (requires root) and out of scope for this PR.
-        mem_multiplier = 8.0  # LPDDR5X (Strix Point/Halo APUs): CK → 8x
-    elif arch == "gfx1103":
-        # Validated on a Radeon 780M (Ryzen 9 7940HS) reporting 2800 MHz over a
-        # 128-bit bus; dmidecode confirms 2 x DDR5-5600, so 89.6 GB/s. A copy
-        # kernel reaches 71.8-72.3 GB/s over 5 runs (80-81%) against that; the
-        # GDDR6 branch below would have claimed 716.8 GB/s and put the same
-        # kernel at 10%.
-        mem_multiplier = 2.0  # DDR5 (Phoenix APU): MCLK → 2x (DDR)
+    elif arch in _APU_ARCHS:
+        mem_multiplier = _apu_mem_multiplier(mem_clock)
     elif arch.startswith("gfx1"):
         mem_multiplier = 16.0  # GDDR6: base CK → 16x (16n prefetch)
     else:

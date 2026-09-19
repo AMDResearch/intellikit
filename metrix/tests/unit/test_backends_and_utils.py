@@ -404,20 +404,40 @@ def _gpu_payload(arch, memory_clock_rate_khz, memory_bus_width_bits):
     }
 
 
+# Parameter is `gfx_arch`, not `arch`: the autouse skip_arch_mismatch fixture
+# skips any test with an `arch` parameter that differs from the local GPU, which
+# would reduce this whole table to the one row matching whatever card is in the
+# machine. The bandwidth math is pure and _run_gpu_query is mocked, so every row
+# can and must run everywhere.
 @pytest.mark.parametrize(
-    "arch, mem_clock_khz, bus_bits, expected_gbs",
+    "gfx_arch, mem_clock_khz, bus_bits, expected_gbs",
     [
-        # gfx1103 (Phoenix / Radeon 780M) reads DDR5 system memory, not GDDR6:
-        # DDR5-5600 dual channel = 2800 MHz x 2 x 128-bit / 8. Values measured
-        # on a Ryzen 9 7940HS. The GDDR6 fallback would claim 716.8 GB/s.
+        # gfx1103 (Phoenix / Radeon 780M) reads system memory, not GDDR6, and
+        # the same part ships with either type. DDR5-5600 dual channel =
+        # 2800 MHz x 2 x 128-bit / 8, measured on a Ryzen 9 7940HS; the GDDR6
+        # fallback would claim 716.8 GB/s.
         ("gfx1103", 2800000, 128, 89.6),
+        # ...and the LPDDR5X-7500 package of that same 7940HS, which a fixed
+        # 2x multiplier would have put at 30 GB/s instead of 120.
+        ("gfx1103", 937500, 128, 120.0),
+        # gfx1150 (Strix Point) likewise: LPDDR5X-7500 as validated, and the
+        # DDR5 board, which a fixed 8x multiplier would have put at 358.4 GB/s.
+        ("gfx1150", 937000, 128, 119.936),
+        ("gfx1150", 2800000, 128, 89.6),
+        # gfx1151 (Strix Halo), LPDDR5X-8000 over 256-bit, as validated.
+        ("gfx1151", 1000000, 256, 256.0),
         # Discrete RDNA must still take the 16x GDDR6 path.
         ("gfx1100", 2500000, 384, 1920.0),
+        # The MCLK test must stay scoped to APUs: this RX 6800 XT reports the
+        # very same 1000 MHz as the gfx1151 above, yet is GDDR6 and needs 16x.
+        # Reading memory type from the clock alone would call it LPDDR5X and
+        # halve its peak bandwidth.
+        ("gfx1030", 1000000, 256, 512.0),
     ],
 )
-def test_query_device_specs_memory_bandwidth(arch, mem_clock_khz, bus_bits, expected_gbs):
-    payload = [_gpu_payload(arch, mem_clock_khz, bus_bits)]
+def test_query_device_specs_memory_bandwidth(gfx_arch, mem_clock_khz, bus_bits, expected_gbs):
+    payload = [_gpu_payload(gfx_arch, mem_clock_khz, bus_bits)]
     with patch.object(device_info, "_run_gpu_query", return_value=payload):
-        specs = device_info.query_device_specs(arch)
-    assert specs.arch == arch
+        specs = device_info.query_device_specs(gfx_arch)
+    assert specs.arch == gfx_arch
     assert specs.hbm_bandwidth_gbs == pytest.approx(expected_gbs)
