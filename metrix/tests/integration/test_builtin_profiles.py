@@ -23,7 +23,7 @@ import pytest
 from metrix import Metrix
 from metrix.metrics import METRIC_PROFILES
 
-from ..unit.conftest import HW_ARCH, HW_METRICS
+from ..unit.conftest import ARCHS_WITH_COUNTER_DEFS, HW_ARCH
 from .test_inline_hip_profiling import _compile_hip
 
 # Every profile except `compute` (CDNA-only) has at least one metric on every
@@ -31,10 +31,15 @@ from .test_inline_hip_profiling import _compile_hip
 # here" branch for any of them is a regression rather than an expected outcome.
 # On a GPU with no counters at all -- gfx1103, and any other arch missing from
 # counter_defs.yaml -- no profile can resolve, so there is nothing to guarantee.
-# That exemption requires a GPU we actually detected: HW_METRICS is also empty
-# when rocminfo or hipcc is missing, and letting that void the invariant would
-# turn a real regression green on any machine where probing failed.
-_GPU_HAS_NO_COUNTERS = HW_ARCH is not None and not HW_METRICS
+#
+# The exemption is keyed on the architecture being absent from counter_defs.yaml,
+# never on the observed metric set being empty. Keying it on emptiness would be
+# self-exempting: if metrics disappeared on a supported arch such as gfx942, the
+# observed set would go empty, UNIVERSAL_PROFILES would collapse to nothing, and
+# every assertion below would pass vacuously -- total metric loss would read as
+# green. An arch that counter_defs.yaml does define must produce metrics, and
+# fails loudly here when it does not.
+_GPU_HAS_NO_COUNTERS = HW_ARCH is not None and HW_ARCH not in ARCHS_WITH_COUNTER_DEFS
 UNIVERSAL_PROFILES = (
     frozenset() if _GPU_HAS_NO_COUNTERS else frozenset(METRIC_PROFILES) - {"compute"}
 )

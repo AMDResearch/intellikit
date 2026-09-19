@@ -35,6 +35,39 @@ def _hw_metrics():
 HW_METRICS = _hw_metrics()
 
 
+def _archs_with_counter_defs():
+    """Architectures that counter_defs.yaml defines at least one metric for.
+
+    Read from the YAML rather than from the backend, and that is the point:
+    it is independent of what the backend reports at runtime, so a test can
+    tell "this arch is expected to expose no counters" apart from "this arch
+    should expose counters but produced none", which is a regression. Every
+    definition in the YAML is arch-gated, so an arch absent from every
+    ``architectures:`` list genuinely resolves to zero metrics.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    import metrix.backends as _pkg
+
+    yaml_path = Path(_pkg.__file__).resolve().parent / "counter_defs.yaml"
+    try:
+        with open(yaml_path, "r") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return set()
+
+    archs = set()
+    for counter in data.get("rocprofiler-sdk", {}).get("counters", []):
+        for defn in counter.get("definitions", []):
+            archs.update(defn.get("architectures", []))
+    return archs
+
+
+ARCHS_WITH_COUNTER_DEFS = _archs_with_counter_defs()
+
+
 @pytest.fixture(autouse=True)
 def skip_arch_mismatch(request):
     """Skip tests parameterized with an arch that doesn't match this GPU."""
