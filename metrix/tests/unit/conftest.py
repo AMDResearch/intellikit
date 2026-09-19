@@ -20,19 +20,27 @@ HW_ARCH = _hw_arch()
 
 
 def _hw_metrics():
-    """Get the set of available metrics on the detected hardware."""
+    """Metrics available on the detected hardware, plus whether probing worked.
+
+    Returns ``(metrics, probe_ok)``. An empty set means two very different
+    things and callers have to tell them apart: ``probe_ok=False`` says the
+    backend could not be built at all -- no GPU, no ROCm, no hipcc -- which is
+    a gap in the environment, while ``probe_ok=True`` with an empty set is the
+    architecture's actual answer, and on an arch that counter_defs.yaml
+    defines metrics for that is a regression rather than a fact of life.
+    """
     if HW_ARCH is None:
-        return set()
+        return set(), False
     try:
         from metrix.backends import get_backend
 
         backend = get_backend(HW_ARCH)
-        return set(backend.get_available_metrics())
+        return set(backend.get_available_metrics()), True
     except (ValueError, RuntimeError):
-        return set()
+        return set(), False
 
 
-HW_METRICS = _hw_metrics()
+HW_METRICS, HW_PROBE_OK = _hw_metrics()
 
 
 def _archs_with_counter_defs():
@@ -88,17 +96,32 @@ def requires_arch(arch: str):
 
 
 def requires_counter_metrics():
-    """Decorator: skip a test unless this GPU exposes any counter-based metric.
+    """Decorator: skip a test unless this GPU is expected to expose counters.
 
     gfx1103 (Phoenix / Radeon 780M) exposes none -- ROCm ships no hardware
     counter definitions for it -- so every built-in profile is empty there.
 
-    Like requires_metric, this also skips when no GPU was detected at all,
-    since HW_METRICS is empty in that case too.
+    Keyed on the architecture being absent from counter_defs.yaml, never on the
+    observed metric set being empty. Keying it on emptiness would be
+    self-exempting in the same way the profile invariant was: if metrics
+    vanished on an arch the YAML does define, every test guarded by this
+    decorator would quietly skip and the regression would never surface.
+    An arch with counter definitions is required to produce metrics, so tests
+    run there and fail if it does not.
+
+    Still skips when the backend could not be probed at all -- no GPU, no ROCm,
+    no hipcc. That is an environmental gap, not a claim about the hardware, and
+    turning it into a failure would only mean every GPU test fails together on
+    a machine that was never able to run them.
     """
+    if not HW_PROBE_OK:
+        return pytest.mark.skipif(
+            True,
+            reason=f"no GPU backend available to probe (detected arch: {HW_ARCH})",
+        )
     return pytest.mark.skipif(
-        not HW_METRICS,
-        reason=f"{HW_ARCH} exposes no counter-based metrics (time-only mode)",
+        HW_ARCH not in ARCHS_WITH_COUNTER_DEFS,
+        reason=f"{HW_ARCH} has no counter definitions in counter_defs.yaml (time-only mode)",
     )
 
 
