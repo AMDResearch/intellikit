@@ -23,11 +23,10 @@ class KernelResults:
     """
     Clean result object for a single kernel
 
-    ``duration_us`` is the *total* time the kernel occupied the GPU in one
-    run (all ``dispatch_count`` launches summed), with min/max/avg taken
-    across runs. It is the denominator the rate metrics are computed
-    against, so it stays consistent with them. For the per-dispatch
-    latency, use :attr:`avg_time_us`.
+    ``duration_us`` is the time a *single* dispatch of the kernel occupied
+    the GPU, with min/max/avg taken across runs. When a kernel is launched
+    ``dispatch_count`` times per run, the counters behind ``metrics`` are
+    per-dispatch averages too, so rates stay consistent with the duration.
     """
 
     name: str
@@ -40,7 +39,7 @@ class KernelResults:
         """Average per-dispatch kernel duration in microseconds."""
         if self.duration_us is None:
             return 0.0
-        return self.duration_us.avg / max(self.dispatch_count, 1)
+        return self.duration_us.avg
 
 
 @dataclass

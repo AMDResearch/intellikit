@@ -50,8 +50,6 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     for kernel in results_obj.kernels:
         kernel_data = {
             "name": kernel.name,
-            # avg_time_us divides out the dispatch count: duration_us is the
-            # total GPU time per run, not a per-dispatch latency.
             "duration_us_avg": float(kernel.avg_time_us),
             "dispatch_count": int(kernel.dispatch_count),
             "metrics": {},

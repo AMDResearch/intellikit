@@ -42,8 +42,8 @@ class FakeStat:
 class FakeKernel:
     """Stand-in for ``KernelResults``.
 
-    ``duration_us`` is the total GPU time per run, so ``avg_time_us``
-    divides it by the dispatch count -- that is what the server reports.
+    ``duration_us`` is already a per-dispatch time, so ``avg_time_us`` just
+    exposes its average -- that is what the server reports.
     """
 
     def __init__(self, name, duration_avg=None, metrics=None, with_metrics=True, dispatch_count=1):
@@ -57,7 +57,7 @@ class FakeKernel:
     def avg_time_us(self):
         if self.duration_us is None:
             return 0.0
-        return self.duration_us.avg / max(self.dispatch_count, 1)
+        return self.duration_us.avg
 
 
 class FakeResults:
@@ -98,8 +98,9 @@ def test_profile_metrics_marshals_kernel_fields():
 
 
 def test_profile_metrics_reports_per_dispatch_duration():
-    """duration_us is the per-run total; the tool must report per-dispatch."""
-    kernel = FakeKernel("gemm", 50.0, {}, dispatch_count=4)
+    """duration_us is per-dispatch; the launch count is reported alongside it
+    so a caller can still recover the per-run total."""
+    kernel = FakeKernel("gemm", 12.5, {}, dispatch_count=4)
     with patch.object(mcp_server, "Metrix", return_value=FakeProfiler([kernel])):
         out = profile_metrics("./app", [KNOWN_METRIC])
 

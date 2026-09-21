@@ -235,15 +235,10 @@ def _print_text_results(results: Dict, metrics: List[str], aggregated: bool, no_
                 print(f"Kernel: {dispatch_key}")
         print(f"{'─' * 80}")
 
-        # Duration. When aggregating by kernel name, this is the total GPU
-        # time of all dispatches of the kernel in a run, not a single dispatch.
+        # Duration
         duration = data.get("duration_us")
         if duration:
-            suffix = ", total per run" if aggregated else ""
-            print(
-                f"Duration: {duration.min:.2f} - {duration.max:.2f} μs "
-                f"(avg={duration.avg:.2f}{suffix})"
-            )
+            print(f"Duration: {duration.min:.2f} - {duration.max:.2f} μs (avg={duration.avg:.2f})")
 
         # Metrics by category
         for cat, cat_metrics in categories.items():
