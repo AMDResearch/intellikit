@@ -12,9 +12,11 @@ from .gfx942 import GFX942Backend
 from .gfx950 import GFX950Backend
 from .gfx1201 import GFX1201Backend
 from .gfx90a import GFX90aBackend
+from .gfx1150 import GFX1150Backend
 from .gfx1151 import GFX1151Backend
 from .gfx1030 import GFX1030Backend
 from .gfx1100 import GFX1100Backend
+from .gfx1103 import GFX1103Backend
 from .decorator import metric
 from .detect import detect_gpu_arch, detect_or_default
 
@@ -54,8 +56,9 @@ def get_backend(arch: str) -> CounterBackend:
         "gfx1100": GFX1100Backend,
         "gfx1101": GFX1100Backend,
         "gfx1102": GFX1100Backend,
-        "gfx1103": GFX1100Backend,
+        "gfx1103": GFX1103Backend,
         "gfx1201": GFX1201Backend,
+        "gfx1150": GFX1150Backend,
         "gfx1151": GFX1151Backend,
     }
 

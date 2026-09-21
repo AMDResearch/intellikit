@@ -80,6 +80,12 @@ supports and warns about the rest. It raises `ValueError` if the preset names
 no metric available on that architecture — `compute` on any RDNA part, for
 instance.
 
+On gfx1103 (Phoenix / Radeon 780M) *no* counter-based metric is available:
+ROCm 7.2.4 ships no hardware-counter definitions for that architecture. Only
+the bare `metrix profile <command>` form degrades there, reporting kernel
+durations alone; naming a preset or `--metrics` still fails, since nothing
+they ask for can be collected.
+
 ## Available metrics
 
 Metrix provides 20 metrics organized by category. Availability varies by GPU architecture.
@@ -88,7 +94,7 @@ Metrix provides 20 metrics organized by category. Availability varies by GPU arc
 
 | Metric | Description |
 |--------|-------------|
-| `compute.gpu_utilization` | GPU utilization (%). *RDNA only (gfx1030/gfx1100/gfx1151/gfx1201).* |
+| `compute.gpu_utilization` | GPU utilization (%). *RDNA only (gfx1030/gfx1100/gfx1150/gfx1151/gfx1201).* |
 | `compute.total_flops` | Total floating-point operations performed |
 | `compute.hbm_gflops` | Compute throughput (GFLOP/s) |
 | `compute.hbm_arithmetic_intensity` | Ratio of FLOPs to HBM bytes (FLOPs/Byte) |

@@ -93,6 +93,8 @@ def list_devices():
         "gfx950": ("AMD Instinct MI355X", "CDNA 4"),
         "gfx1030": ("AMD Radeon RX 6000", "RDNA 2"),
         "gfx1100": ("AMD Radeon RX 7900", "RDNA 3"),
+        "gfx1103": ("AMD Radeon 780M APU", "RDNA 3"),
+        "gfx1150": ("AMD Strix Point APU", "RDNA 3.5"),
         "gfx1151": ("AMD Strix Halo APU", "RDNA 3.5"),
         "gfx1201": ("AMD Radeon RX 9070", "RDNA 4"),
     }

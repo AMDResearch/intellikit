@@ -1,14 +1,15 @@
 """
 Unit tests for backend metric computations (gfx942, gfx950, gfx90a, gfx1201,
-gfx1030, and gfx1151)
+gfx1030, gfx1103, gfx1150, and gfx1151)
 
 Tests use MOCK counter data (no hardware counters in test code!)
 Tests are parametrized to run on MI300X (gfx942), MI350X (gfx950), MI200 (gfx90a),
-RDNA4 (gfx1201), RDNA2 (gfx1030), and RDNA 3.5 (gfx1151).
+RDNA4 (gfx1201), RDNA2 (gfx1030), RDNA3 (gfx1103) and RDNA 3.5 (gfx1150, gfx1151).
 All metrics are loaded from counter_defs.yaml.
 """
 
 import pytest
+from dataclasses import replace
 from unittest.mock import patch
 from metrix.backends import get_backend
 from metrix.backends.base import DeviceSpecs, Statistics
@@ -68,6 +69,28 @@ _TEST_SPECS = {
         hbm_bandwidth_gbs=512.0,
         l2_size_mb=4.0,
         lds_size_per_cu_kb=128.0,
+    ),
+    "gfx1103": DeviceSpecs(
+        arch="gfx1103",
+        name="AMD Radeon 780M",
+        num_cu=6,
+        max_waves_per_cu=64,
+        wavefront_size=32,
+        base_clock_mhz=2799.0,
+        hbm_bandwidth_gbs=89.6,
+        l2_size_mb=2.0,
+        lds_size_per_cu_kb=64.0,
+    ),
+    "gfx1150": DeviceSpecs(
+        arch="gfx1150",
+        name="AMD Strix Point",
+        num_cu=8,
+        max_waves_per_cu=32,
+        wavefront_size=32,
+        base_clock_mhz=2900.0,
+        hbm_bandwidth_gbs=120.0,
+        l2_size_mb=2.0,
+        lds_size_per_cu_kb=64.0,
     ),
     "gfx1151": DeviceSpecs(
         arch="gfx1151",
@@ -968,27 +991,28 @@ class TestRDNA2BytesTransferred:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# RDNA 3.5 (gfx1151) tests
+# RDNA 3.5 (gfx1150, gfx1151) tests
 #
-# gfx1151 is the Strix Halo APU. Like gfx1030 it exposes per-size
-# GL2C_EA_RDREQ_{32,64,96,128}B_sum buckets and only the 64B GL2C_EA_WRREQ
-# bucket. The aggregate GL2C_EA_RDREQ_sum / GL2C_EA_WRREQ_sum counters
-# that gfx1201 has built-in are NOT available on gfx1151, so the YAML
-# routes gfx1151 through the same expressions as gfx1030.
+# gfx1150 is the Strix Point APU and gfx1151 the Strix Halo APU. Like gfx1030
+# they expose per-size GL2C_EA_RDREQ_{32,64,96,128}B_sum buckets and only the
+# 64B GL2C_EA_WRREQ bucket. The aggregate GL2C_EA_RDREQ_sum / GL2C_EA_WRREQ_sum
+# counters that gfx1201 has built-in are NOT available on either, so the YAML
+# routes both through the same expressions as gfx1030.
 # ═══════════════════════════════════════════════════════════════════
 
 
-@pytest.fixture
-def rdna35_backend():
-    """Fixture for gfx1151 (RDNA 3.5 / Strix Halo) backend"""
+@pytest.fixture(params=["gfx1150", "gfx1151"])
+def rdna35_backend(request):
+    """Fixture for the RDNA 3.5 APU backends (Strix Point / Strix Halo)"""
+    arch = request.param
     with patch(
-        "metrix.backends.gfx1151.query_device_specs",
-        return_value=_TEST_SPECS["gfx1151"],
+        f"metrix.backends.{arch}.query_device_specs",
+        return_value=_TEST_SPECS[arch],
     ):
-        return get_backend("gfx1151")
+        return get_backend(arch)
 
 
-# Reuse the same synthetic counter values as the RDNA2 tests; gfx1151 uses
+# Reuse the same synthetic counter values as the RDNA2 tests; RDNA 3.5 uses
 # the identical YAML expression so the expected outputs match exactly.
 _RDNA35_READ_BYTES = _RDNA2_READ_BYTES
 _RDNA35_WRITE_BYTES = _RDNA2_WRITE_BYTES
@@ -997,7 +1021,7 @@ _rdna35_write_counters = _rdna2_write_counters
 
 
 class TestRDNA35MetricDiscovery:
-    """gfx1151 must surface the same RDNA bandwidth metrics as gfx1030"""
+    """RDNA 3.5 must surface the same RDNA bandwidth metrics as gfx1030"""
 
     def test_discovers_vram_bandwidth_metrics(self, rdna35_backend):
         metrics = rdna35_backend.get_available_metrics()
@@ -1013,14 +1037,14 @@ class TestRDNA35MetricDiscovery:
         assert "memory.bytes_transferred_l2" in metrics
 
     def test_required_counters_use_per_size_buckets(self, rdna35_backend):
-        """gfx1151 must request per-size GL2C_EA_RDREQ_*B_sum, not the gfx1201 aggregate"""
+        """RDNA 3.5 must request per-size GL2C_EA_RDREQ_*B_sum, not the gfx1201 aggregate"""
         counters = set(rdna35_backend.get_required_counters(["memory.hbm_read_bandwidth"]))
         for size in ("32B", "64B", "96B", "128B"):
             assert f"GL2C_EA_RDREQ_{size}_sum" in counters
         assert "GL2C_EA_RDREQ_sum" not in counters
 
     def test_required_counters_use_mc_wrreq_for_writes(self, rdna35_backend):
-        """gfx1151 must derive total writes from GL2C_MC_WRREQ_sum + 64B bucket"""
+        """RDNA 3.5 must derive total writes from GL2C_MC_WRREQ_sum + 64B bucket"""
         counters = set(rdna35_backend.get_required_counters(["memory.hbm_write_bandwidth"]))
         assert "GL2C_EA_WRREQ_64B_sum" in counters
         assert "GL2C_MC_WRREQ_sum" in counters
@@ -1028,7 +1052,7 @@ class TestRDNA35MetricDiscovery:
 
 
 class TestRDNA35VRAMReadBandwidth:
-    """gfx1151 sums per-size GL2C_EA_RDREQ buckets (mirrors gfx1030)"""
+    """RDNA 3.5 sums per-size GL2C_EA_RDREQ buckets (mirrors gfx1030)"""
 
     def test_read_bandwidth_per_size_buckets(self, rdna35_backend):
         active_cycles = int(rdna35_backend.device_specs.base_clock_mhz * 1000)
@@ -1054,7 +1078,7 @@ class TestRDNA35VRAMReadBandwidth:
 
 
 class TestRDNA35VRAMWriteBandwidth:
-    """gfx1151 only exposes the 64B write bucket; residual := MC_WRREQ_sum - 64B_sum @ 32B"""
+    """RDNA 3.5 only exposes the 64B write bucket; residual := MC_WRREQ_sum - 64B_sum @ 32B"""
 
     def test_write_bandwidth_with_32B_residual(self, rdna35_backend):
         active_cycles = int(rdna35_backend.device_specs.base_clock_mhz * 1000)
@@ -1128,7 +1152,7 @@ class TestRDNA35BytesTransferred:
 
 
 class TestRDNA35L2Metrics:
-    """gfx1151 reuses gfx1030's GL2C_HIT/GL2C_MISS L2 expressions"""
+    """RDNA 3.5 reuses gfx1030's GL2C_HIT/GL2C_MISS L2 expressions"""
 
     def test_l2_hit_rate(self, rdna35_backend):
         rdna35_backend._raw_data = {"GL2C_HIT_sum": 800, "GL2C_MISS_sum": 200}
@@ -1139,3 +1163,63 @@ class TestRDNA35L2Metrics:
         rdna35_backend._raw_data = {"GL2C_HIT_sum": 100, "GL2C_MISS_sum": 50}
         result = compute(rdna35_backend, "memory.bytes_transferred_l2")
         assert result == (100 + 50) * 128
+
+
+class TestRDNA35LdsMetricAvailability:
+    """gfx1150 lacks two LDS-related derived counters that gfx1151 has.
+
+    `rocprofv3 --list-avail` on Strix Point (ROCm 7.2.4) reports neither
+    ALUStalledByLDS nor LdsLatency, so the YAML must not offer them there.
+    """
+
+    _LDS_ONLY_ON_HALO = ("ALUStalledByLDS", "LdsLatency")
+
+    def test_strix_point_omits_lds_counters(self):
+        with patch(
+            "metrix.backends.gfx1150.query_device_specs",
+            return_value=_TEST_SPECS["gfx1150"],
+        ):
+            metrics = get_backend("gfx1150").get_available_metrics()
+        for name in self._LDS_ONLY_ON_HALO:
+            assert name not in metrics
+
+    def test_strix_halo_keeps_lds_counters(self):
+        with patch(
+            "metrix.backends.gfx1151.query_device_specs",
+            return_value=_TEST_SPECS["gfx1151"],
+        ):
+            metrics = get_backend("gfx1151").get_available_metrics()
+        for name in self._LDS_ONLY_ON_HALO:
+            assert name in metrics
+
+
+# ═══════════════════════════════════════════════════════════════════
+# RDNA3 APU (gfx1103) tests
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestPhoenixHasNoCounterMetrics:
+    """gfx1103 has no hardware counters, so it is in no `architectures:` list."""
+
+    def test_gfx1103_exposes_no_metrics(self):
+        with patch(
+            "metrix.backends.gfx1103.query_device_specs",
+            return_value=_TEST_SPECS["gfx1103"],
+        ):
+            backend = get_backend("gfx1103")
+        assert backend.get_available_metrics() == []
+
+    def test_gating_is_on_arch_not_backend_class(self):
+        """The very same GFX1103Backend yields metrics when its specs say gfx1100.
+
+        Proves the empty set above comes from the YAML architecture lists rather
+        than from anything in the class, and doubles as a positive control: if
+        counter_defs.yaml failed to load, this assertion would fail too.
+        """
+        as_gfx1100 = replace(_TEST_SPECS["gfx1103"], arch="gfx1100")
+        with patch(
+            "metrix.backends.gfx1103.query_device_specs",
+            return_value=as_gfx1100,
+        ):
+            metrics = get_backend("gfx1103").get_available_metrics()
+        assert "compute.gpu_utilization" in metrics

@@ -20,19 +20,60 @@ HW_ARCH = _hw_arch()
 
 
 def _hw_metrics():
-    """Get the set of available metrics on the detected hardware."""
+    """Metrics available on the detected hardware, plus whether probing worked.
+
+    Returns ``(metrics, probe_ok)``. An empty set means two very different
+    things and callers have to tell them apart: ``probe_ok=False`` says the
+    backend could not be built at all -- no GPU, no ROCm, no hipcc -- which is
+    a gap in the environment, while ``probe_ok=True`` with an empty set is the
+    architecture's actual answer, and on an arch that counter_defs.yaml
+    defines metrics for that is a regression rather than a fact of life.
+    """
     if HW_ARCH is None:
-        return set()
+        return set(), False
     try:
         from metrix.backends import get_backend
 
         backend = get_backend(HW_ARCH)
-        return set(backend.get_available_metrics())
+        return set(backend.get_available_metrics()), True
     except (ValueError, RuntimeError):
+        return set(), False
+
+
+HW_METRICS, HW_PROBE_OK = _hw_metrics()
+
+
+def _archs_with_counter_defs():
+    """Architectures that counter_defs.yaml defines at least one metric for.
+
+    Read from the YAML rather than from the backend, and that is the point:
+    it is independent of what the backend reports at runtime, so a test can
+    tell "this arch is expected to expose no counters" apart from "this arch
+    should expose counters but produced none", which is a regression. Every
+    definition in the YAML is arch-gated, so an arch absent from every
+    ``architectures:`` list genuinely resolves to zero metrics.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    import metrix.backends as _pkg
+
+    yaml_path = Path(_pkg.__file__).resolve().parent / "counter_defs.yaml"
+    try:
+        with open(yaml_path, "r") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
         return set()
 
+    archs = set()
+    for counter in data.get("rocprofiler-sdk", {}).get("counters", []):
+        for defn in counter.get("definitions", []):
+            archs.update(defn.get("architectures", []))
+    return archs
 
-HW_METRICS = _hw_metrics()
+
+ARCHS_WITH_COUNTER_DEFS = _archs_with_counter_defs()
 
 
 @pytest.fixture(autouse=True)
@@ -51,6 +92,36 @@ def requires_arch(arch: str):
     return pytest.mark.skipif(
         HW_ARCH != arch,
         reason=f"requires {arch} but this machine has {HW_ARCH}",
+    )
+
+
+def requires_counter_metrics():
+    """Decorator: skip a test unless this GPU is expected to expose counters.
+
+    gfx1103 (Phoenix / Radeon 780M) exposes none -- ROCm ships no hardware
+    counter definitions for it -- so every built-in profile is empty there.
+
+    Keyed on the architecture being absent from counter_defs.yaml, never on the
+    observed metric set being empty. Keying it on emptiness would be
+    self-exempting in the same way the profile invariant was: if metrics
+    vanished on an arch the YAML does define, every test guarded by this
+    decorator would quietly skip and the regression would never surface.
+    An arch with counter definitions is required to produce metrics, so tests
+    run there and fail if it does not.
+
+    Still skips when the backend could not be probed at all -- no GPU, no ROCm,
+    no hipcc. That is an environmental gap, not a claim about the hardware, and
+    turning it into a failure would only mean every GPU test fails together on
+    a machine that was never able to run them.
+    """
+    if not HW_PROBE_OK:
+        return pytest.mark.skipif(
+            True,
+            reason=f"no GPU backend available to probe (detected arch: {HW_ARCH})",
+        )
+    return pytest.mark.skipif(
+        HW_ARCH not in ARCHS_WITH_COUNTER_DEFS,
+        reason=f"{HW_ARCH} has no counter definitions in counter_defs.yaml (time-only mode)",
     )
 
 

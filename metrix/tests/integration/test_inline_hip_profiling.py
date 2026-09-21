@@ -15,7 +15,7 @@ import pytest
 
 from metrix import Metrix
 
-from ..unit.conftest import requires_metric
+from ..unit.conftest import requires_counter_metrics, requires_metric
 
 VECTOR_ADD_HIP = """
 #include <hip/hip_runtime.h>
@@ -143,6 +143,7 @@ def test_profile_results_structure():
     assert results.total_kernels >= 1
 
 
+@requires_counter_metrics()
 @pytest.mark.parametrize("profile_name", ["quick", "memory"])
 def test_profile_with_preset(profile_name):
     """Profile using preset (quick or memory) collects metrics."""

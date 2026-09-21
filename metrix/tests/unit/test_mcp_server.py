@@ -11,6 +11,8 @@ import pytest
 from metrix.mcp.server import list_available_metrics, profile_metrics
 from metrix.metrics import METRIC_CATALOG
 
+from .conftest import requires_counter_metrics
+
 
 def _has_gpu_backend():
     """Check if we can instantiate the Metrix backend (requires hipcc/ROCm)."""
@@ -40,11 +42,13 @@ class TestListAvailableMetrics:
                 f"available in the current backend"
             )
 
+    @requires_counter_metrics()
     def test_returns_nonempty(self):
         """list_available_metrics must return at least one metric"""
         result = list_available_metrics()
         assert len(result["metrics"]) > 0
 
+    @requires_counter_metrics()
     def test_includes_common_metrics(self):
         """list_available_metrics should include well-known metrics"""
         result = list_available_metrics()
@@ -67,6 +71,7 @@ class TestListAvailableMetrics:
             "compute.wave_occupancy does not exist in the metric catalog"
         )
 
+    @requires_counter_metrics()
     def test_by_category_grouping(self):
         """list_available_metrics should group metrics by category"""
         result = list_available_metrics()

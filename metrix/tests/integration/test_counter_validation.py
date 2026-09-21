@@ -70,9 +70,14 @@ def _profile(binary: Path, metrics: list, tmp_dir: Path, num_replays: int = 2) -
         cwd=str(tmp_dir),
         timeout_seconds=120,
     )
-    assert results.kernels, "No kernels profiled"
+    # Exclude HIP runtime helper kernels (e.g. the hipMemset-backed
+    # __amd_rocclr_fillBufferUnAligned) -- on small/fast workloads they can
+    # outlast the actual target kernel, which would break the
+    # longest-duration heuristic below.
+    candidates = [k for k in results.kernels if not k.name.startswith("__amd_rocclr_")]
+    assert candidates, f"No user kernels profiled (got {[k.name for k in results.kernels]})"
     # Pick the kernel with the longest duration (measured run, not warmup)
-    kernel = max(results.kernels, key=lambda k: k.duration_us.avg)
+    kernel = max(candidates, key=lambda k: k.duration_us.avg)
     return {m: kernel.metrics[m].avg for m in metrics if m in kernel.metrics}
 
 
@@ -283,11 +288,15 @@ class TestCacheHitRates:
     _L2_SRC = (
         _HIP_HEADER
         + r"""
-    __global__ void l2_kernel(const float* __restrict__ src,
+    __global__ void l2_kernel(const volatile float* __restrict__ src,
                               float* __restrict__ out,
                               size_t N, int iters) {
         float acc = 0.0f;
         for (int i = 0; i < iters; i++) {
+            // idx is loop-invariant, so without `volatile` the compiler
+            // hoists this load out of the loop entirely -- the hit/miss
+            // counters would then reflect a single access regardless of
+            // `iters`, not the repeated-access pattern this test measures.
             size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) % N;
             acc += src[idx];
         }
@@ -325,7 +334,14 @@ class TestCacheHitRates:
         float acc = 0.0f;
         int idx = threadIdx.x;
         for (int i = 0; i < iters; i++) {
+            // idx is loop-invariant, so the compiler would hoist this load out
+            // of the loop entirely. The empty asm with a "memory" clobber
+            // forces it to reload each iteration. Do NOT use `volatile` here:
+            // that compiles to `flat_load_dword ... sc0 sc1`, a system-scope
+            // load that bypasses the very L1 this kernel exists to exercise,
+            // dropping the measured hit rate to ~50%.
             if (idx < N_per_block) acc += src[idx];
+            __asm__ __volatile__("" ::: "memory");
         }
         if (threadIdx.x == 0) out[blockIdx.x] = acc;
     }
@@ -349,6 +365,7 @@ class TestCacheHitRates:
     """
     )
 
+    @requires_metric("memory.l2_hit_rate")
     def test_l2_hit_rate_with_resident_data(self):
         """256 KB array iterated 500x with few blocks should show elevated L2 hit rate.
 
@@ -411,6 +428,7 @@ def _lds_source(stride: int) -> str:
 class TestLDSBankConflicts:
     """Validate LDS bank conflict metric."""
 
+    @requires_metric("memory.lds_bank_conflicts")
     def test_no_conflicts_with_sequential_access(self):
         """Sequential LDS access should show ~0 bank conflicts."""
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
