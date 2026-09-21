@@ -82,7 +82,7 @@ profiler = Metrix()
 results = profiler.profile("./your_app", metrics=["memory.hbm_bandwidth_utilization"])
 
 for kernel in results.kernels:
-    print(f"{kernel.name}: {kernel.duration_us.avg:.2f} μs")
+    print(f"{kernel.name}: {kernel.avg_time_us:.2f} μs/dispatch")
 ```
 
 ---

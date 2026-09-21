@@ -1,0 +1,22 @@
+# CODEOWNERS -- reviewers auto-requested when matching paths change.
+
+# Catch-all for anything not matched below.
+*                       @mawad-amd
+
+# ---- packages ----
+/accordo/               @mawad-amd
+/kerncap/               @coleramos425 @mawad-amd
+/linex/                 @mawad-amd
+/metrix/                @mawad-amd @mehdi-saeedi
+/nexus/                 @mawad-amd
+/rocm_mcp/              @ypapadop-amd @mawad-amd
+/uprof_mcp/             @ypapadop-amd @mawad-amd
+
+# ---- build, CI and packaging ----
+/.github/               @mawad-amd
+/docker/                @mawad-amd
+/apptainer/             @mawad-amd
+/install/               @mawad-amd
+
+# ---- docs ----
+/docs/                  @mawad-amd @coleramos425 @ypapadop-amd

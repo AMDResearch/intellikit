@@ -40,12 +40,24 @@ class FakeStat:
 
 
 class FakeKernel:
-    def __init__(self, name, duration_avg=None, metrics=None, with_metrics=True):
+    """Stand-in for ``KernelResults``.
+
+    ``duration_us`` is already a per-dispatch time, so ``avg_time_us`` just
+    exposes its average -- that is what the server reports.
+    """
+
+    def __init__(self, name, duration_avg=None, metrics=None, with_metrics=True, dispatch_count=1):
         self.name = name
-        # An object with no .avg exercises the hasattr fallback to 0.0.
-        self.duration_us = FakeStat(duration_avg) if duration_avg is not None else object()
+        self.duration_us = FakeStat(duration_avg) if duration_avg is not None else None
+        self.dispatch_count = dispatch_count
         if with_metrics:
             self.metrics = metrics or {}
+
+    @property
+    def avg_time_us(self):
+        if self.duration_us is None:
+            return 0.0
+        return self.duration_us.avg
 
 
 class FakeResults:
@@ -81,7 +93,20 @@ def test_profile_metrics_marshals_kernel_fields():
     entry = out["kernels"][0]
     assert entry["name"] == "gemm"
     assert entry["duration_us_avg"] == 12.5
+    assert entry["dispatch_count"] == 1
     assert entry["metrics"][KNOWN_METRIC] == {"avg": 87.5, "unit": "%"}
+
+
+def test_profile_metrics_reports_per_dispatch_duration():
+    """duration_us is per-dispatch; the launch count is reported alongside it
+    so a caller can still recover the per-run total."""
+    kernel = FakeKernel("gemm", 12.5, {}, dispatch_count=4)
+    with patch.object(mcp_server, "Metrix", return_value=FakeProfiler([kernel])):
+        out = profile_metrics("./app", [KNOWN_METRIC])
+
+    entry = out["kernels"][0]
+    assert entry["duration_us_avg"] == 12.5
+    assert entry["dispatch_count"] == 4
 
 
 def test_profile_metrics_defaults_to_all_available_metrics():
@@ -99,7 +124,7 @@ def test_profile_metrics_passes_command_through():
     assert profiler.profile_calls[0]["command"] == "python train.py --size 1024"
 
 
-def test_profile_metrics_duration_without_avg_becomes_zero():
+def test_profile_metrics_missing_duration_becomes_zero():
     kernel = FakeKernel("nodur", duration_avg=None)
     with patch.object(mcp_server, "Metrix", return_value=FakeProfiler([kernel])):
         out = profile_metrics("./app", [KNOWN_METRIC])

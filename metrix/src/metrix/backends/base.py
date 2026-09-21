@@ -861,6 +861,12 @@ class CounterBackend(ABC):
         """
         Compute min/max/avg statistics for each counter across dispatches
 
+        When the inputs come from :meth:`_merge_dispatches`, each entry is one
+        run's average dispatch, so both the counter and ``duration_us``
+        statistics are per-dispatch quantities and the min/max/avg run across
+        runs. ``_num_dispatches`` carries the launch count, which is what
+        recovers the per-run totals.
+
         Args:
             dispatches: List of ProfileResult objects
 
@@ -901,51 +907,51 @@ class CounterBackend(ABC):
 
     def _merge_dispatches(self, dispatches: List[ProfileResult]) -> ProfileResult:
         """
-        Merge multiple dispatches by summing their counters
+        Merge multiple dispatches into a single average dispatch
 
-        Used for within-run aggregation by kernel name (e.g. multi-pass profiling).
-        Counters are summed (each pass contributes one subset; others are 0).
-        Duration is stored as the average per dispatch so rate metrics (e.g. GFLOPS
-        = flops / time) use per-run time, not total time across passes.
+        Used for within-run aggregation by kernel name, e.g. a kernel that is
+        launched more than once per run. Counters and duration are both
+        averaged, so the merged result describes one typical dispatch and
+        rate metrics (GFLOPS = flops / time, bandwidth utilization) see the
+        same per-dispatch basis on both sides of the ratio -- summing
+        counters while averaging duration inflates rates by roughly the
+        dispatch count.
+
+        Each counter is divided by the number of dispatches that reported it,
+        not by the length of the list, so a counter present in only some
+        entries (multi-pass collection) keeps its own scale. That also makes
+        ratio-shaped counters (utilization, hit rate) average correctly
+        without special-casing their names.
 
         Args:
             dispatches: List of ProfileResult objects for same kernel
 
         Returns:
-            Single ProfileResult with merged counters and average duration_ns
+            Single ProfileResult with per-dispatch average counters and
+            duration_ns
         """
         if not dispatches:
             raise ValueError("Cannot merge empty dispatch list")
 
         first = dispatches[0]
         merged_counters = defaultdict(float)
+        counter_counts = defaultdict(int)
         total_duration = 0
-
-        _AVG_PATTERNS = ("Percent", "Hit", "Util", "Busy", "Occupancy", "Mean", "Rate", "Ratio")
-
-        def _should_average(name: str) -> bool:
-            return any(p in name for p in _AVG_PATTERNS)
-
-        non_summable_counts = defaultdict(int)
 
         for dispatch in dispatches:
             for counter, value in dispatch.counters.items():
                 merged_counters[counter] += value
-                if _should_average(counter):
-                    non_summable_counts[counter] += 1
+                counter_counts[counter] += 1
             total_duration += dispatch.duration_ns
 
-        for counter, count in non_summable_counts.items():
-            if count > 0:
-                merged_counters[counter] /= count
-
-        avg_duration_ns = total_duration // len(dispatches)
+        for counter, count in counter_counts.items():
+            merged_counters[counter] /= count
 
         merged = ProfileResult(
             dispatch_id=first.dispatch_id,
             kernel_name=first.kernel_name,
             gpu_id=first.gpu_id,
-            duration_ns=avg_duration_ns,
+            duration_ns=round(total_duration / len(dispatches)),
             grid_size=first.grid_size,
             workgroup_size=first.workgroup_size,
             counters=dict(merged_counters),

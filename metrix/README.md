@@ -56,7 +56,7 @@ profiler = Metrix()
 results = profiler.profile("./my_app", num_replays=5)
 
 for kernel in results.kernels:
-    print(f"{kernel.name}: {kernel.duration_us.avg:.2f} μs")
+    print(f"{kernel.name}: {kernel.avg_time_us:.2f} μs/dispatch")
     for metric, stats in kernel.metrics.items():
         print(f"  {metric}: {stats.avg:.2f}")
 ```
@@ -127,6 +127,9 @@ metrix profile [options] <target>
   --kernel, -k       Filter kernels by name (regular expression, passed to rocprofv3)
   --num-replays, -n  Replay the application N times and aggregate (default: 10)
   --aggregate        Aggregate metrics by kernel name across replays (default: per-dispatch across runs)
+                     A kernel launched several times per replay is reported as
+                     one average dispatch: counters and duration are both
+                     divided by the launch count, so rates stay per-dispatch.
   --top K            Show only top K slowest kernels
   --output, -o       Output file (.json, .csv, .txt)
   --timeout SECONDS  Profiling timeout in seconds (default: 60)
