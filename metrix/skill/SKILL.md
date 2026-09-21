@@ -53,7 +53,7 @@ profiler = Metrix()
 results = profiler.profile("./my_app", num_replays=5)
 
 for kernel in results.kernels:
-    print(kernel.name, kernel.duration_us.avg)
+    print(kernel.name, kernel.avg_time_us)
     for metric, stats in kernel.metrics.items():
         print(f"  {metric}: {stats.avg}")
 ```

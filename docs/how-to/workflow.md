@@ -38,7 +38,7 @@ results = profiler.profile(
 
 for kernel in results.kernels:
     bw = kernel.metrics["memory.hbm_bandwidth_utilization"].avg
-    print(f"{kernel.name}: {kernel.duration_us.avg:.2f} μs, BW util: {bw:.1f}%")
+    print(f"{kernel.name}: {kernel.avg_time_us:.2f} μs/dispatch, BW util: {bw:.1f}%")
 ```
 
 ## Step 2: Inspect GPU execution details

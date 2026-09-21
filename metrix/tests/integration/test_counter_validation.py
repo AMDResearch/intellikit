@@ -449,7 +449,9 @@ int main() {
     float *d_out;
     HIP_CHECK(hipMalloc(&d_out, num_blocks * sizeof(float)));
     HIP_CHECK(hipMemset(d_out, 0, num_blocks * sizeof(float)));
-    valu_fma_kernel<<<num_blocks, block>>>(d_out, 100);
+    // Both launches do the same work: metrics are per-dispatch averages, so
+    // a short warmup dispatch would drag the average below the analytic value.
+    valu_fma_kernel<<<num_blocks, block>>>(d_out, iters);
     HIP_CHECK(hipDeviceSynchronize());
     valu_fma_kernel<<<num_blocks, block>>>(d_out, iters);
     HIP_CHECK(hipDeviceSynchronize());
@@ -465,10 +467,15 @@ class TestFLOPSCounters:
     """Validate compute.total_flops and compute.hbm_gflops."""
 
     def test_valu_fma_total_flops(self):
-        """Pure FMA kernel should report correct total FLOPS count.
+        """Pure FMA kernel should report correct FLOPS count per dispatch.
 
         512 blocks * 256 threads = 131072 threads = 2048 wavefronts
         2048 waves * 100000 iters * 2 FLOP/FMA * 64 lanes = 26,214,400,000
+
+        The kernel is launched twice with identical work, so this also pins
+        the dispatch-aggregation contract: counters are averaged across the
+        dispatches of a kernel, not summed. Summing them (as metrix did
+        before) reports 2x the analytic figure here.
         """
         expected = 2048 * 100000 * 2 * 64
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:

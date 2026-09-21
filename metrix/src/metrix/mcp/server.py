@@ -33,7 +33,8 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     Returns:
         Dictionary with a 'kernels' list. Each kernel entry contains:
         - name: GPU kernel function name
-        - duration_us_avg: Average kernel execution time in microseconds
+        - duration_us_avg: Average execution time of a single dispatch, in microseconds
+        - dispatch_count: Number of times the kernel was launched per run
         - metrics: Dictionary mapping metric name to {avg, unit}
     """
     profiler = Metrix()
@@ -49,9 +50,8 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     for kernel in results_obj.kernels:
         kernel_data = {
             "name": kernel.name,
-            "duration_us_avg": float(kernel.duration_us.avg)
-            if hasattr(kernel.duration_us, "avg")
-            else 0.0,
+            "duration_us_avg": float(kernel.avg_time_us),
+            "dispatch_count": int(kernel.dispatch_count),
             "metrics": {},
         }
 

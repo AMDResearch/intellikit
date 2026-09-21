@@ -19,6 +19,7 @@ import pytest
 
 from metrix.backends import detect as detect_mod
 from metrix.backends import device_info
+from metrix.backends.base import CounterBackend, DeviceSpecs, ProfileResult
 from metrix.backends.detect import detect_gpu_arch, detect_or_default
 from metrix.utils.common import split_counters_into_passes
 
@@ -384,3 +385,132 @@ def test_run_gpu_query_reports_missing_binary(tmp_path):
     ):
         with pytest.raises(RuntimeError, match="gpu_query failed"):
             device_info._run_gpu_query()
+
+
+# --------------------------------------------------------------------------
+# CounterBackend._merge_dispatches
+# --------------------------------------------------------------------------
+
+
+class _DummyBackend(CounterBackend):
+    """Minimal concrete backend, just enough to exercise _merge_dispatches."""
+
+    def _get_device_specs(self):
+        return DeviceSpecs(arch="dummy", name="dummy")
+
+    def _run_rocprof(self, *args, **kwargs):
+        raise NotImplementedError
+
+
+def _dispatch(dispatch_id, duration_ns, counters):
+    return ProfileResult(
+        dispatch_id=dispatch_id,
+        kernel_name="k",
+        gpu_id=0,
+        duration_ns=duration_ns,
+        grid_size=(1, 1, 1),
+        workgroup_size=(1, 1, 1),
+        counters=dict(counters),
+    )
+
+
+@pytest.mark.parametrize(
+    "durations,flop_counts",
+    [
+        ([1000, 2000], [100, 200]),
+        ([1000, 1000, 1000], [50, 50, 50]),
+        ([500, 1500, 2000, 4000], [10, 30, 20, 60]),
+        ([1, 1], [1, 1]),
+    ],
+)
+def test_merge_dispatches_keeps_rate_metrics_consistent(durations, flop_counts):
+    """A kernel launched multiple times per run merges to a single average
+    dispatch whose counter/duration ratio must match the same rate computed
+    from the raw per-dispatch data -- summing one side of the ratio but
+    averaging the other silently inflates rate metrics (GFLOPS, bandwidth %)
+    by roughly the dispatch count.
+    """
+    dispatches = [
+        _dispatch(i, d, {"SQ_INSTS_VALU_ADD_F32": f})
+        for i, (d, f) in enumerate(zip(durations, flop_counts))
+    ]
+
+    merged = _DummyBackend()._merge_dispatches(dispatches)
+
+    expected_rate = sum(flop_counts) / sum(durations)
+    actual_rate = merged.counters["SQ_INSTS_VALU_ADD_F32"] / merged.duration_ns
+    assert actual_rate == pytest.approx(expected_rate)
+
+
+def test_merge_dispatches_averages_duration_and_counters():
+    """Pinning test for the specific mechanism: both duration_ns and the
+    counters on the merged result describe a single average dispatch, so
+    neither side of a rate metric carries the dispatch count.
+    """
+    dispatches = [
+        _dispatch(0, 1000, {"C": 1}),
+        _dispatch(1, 2000, {"C": 4}),
+        _dispatch(2, 3000, {"C": 7}),
+    ]
+
+    merged = _DummyBackend()._merge_dispatches(dispatches)
+
+    assert merged.duration_ns == 2000
+    assert merged.counters["C"] == pytest.approx(4.0)
+
+
+def test_merge_dispatches_single_dispatch_is_a_no_op():
+    (dispatch,) = [_dispatch(0, 1234, {"SQ_INSTS_VALU_ADD_F32": 42})]
+
+    merged = _DummyBackend()._merge_dispatches([dispatch])
+
+    assert merged.duration_ns == 1234
+    assert merged.counters["SQ_INSTS_VALU_ADD_F32"] == 42
+
+
+def test_merge_dispatches_keeps_scale_of_counters_missing_from_some_passes():
+    """Multi-pass profiling: each pass may only report a subset of counters,
+    e.g. rocprofv3 splitting counters that can't be collected in a single
+    pass across separate replays of the kernel. Each counter is averaged over
+    the dispatches that actually reported it, so a counter seen once keeps
+    its value instead of being diluted by the passes that never measured it.
+    """
+    dispatches = [
+        _dispatch(0, 1000, {"A": 10}),
+        _dispatch(1, 1000, {"B": 20}),
+    ]
+
+    merged = _DummyBackend()._merge_dispatches(dispatches)
+
+    assert merged.counters["A"] == 10
+    assert merged.counters["B"] == 20
+    assert merged.duration_ns == 1000
+
+
+@pytest.mark.parametrize("counter_name", ["GpuBusyPercent", "L2CacheHit", "VALUUtil", "MemoryBusy"])
+def test_merge_dispatches_averages_utilization_style_counters(counter_name):
+    """Counters that are already ratios/percentages need no special casing:
+    averaging every counter keeps two 50% utilization samples at ~50% instead
+    of turning them into 100%.
+    """
+    dispatches = [
+        _dispatch(0, 1000, {counter_name: 40.0}),
+        _dispatch(1, 3000, {counter_name: 60.0}),
+    ]
+
+    merged = _DummyBackend()._merge_dispatches(dispatches)
+
+    assert merged.counters[counter_name] == pytest.approx(50.0)
+
+
+def test_merge_dispatches_sets_num_dispatches():
+    dispatches = [_dispatch(i, 1000, {"C": 1}) for i in range(4)]
+
+    merged = _DummyBackend()._merge_dispatches(dispatches)
+
+    assert merged._num_dispatches == 4
+
+
+def test_merge_dispatches_rejects_empty_list():
+    with pytest.raises(ValueError, match="empty dispatch list"):
+        _DummyBackend()._merge_dispatches([])
