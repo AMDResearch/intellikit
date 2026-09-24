@@ -116,7 +116,29 @@ def test_builtin_profile_runs_or_reports_unavailable(profile_name, saxpy_binary)
     available = set(profiler.backend.get_available_metrics())
     expected = [m for m in METRIC_PROFILES[profile_name]["metrics"] if m in available]
     assert expected, f"profile '{profile_name}' returned results but selected no metrics"
-    assert set(expected) <= set(user_kernels[0].metrics), (
-        f"profile '{profile_name}' on {arch} is missing "
-        f"{sorted(set(expected) - set(user_kernels[0].metrics))}"
+    missing = set(expected) - set(user_kernels[0].metrics)
+    unexpected_missing = set()
+    for metric_name in missing:
+        metric = profiler.backend._metrics[metric_name]
+        weight_counter = metric.get("weight_counter")
+        matching_stats = [
+            counters for key, counters in profiler.backend._aggregated.items() if "saxpy" in key
+        ]
+        # A collected, nonpositive weight means the workload had no valid
+        # sample for this metric. A missing weight counter is instead a
+        # collection regression and must remain in unexpected_missing.
+        unavailable_sample = (
+            metric.get("aggregation") == "samples"
+            and weight_counter
+            and matching_stats
+            and all(
+                weight_counter in counters and counters[weight_counter].max <= 0
+                for counters in matching_stats
+            )
+        )
+        if not unavailable_sample:
+            unexpected_missing.add(metric_name)
+
+    assert not unexpected_missing, (
+        f"profile '{profile_name}' on {arch} is missing {sorted(unexpected_missing)}"
     )

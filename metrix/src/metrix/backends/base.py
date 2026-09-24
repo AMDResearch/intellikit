@@ -8,7 +8,7 @@ Counter names appear EXACTLY ONCE - as function parameter names.
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 
 @dataclass(frozen=True)
@@ -80,6 +80,7 @@ class CounterBackend(ABC):
         self._load_yaml_metrics_if_available()  # Load YAML metrics if available (takes precedence)
         self._raw_data = {}  # Current raw counter values (for metric computation)
         self._aggregated = {}  # Aggregated results: {dispatch_key: {counter: Statistics}}
+        self._metric_aggregated = {}  # Metrics evaluated from correlated valid raw samples
 
     @abstractmethod
     def _get_device_specs(self) -> DeviceSpecs:
@@ -121,6 +122,13 @@ class CounterBackend(ABC):
         """
         return dict(self._unsupported_metrics)
 
+    def get_metric_metadata(self, metric: str) -> Dict[str, object]:
+        """Return public metadata selected for this backend architecture."""
+        if metric not in self._metrics:
+            available = ", ".join(self.get_available_metrics())
+            raise ValueError(f"Unknown metric '{metric}'. Available metrics: {available}")
+        return {key: value for key, value in self._metrics[metric].items() if key != "compute"}
+
     def _load_yaml_metrics_if_available(self):
         """
         Load metrics from counter_defs.yaml if it exists.
@@ -158,6 +166,13 @@ class CounterBackend(ABC):
         for counter_def in counters_section:
             counter_name = counter_def.get("name")
             definitions = counter_def.get("definitions", [])
+            metadata_keys = (
+                "aggregation",
+                "weight_counter",
+                "requires_consistent_passes",
+                "description",
+            )
+            metadata = {key: counter_def[key] for key in metadata_keys if key in counter_def}
 
             if not definitions:
                 continue
@@ -172,6 +187,8 @@ class CounterBackend(ABC):
 
             if definition is None:
                 continue
+
+            metadata.update({key: definition[key] for key in metadata_keys if key in definition})
 
             # Check if this metric is marked unsupported for this architecture
             unsupported_reason = definition.get("unsupported_reason")
@@ -193,6 +210,7 @@ class CounterBackend(ABC):
                         "counters": [counter_name],
                         "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
                         "unit": unit,
+                        **metadata,
                     }
                 else:
                     required_counters = self._extract_counters_from_expression(expression)
@@ -201,6 +219,7 @@ class CounterBackend(ABC):
                         "counters": required_counters,
                         "compute": compute_fn,
                         "unit": unit,
+                        **metadata,
                     }
             else:
                 unit = counter_def.get("unit", "")
@@ -208,6 +227,7 @@ class CounterBackend(ABC):
                     "counters": [counter_name],
                     "compute": lambda cn=counter_name: self._raw_data.get(cn, 0.0),
                     "unit": unit,
+                    **metadata,
                 }
 
         if not yaml_metrics and not yaml_unsupported:
@@ -548,12 +568,16 @@ class CounterBackend(ABC):
             from collections import defaultdict
 
             category_groups = defaultdict(list)
+            sample_metrics = []
             for metric in metrics:
+                if self._metrics.get(metric, {}).get("aggregation") == "samples":
+                    sample_metrics.append(metric)
+                    continue
                 category = metric.split(".")[0] if "." in metric else "other"
                 category_groups[category].append(metric)
 
-            # Split large categories into sub-batches
-            batches = []
+            # Sample metrics must be evaluated from the same raw-counter collection.
+            batches = [("sample metrics", sample_metrics)] if sample_metrics else []
             for category, category_metrics in sorted(category_groups.items()):
                 if len(category_metrics) <= MAX_METRICS_PER_BATCH:
                     batches.append((category, category_metrics))
@@ -565,6 +589,7 @@ class CounterBackend(ABC):
                         batches.append((batch_label, chunk))
 
             all_kernel_results = {}
+            all_metric_results = {}
             total_batches = len(batches)
 
             # Process each batch
@@ -590,6 +615,8 @@ class CounterBackend(ABC):
                     if kernel_name not in all_kernel_results:
                         all_kernel_results[kernel_name] = {}
                     all_kernel_results[kernel_name].update(kernel_data)
+                for kernel_name, metric_data in batch_result._metric_aggregated.items():
+                    all_metric_results.setdefault(kernel_name, {}).update(metric_data)
 
                 # Log results for this batch (grouped by kernel)
                 for kernel_name, kernel_data in batch_result._aggregated.items():
@@ -606,8 +633,9 @@ class CounterBackend(ABC):
             all_kernel_results = self._compute_derived_metrics(all_kernel_results)
             logger.info("Derived metrics computed")
 
-            # Return merged results - set our _aggregated and return self
+            # Return merged results - set our aggregated counters and replay-correlated metrics.
             self._aggregated = all_kernel_results
+            self._metric_aggregated = all_metric_results
             return self
 
         # If metrics <= MAX_METRICS_PER_BATCH, continue with normal flow
@@ -622,6 +650,11 @@ class CounterBackend(ABC):
 
         # Collect all replays across all passes
         all_results_by_kernel = {}
+        expected_pass_signature = None
+        requires_consistent_passes = any(
+            self._metrics.get(metric, {}).get("requires_consistent_passes", False)
+            for metric in metrics
+        )
 
         for pass_num, pass_counters in enumerate(counter_passes, 1):
             if True:  # Always show per-pass results
@@ -670,6 +703,11 @@ class CounterBackend(ABC):
                         r.run_id = replay_id
                     pass_results.extend(results)
 
+            if requires_consistent_passes:
+                expected_pass_signature = self._validate_counter_pass_population(
+                    expected_pass_signature, pass_results, pass_num
+                )
+
             # Report per-pass statistics for agent visibility
             if True:  # Always show per-pass results
                 # Compute statistics for this pass only
@@ -708,12 +746,143 @@ class CounterBackend(ABC):
             self._aggregated = self._aggregate_by_kernel_then_runs(all_results, num_replays)
         else:
             self._aggregated = self._aggregate_by_dispatch_across_runs(all_results)
+        self._metric_aggregated = self._aggregate_metric_stats(
+            all_results, metrics, aggregate_by_kernel
+        )
 
         return self
+
+    @staticmethod
+    def _validate_counter_pass_population(expected, results, pass_num):
+        """Reject multipass results that did not execute the same filtered workload."""
+        current = Counter(
+            (getattr(result, "run_id", 0), result.dispatch_id, result.kernel_name)
+            for result in results
+        )
+        if expected is None:
+            return current
+        if current != expected:
+            changed_groups = len(set(current) ^ set(expected))
+            raise RuntimeError(
+                "Counter passes produced different filtered dispatch populations "
+                f"(pass 1: {sum(expected.values()):,}, "
+                f"pass {pass_num}: {sum(current.values()):,}, "
+                f"changed groups: {changed_groups}). Profile the metric groups "
+                "separately or use a deterministic target."
+            )
+        return expected
 
     def get_dispatch_keys(self) -> List[str]:
         """Get list of all dispatch/kernel keys in aggregated results"""
         return list(self._aggregated.keys())
+
+    def _aggregate_metric_stats(
+        self, results: List[ProfileResult], metrics: List[str], aggregate_by_kernel: bool
+    ) -> Dict[str, Dict[str, Statistics]]:
+        """Combine correlated replay metrics with weighted sample metrics."""
+        aggregated = self._aggregate_correlated_metric_stats(results, metrics, aggregate_by_kernel)
+        for key, metric_data in self._aggregate_sample_metric_stats(
+            results, metrics, aggregate_by_kernel
+        ).items():
+            aggregated.setdefault(key, {}).update(metric_data)
+        return aggregated
+
+    def _aggregate_correlated_metric_stats(
+        self, results: List[ProfileResult], metrics: List[str], aggregate_by_kernel: bool
+    ) -> Dict[str, Dict[str, Statistics]]:
+        """Compute non-sample metrics from correlated replay values."""
+        groups = defaultdict(list)
+        if aggregate_by_kernel:
+            replays = defaultdict(lambda: defaultdict(list))
+            for result in results:
+                replay_id = getattr(result, "run_id", 0)
+                replays[replay_id][result.kernel_name].append(result)
+            for kernels in replays.values():
+                for kernel_name, dispatches in kernels.items():
+                    groups[kernel_name].append(self._merge_dispatches(dispatches, total=True))
+        else:
+            for result in results:
+                key = f"dispatch_{result.dispatch_id}:{result.kernel_name}"
+                groups[key].append(result)
+
+        return {
+            key: self._compute_metric_stats_from_dispatches(dispatches, metrics)
+            for key, dispatches in groups.items()
+        }
+
+    def _compute_metric_stats_from_dispatches(
+        self, dispatches: List[ProfileResult], metrics: List[str]
+    ) -> Dict[str, Statistics]:
+        """Evaluate each metric per replay before calculating its extrema."""
+        aggregated = {}
+        for metric in metrics:
+            metric_info = self._metrics.get(metric)
+            if not metric_info or metric_info.get("aggregation") != "correlated":
+                continue
+            required_counters = metric_info.get("counters", [])
+            values = []
+            for dispatch in dispatches:
+                if any(counter not in dispatch.counters for counter in required_counters):
+                    continue
+                self._raw_data = {
+                    counter: dispatch.counters[counter] for counter in required_counters
+                }
+                self._current_duration_us = dispatch.duration_ns / 1000.0
+                values.append(float(metric_info["compute"]()))
+            if values:
+                aggregated[metric] = Statistics(
+                    min=min(values),
+                    max=max(values),
+                    avg=sum(values) / len(values),
+                    count=len(values),
+                    unit=metric_info.get("unit", ""),
+                )
+        return aggregated
+
+    def _aggregate_sample_metric_stats(
+        self, results: List[ProfileResult], metrics: List[str], aggregate_by_kernel: bool
+    ) -> Dict[str, Dict[str, Statistics]]:
+        """Aggregate sample metrics, excluding invalid or zero-weight samples."""
+        sample_metrics = [
+            metric
+            for metric in metrics
+            if self._metrics.get(metric, {}).get("aggregation") == "samples"
+        ]
+        samples = defaultdict(lambda: defaultdict(list))
+
+        for result in results:
+            key = (
+                result.kernel_name
+                if aggregate_by_kernel
+                else f"dispatch_{result.dispatch_id}:{result.kernel_name}"
+            )
+            for metric in sample_metrics:
+                metric_info = self._metrics[metric]
+                counters = metric_info["counters"]
+                if any(counter not in result.counters for counter in counters):
+                    continue
+                weight_counter = metric_info.get("weight_counter")
+                weight = result.counters.get(weight_counter, 1.0) if weight_counter else 1.0
+                if weight <= 0:
+                    continue
+                self._raw_data = {counter: result.counters[counter] for counter in counters}
+                self._current_duration_us = result.duration_ns / 1000.0
+                samples[key][metric].append((float(metric_info["compute"]()), float(weight)))
+
+        return {
+            key: {
+                metric: Statistics(
+                    min=min(value for value, _ in values),
+                    max=max(value for value, _ in values),
+                    avg=sum(value * weight for value, weight in values)
+                    / sum(weight for _, weight in values),
+                    count=len(values),
+                    unit=self._metrics[metric].get("unit", ""),
+                )
+                for metric, values in metric_values.items()
+            }
+            for key, metric_values in samples.items()
+        }
 
     def compute_metric_stats(self, dispatch_key: str, metric: str) -> Statistics:
         """
@@ -729,10 +898,17 @@ class CounterBackend(ABC):
         if dispatch_key not in self._aggregated:
             raise KeyError(f"Unknown dispatch key: {dispatch_key}")
 
-        counter_stats = self._aggregated[dispatch_key]
-
         if metric not in self._metrics:
             raise ValueError(f"Unknown metric: {metric}")
+
+        aggregated_stats = self._metric_aggregated.get(dispatch_key, {}).get(metric)
+        if aggregated_stats is not None:
+            return aggregated_stats
+        if self._metrics[metric].get("aggregation") == "samples":
+            weight_counter = self._metrics[metric].get("weight_counter", "weight counter")
+            raise ValueError(f"No valid samples for {metric}: {weight_counter} must be positive")
+
+        counter_stats = self._aggregated[dispatch_key]
 
         # Compute metric using min/max/avg of each counter
         metric_min = self._compute_with_stat_type(metric, counter_stats, "min")
@@ -839,7 +1015,9 @@ class CounterBackend(ABC):
             replay_id = getattr(result, "run_id", 0)  # Keep field name for compatibility
             replays[replay_id][result.kernel_name].append(result)
 
-        # Merge within each replay (sum counters)
+        # Merge within each replay on the public per-dispatch basis. Metrics
+        # that require total-work correlation perform their own total=True
+        # merge in _aggregate_correlated_metric_stats.
         merged_replays = []
         for replay_id, kernels in replays.items():
             for kernel_name, dispatches in kernels.items():
@@ -905,30 +1083,22 @@ class CounterBackend(ABC):
 
         return stats
 
-    def _merge_dispatches(self, dispatches: List[ProfileResult]) -> ProfileResult:
+    def _merge_dispatches(
+        self, dispatches: List[ProfileResult], *, total: bool = False
+    ) -> ProfileResult:
         """
-        Merge multiple dispatches into a single average dispatch
+        Merge multiple dispatches on an average- or total-work basis.
 
-        Used for within-run aggregation by kernel name, e.g. a kernel that is
-        launched more than once per run. Counters and duration are both
-        averaged, so the merged result describes one typical dispatch and
-        rate metrics (GFLOPS = flops / time, bandwidth utilization) see the
-        same per-dispatch basis on both sides of the ratio -- summing
-        counters while averaging duration inflates rates by roughly the
-        dispatch count.
-
-        Each counter is divided by the number of dispatches that reported it,
-        not by the length of the list, so a counter present in only some
-        entries (multi-pass collection) keeps its own scale. That also makes
-        ratio-shaped counters (utilization, hit rate) average correctly
-        without special-casing their names.
+        The default returns one average dispatch, preserving upstream behavior and
+        the scale of counters absent from some collection passes. Correlated metrics
+        use ``total=True`` so rates divide total work by total execution time.
+        Ratio-style counters are averaged in either mode.
 
         Args:
             dispatches: List of ProfileResult objects for same kernel
 
         Returns:
-            Single ProfileResult with per-dispatch average counters and
-            duration_ns
+            Single ProfileResult on the requested aggregation basis.
         """
         if not dispatches:
             raise ValueError("Cannot merge empty dispatch list")
@@ -938,20 +1108,34 @@ class CounterBackend(ABC):
         counter_counts = defaultdict(int)
         total_duration = 0
 
+        _AVG_PATTERNS = ("Percent", "Hit", "Util", "Busy", "Occupancy", "Mean", "Rate", "Ratio")
+
+        def _should_average(name: str) -> bool:
+            return any(pattern in name for pattern in _AVG_PATTERNS)
+
+        non_summable_counts = defaultdict(int)
+
         for dispatch in dispatches:
             for counter, value in dispatch.counters.items():
                 merged_counters[counter] += value
                 counter_counts[counter] += 1
+                if _should_average(counter):
+                    non_summable_counts[counter] += 1
             total_duration += dispatch.duration_ns
 
-        for counter, count in counter_counts.items():
-            merged_counters[counter] /= count
+        for counter, count in non_summable_counts.items():
+            if count > 0:
+                merged_counters[counter] /= count
+        if not total:
+            for counter, count in counter_counts.items():
+                if counter not in non_summable_counts:
+                    merged_counters[counter] /= count
 
         merged = ProfileResult(
             dispatch_id=first.dispatch_id,
             kernel_name=first.kernel_name,
             gpu_id=first.gpu_id,
-            duration_ns=round(total_duration / len(dispatches)),
+            duration_ns=total_duration if total else round(total_duration / len(dispatches)),
             grid_size=first.grid_size,
             workgroup_size=first.workgroup_size,
             counters=dict(merged_counters),
