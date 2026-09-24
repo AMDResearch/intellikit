@@ -324,7 +324,7 @@ def _write_csv_output(output_path: Path, results: Dict, metrics: List[str], aggr
                     stats = data["metrics"][metric]
                     row.extend([stats.min, stats.max, stats.avg])
                 else:
-                    row.extend([0, 0, 0])
+                    row.extend(["", "", ""])
 
             writer.writerow(row)
 

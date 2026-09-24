@@ -280,12 +280,22 @@ def test_json_writer_handles_missing_duration(tmp_path):
     assert json.loads(out.read_text())["k"]["duration_us"] is None
 
 
-def test_csv_writer_zero_fills_missing_values(tmp_path):
+def test_csv_writer_leaves_missing_metric_empty(tmp_path):
     results = {"k": {"duration_us": None, "metrics": {}}}
     out = tmp_path / "r.csv"
     _write_csv_output(out, results, [KNOWN_METRIC], aggregated=False)
     row = list(csv.reader(out.read_text().splitlines()))[1]
     assert row[1:4] == ["0", "0", "0"]
+    assert row[4:7] == ["", "", ""]
+
+
+def test_csv_writer_preserves_measured_zero(tmp_path):
+    zero = Statistics(min=0.0, max=0.0, avg=0.0, count=1, unit="Percent")
+    results = {"k": {"duration_us": None, "metrics": {KNOWN_METRIC: zero}}}
+    out = tmp_path / "r.csv"
+    _write_csv_output(out, results, [KNOWN_METRIC], aggregated=False)
+    row = list(csv.reader(out.read_text().splitlines()))[1]
+    assert row[4:7] == ["0.0", "0.0", "0.0"]
 
 
 def test_text_writer_restores_stdout(tmp_path, capsys):
@@ -321,17 +331,42 @@ def test_dispatch_key_without_colon_prints_as_kernel(capsys):
 # --------------------------------------------------------------------------
 
 
-def test_list_metrics_prints_every_catalog_entry(capsys):
-    list_metrics()
+def test_list_metrics_prints_only_backend_metrics(capsys):
+    backend = FakeBackend(available=[KNOWN_METRIC])
+    with (
+        patch("metrix.cli.list_cmd.detect_or_default", return_value="gfx942"),
+        patch("metrix.cli.list_cmd.get_backend", return_value=backend),
+    ):
+        list_metrics()
     out = capsys.readouterr().out
-    assert f"Total: {len(METRIC_CATALOG)} metrics" in out
+    assert "Total: 1 metrics" in out
+    assert KNOWN_METRIC in out
+    assert "memory.atomic_latency" not in out
 
 
 def test_list_metrics_by_category_is_a_subset(capsys):
     category = METRIC_CATALOG[KNOWN_METRIC]["category"].value
-    list_metrics(category)
+    backend = FakeBackend(available=[KNOWN_METRIC])
+    with (
+        patch("metrix.cli.list_cmd.detect_or_default", return_value="gfx942"),
+        patch("metrix.cli.list_cmd.get_backend", return_value=backend),
+    ):
+        list_metrics(category)
     out = capsys.readouterr().out
     assert f"Category: {category}" in out
+
+
+def test_list_metrics_uses_backend_description(capsys):
+    backend = FakeBackend(
+        available=[KNOWN_METRIC],
+        metadata={KNOWN_METRIC: {"description": "selected architecture description"}},
+    )
+    with (
+        patch("metrix.cli.list_cmd.detect_or_default", return_value="gfx942"),
+        patch("metrix.cli.list_cmd.get_backend", return_value=backend),
+    ):
+        list_metrics()
+    assert "selected architecture description" in capsys.readouterr().out
 
 
 def test_list_profiles_prints_each_profile(capsys):
@@ -390,17 +425,23 @@ def test_show_metric_info_prints_counters_from_backend(capsys):
     assert "gfx942" in out
 
 
+def test_show_metric_info_uses_backend_description(capsys):
+    backend = FakeBackend(
+        metadata={KNOWN_METRIC: {"description": "selected architecture description"}}
+    )
+    with patch("metrix.cli.info_cmd.get_backend", return_value=backend):
+        show_metric_info(KNOWN_METRIC, "gfx942")
+    assert "selected architecture description" in capsys.readouterr().out
+
+
 def test_show_metric_info_unknown_metric_returns_1(capsys):
     assert show_metric_info("memory.not_a_metric") == 1
     assert "Unknown metric" in capsys.readouterr().out
 
 
 def test_show_metric_info_unimplemented_on_arch_is_handled(capsys):
-    backend = FakeBackend()
-    with (
-        patch("metrix.cli.info_cmd.get_backend", return_value=backend),
-        patch.object(backend, "get_metric_counters", side_effect=ValueError),
-    ):
+    backend = FakeBackend(available=[])
+    with patch("metrix.cli.info_cmd.get_backend", return_value=backend):
         show_metric_info(KNOWN_METRIC, "gfx1030")
     assert "not implemented" in capsys.readouterr().out
 
@@ -459,6 +500,14 @@ def test_parser_builds_and_exposes_subcommands():
     args = parser.parse_args(["profile", "./app"])
     assert args.command == "profile"
     assert args.target == "./app"
+
+
+def test_parser_accepts_arch_for_metric_discovery():
+    parser = create_parser()
+    assert parser.parse_args(["list", "metrics", "--arch", "gfx1201"]).arch == "gfx1201"
+    assert (
+        parser.parse_args(["info", "metric", KNOWN_METRIC, "--arch", "gfx1201"]).arch == "gfx1201"
+    )
 
 
 def test_bare_invocation_prints_help(capsys):

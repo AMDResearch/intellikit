@@ -3,6 +3,7 @@ Info command implementation
 """
 
 from ..metrics import METRIC_CATALOG, METRIC_PROFILES
+from ..metrics.catalog import get_selected_metric_info
 from ..backends import get_backend, detect_or_default
 
 
@@ -29,7 +30,8 @@ def show_metric_info(metric_name, arch="gfx942"):
         print("\nRun 'metrix list metrics' to see available metrics")
         return 1
 
-    metric_def = METRIC_CATALOG[metric_name]
+    backend = get_backend(arch)
+    metric_def = get_selected_metric_info(metric_name, backend)
 
     print("╔════════════════════════════════════════════════════════════════════╗")
     print(f"║  {metric_def['name']:66s} ║")
@@ -40,15 +42,14 @@ def show_metric_info(metric_name, arch="gfx942"):
     print(f"Unit:        {metric_def['unit']}")
     print(f"Category:    {metric_def['category'].value}")
 
-    # Show actual hardware counters from the backend (architecture-specific)
     print(f"\nRequired Hardware Counters ({arch}):")
-    try:
-        backend = get_backend(arch)
-        actual_counters = backend.get_metric_counters(metric_name)
-        for counter in actual_counters:
+    if metric_def["available"]:
+        for counter in metric_def["counters"]:
             print(f"  • {counter}")
-    except ValueError:
+    else:
         print(f"  ⚠️  Metric not implemented for {arch}")
+        if "unavailable_reason" in metric_def:
+            print(f"     {metric_def['unavailable_reason']}")
 
 
 def show_profile_info(profile_name):

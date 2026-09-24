@@ -15,6 +15,7 @@ from pathlib import Path
 from .backends import get_backend, Statistics, detect_or_default
 from .backends.base import CounterBackend
 from .metrics import METRIC_PROFILES, METRIC_CATALOG, resolve_profile_metrics
+from .metrics.catalog import get_selected_metric_info
 from .logger import logger
 
 
@@ -266,8 +267,11 @@ class Metrix:
             List of metric names
         """
         if category:
+            available = set(self.backend.get_available_metrics())
             return [
-                name for name, defn in METRIC_CATALOG.items() if defn["category"].value == category
+                name
+                for name, defn in METRIC_CATALOG.items()
+                if name in available and defn["category"].value == category
             ]
         return self.backend.get_available_metrics()
 
@@ -277,6 +281,4 @@ class Metrix:
 
     def get_metric_info(self, metric_name: str) -> dict:
         """Get detailed information about a metric"""
-        if metric_name not in METRIC_CATALOG:
-            raise ValueError(f"Unknown metric: {metric_name}")
-        return METRIC_CATALOG[metric_name]
+        return get_selected_metric_info(metric_name, self.backend)
