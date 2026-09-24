@@ -26,6 +26,11 @@
 #     TCC_EA_RDREQ_sum — total read requests (aggregate of EA0+EA1 ports)
 #     TCC_EA_RDREQ_32B_sum — 32-byte read requests
 #     Remaining reads are 64B: (RDREQ - RDREQ_32B)
+#   gfx1201 (RDNA4): The installed SDK additionally advertises a 256B read bucket.
+#     This bucket is absent from the exporter reference file but is hardware-validated
+#     by a 512 MiB streaming-read probe, so gfx1201 uses 32B/64B/128B/256B reads.
+#     GL2C_EA_WRREQ counts 256B write-request units for cached streaming stores.
+#     Mixed and atomic write traffic remains an estimate because no reliable size buckets are exposed.
 #
 # Backends gate on DeviceSpecs.arch, so any arch missing from the
 # `architectures:` lists below yields zero metrics and metrix falls back to
@@ -136,12 +141,20 @@ rocprofiler-sdk:
     - name: ALUStalledByLDS
       unit: Percent
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+        - architectures: [gfx1030, gfx1100, gfx1151]
+        - unsupported_reason: >-
+            rocprofiler-sdk does not expose ALUStalledByLDS or its required LDS
+            instruction-wait counter on the validated gfx1201 stack.
+          architectures: [gfx1201]
 
     - name: LdsLatency
       unit: Cycles
       definitions:
-        - architectures: [gfx1201, gfx1030, gfx1100, gfx1151]
+        - architectures: [gfx1030, gfx1100, gfx1151]
+        - unsupported_reason: >-
+            Reliable gfx1201 LDS latency requires validated level-counter and
+            accumulator pairing that rocprofiler-sdk does not currently expose.
+          architectures: [gfx1201]
 
     - name: MeanOccupancyPerActiveCU
       unit: Percent
@@ -276,6 +289,14 @@ rocprofiler-sdk:
         - expression: LDSBankConflict
           architectures: [gfx1201, gfx1030, gfx1100, gfx1150, gfx1151]
 
+    - name: memory.lds_bank_conflict_percent
+      unit: Percent
+      aggregation: samples
+      weight_counter: SQC_LDS_IDX_ACTIVE
+      definitions:
+        - expression: 100 * SQC_LDS_BANK_CONFLICT / SQC_LDS_IDX_ACTIVE
+          architectures: [gfx1201]
+
     # --- HBM/VRAM read bandwidth ---
     # Total bytes read from HBM (CDNA) or VRAM (RDNA) / kernel active time.
     # gfx942/gfx950: 3 request sizes — 128B (TCC_BUBBLE), 64B (remainder), 32B.
@@ -296,10 +317,19 @@ rocprofiler-sdk:
             / (GRBM_GUI_ACTIVE / (BASE_CLOCK_MHZ * 1e6))
           architectures: [gfx90a]
         - expression: >-
-            GL2C_EA_RDREQ_sum * 256
+            (GL2C_EA_RDREQ_32B_sum * 32
+            + GL2C_EA_RDREQ_64B_sum * 64
+            + GL2C_EA_RDREQ_128B_sum * 128
+            + GL2C_EA_RDREQ_256B_sum * 256)
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
           architectures: [gfx1201]
+          aggregation: correlated
+          requires_consistent_passes: true
+          description: >-
+            On gfx1201, GL2C request-interface read traffic reconstructed from the
+            locally validated 32-, 64-, 128-, and 256-byte request buckets; this is
+            not exact physical GDDR traffic when cache or compression effects apply.
         - expression: >-
             (GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
@@ -311,7 +341,8 @@ rocprofiler-sdk:
 
     # --- HBM/VRAM write bandwidth ---
     # Total bytes written to HBM / kernel active time.
-    # Writes are 64B or 32B only (no 128B writes on any arch).
+    # gfx1201 uses the qualified 256B aggregate-request estimate below.
+    # Older RDNA definitions reconstruct traffic from 64B and residual 32B requests.
 
     - name: memory.hbm_write_bandwidth
       unit: GB/s
@@ -331,6 +362,12 @@ rocprofiler-sdk:
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
           architectures: [gfx1201]
+          aggregation: correlated
+          requires_consistent_passes: true
+          description: >-
+            On gfx1201, an empirical GL2C_EA_WRREQ_sum times 256 estimate for large
+            cached, coalesced streaming stores; compressed, atomic, mixed-size, and
+            cache-resident traffic can differ from logical or physical bytes.
         # gfx1030/gfx1150/gfx1151 only expose the 64B write bucket;
         # residual writes attributed to 32B.
         - expression: >-
@@ -364,11 +401,21 @@ rocprofiler-sdk:
             / HBM_BANDWIDTH_GBS * 100
           architectures: [gfx90a]
         - expression: >-
-            ((GL2C_EA_RDREQ_sum + GL2C_EA_WRREQ_sum) * 256
+            ((GL2C_EA_RDREQ_32B_sum * 32
+            + GL2C_EA_RDREQ_64B_sum * 64
+            + GL2C_EA_RDREQ_128B_sum * 128
+            + GL2C_EA_RDREQ_256B_sum * 256
+            + GL2C_EA_WRREQ_sum * 256)
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             / HBM_BANDWIDTH_GBS * 100)
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
           architectures: [gfx1201]
+          aggregation: correlated
+          requires_consistent_passes: true
+          description: >-
+            On gfx1201, bandwidth utilization combines validated read-size buckets
+            with the empirical 256-byte streaming-write estimate and represents GL2C
+            request-interface traffic rather than exact physical GDDR traffic.
         - expression: >-
             ((GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
@@ -401,8 +448,18 @@ rocprofiler-sdk:
             + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
           architectures: [gfx90a]
         - expression: >-
-            (GL2C_EA_RDREQ_sum + GL2C_EA_WRREQ_sum) * 256
+            GL2C_EA_RDREQ_32B_sum * 32
+            + GL2C_EA_RDREQ_64B_sum * 64
+            + GL2C_EA_RDREQ_128B_sum * 128
+            + GL2C_EA_RDREQ_256B_sum * 256
+            + GL2C_EA_WRREQ_sum * 256
           architectures: [gfx1201]
+          aggregation: correlated
+          requires_consistent_passes: true
+          description: >-
+            On gfx1201, total bytes combine validated read-size buckets with the
+            empirical 256-byte streaming-write estimate; compression, atomics,
+            mixed-size requests, and cache residency can change physical traffic.
         - expression: >-
             GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64

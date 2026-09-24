@@ -61,6 +61,30 @@ def test_every_profile_references_only_real_metrics():
             assert metric in METRIC_CATALOG, f"profile '{name}' references unknown '{metric}'"
 
 
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "memory.hbm_read_bandwidth",
+        "memory.hbm_write_bandwidth",
+        "memory.hbm_bandwidth_utilization",
+        "memory.bytes_transferred_hbm",
+    ],
+)
+def test_shared_vram_catalog_remains_architecture_neutral(metric):
+    description = METRIC_CATALOG[metric]["description"].lower()
+    assert "gfx1201" not in description
+    assert "256-byte" not in description
+    assert "empirical" not in description
+
+
+def test_lds_bank_conflict_percent_is_a_single_gfx1201_semantic_metric():
+    metric = METRIC_CATALOG["memory.lds_bank_conflict_percent"]
+    assert metric["unit"] == "Percent"
+    assert "lds_audit" not in METRIC_PROFILES
+    assert "SQC_LDS_BANK_CONFLICT" not in METRIC_CATALOG
+    assert "SQC_LDS_IDX_ACTIVE" not in METRIC_CATALOG
+
+
 # --------------------------------------------------------------------------
 # resolve_profile_metrics
 # --------------------------------------------------------------------------

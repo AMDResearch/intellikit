@@ -90,6 +90,12 @@ they ask for can be collected.
 - `memory.bytes_transferred_l2` - Total bytes through L2 cache
 - `memory.bytes_transferred_l1` - Total bytes through L1 cache
 
+> **gfx1201 qualification:** reads include the locally advertised and hardware-validated
+> 256B GL2C request bucket. These metrics describe request-interface traffic, not exact
+> physical GDDR transfers. Writes use an empirical 256-byte/request estimate for large
+> cached, coalesced stores; cache effects, compression, atomics, mixed-size requests, and
+> cache-resident traffic can differ from logical or physical bytes.
+
 ### Cache Performance
 - `memory.l1_hit_rate` - L1 cache hit rate (%)
 - `memory.l2_hit_rate` - L2 cache hit rate (%)
@@ -102,6 +108,7 @@ they ask for can be collected.
 
 ### Local Data Share
 - `memory.lds_bank_conflicts` - LDS bank conflicts per access
+- `memory.lds_bank_conflict_percent` - Indexed-LDS cycles stalled by bank conflicts (%). *gfx1201 only.*
 
 ### Atomic Operations
 - `memory.atomic_latency` - Atomic operation latency (cycles)
