@@ -47,6 +47,7 @@ METRIC_PROFILES = {
             "memory.global_store_efficiency",
             # LDS
             "memory.lds_bank_conflicts",
+            "memory.lds_bank_conflict_percent",
             # Note: memory.lds_utilization requires kernel metadata, not hardware counters
             # Atomic operations
             "memory.atomic_latency",
