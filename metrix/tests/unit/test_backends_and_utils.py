@@ -571,3 +571,78 @@ def test_merge_dispatches_sets_num_dispatches():
 def test_merge_dispatches_rejects_empty_list():
     with pytest.raises(ValueError, match="empty dispatch list"):
         _DummyBackend()._merge_dispatches([])
+
+
+def test_merge_dispatches_total_mode_sums_work_and_duration():
+    dispatches = [
+        _dispatch(0, 1000, {"BYTES": 10}),
+        _dispatch(1, 3000, {"BYTES": 30}),
+    ]
+
+    merged = _DummyBackend()._merge_dispatches(dispatches, total=True)
+
+    assert merged.duration_ns == 4000
+    assert merged.counters["BYTES"] == 40
+
+
+def test_weighted_sample_statistics_omit_nonpositive_weights():
+    backend = _DummyBackend()
+    metric = "test.weighted"
+    backend._metrics[metric] = {
+        "counters": ["VALUE", "WEIGHT"],
+        "compute": lambda: backend._raw_data["VALUE"],
+        "unit": "Percent",
+        "aggregation": "samples",
+        "weight_counter": "WEIGHT",
+    }
+    results = [
+        _dispatch(0, 1000, {"VALUE": 50, "WEIGHT": 1}),
+        _dispatch(1, 1000, {"VALUE": 100, "WEIGHT": 3}),
+        _dispatch(2, 1000, {"VALUE": 0, "WEIGHT": 0}),
+    ]
+
+    stats = backend._aggregate_sample_metric_stats(results, [metric], True)["k"][metric]
+
+    assert stats.min == 50
+    assert stats.avg == pytest.approx(87.5)
+    assert stats.max == 100
+    assert stats.count == 2
+
+
+def test_correlated_metric_statistics_use_total_work_per_replay():
+    backend = _DummyBackend()
+    metric = "test.correlated"
+    backend._metrics[metric] = {
+        "counters": ["BYTES"],
+        "compute": lambda: backend._raw_data["BYTES"],
+        "unit": "Bytes",
+        "aggregation": "correlated",
+    }
+    results = [
+        _dispatch(0, 1000, {"BYTES": 10}),
+        _dispatch(1, 3000, {"BYTES": 30}),
+    ]
+    for result in results:
+        result.run_id = 0
+
+    stats = backend._aggregate_correlated_metric_stats(results, [metric], True)["k"][metric]
+
+    assert stats.min == 40
+    assert stats.avg == 40
+    assert stats.max == 40
+
+
+def test_counter_pass_population_includes_dispatch_identity():
+    backend = _DummyBackend()
+    first_pass = [
+        _dispatch(1, 1000, {"A": 1}),
+        ProfileResult(2, "other", 0, 1000, (1, 1, 1), (1, 1, 1), {"A": 1}),
+    ]
+    second_pass = [
+        _dispatch(2, 1000, {"B": 1}),
+        ProfileResult(1, "other", 0, 1000, (1, 1, 1), (1, 1, 1), {"B": 1}),
+    ]
+    expected = backend._validate_counter_pass_population(None, first_pass, 1)
+
+    with pytest.raises(RuntimeError, match="different filtered dispatch populations"):
+        backend._validate_counter_pass_population(expected, second_pass, 2)
