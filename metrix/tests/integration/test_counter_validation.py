@@ -437,6 +437,18 @@ class TestLDSBankConflicts:
             m = _profile(b, ["memory.lds_bank_conflicts"], p)
         assert m["memory.lds_bank_conflicts"] < 2.0
 
+    @requires_arch("gfx1201")
+    def test_gfx1201_conflict_percent_is_present_and_bounded(self):
+        """The production gfx1201 percentage metric must be collected, not skipped."""
+        metric = "memory.lds_bank_conflict_percent"
+        with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
+            p = Path(d)
+            b = _compile_hip(_lds_source(1), "lds_percent", p)
+            values = _profile(b, [metric], p)
+
+        assert metric in values
+        assert 0.0 <= values[metric] <= 100.0
+
     @requires_cdna()
     def test_high_conflicts_with_stride32(self):
         """Stride-32 LDS access should cause many bank conflicts."""
@@ -659,6 +671,7 @@ _ALL_PERCENTAGE_METRICS = [
     "memory.coalescing_efficiency",
     "memory.global_load_efficiency",
     "memory.global_store_efficiency",
+    "memory.lds_bank_conflict_percent",
 ]
 
 # Metrics that must be non-negative (bandwidth, bytes, FLOPS, latency, etc.)
