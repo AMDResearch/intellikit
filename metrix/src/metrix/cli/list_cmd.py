@@ -3,14 +3,15 @@ List command implementation
 """
 
 from ..metrics import METRIC_CATALOG, METRIC_PROFILES
-from ..metrics.catalog import get_metrics_by_category
+from ..metrics.catalog import get_selected_metric_info
+from ..backends import detect_or_default, get_backend
 
 
 def list_command(args):
     """Execute list command"""
 
     if args.item_type == "metrics":
-        list_metrics(args.category)
+        list_metrics(args.category, getattr(args, "arch", None))
     elif args.item_type == "profiles":
         list_profiles()
     elif args.item_type == "counters":
@@ -21,18 +22,22 @@ def list_command(args):
     return 0
 
 
-def list_metrics(category=None):
+def list_metrics(category=None, arch=None):
     """List available metrics"""
 
     print("╔════════════════════════════════════════════════════════════════════╗")
     print("║                     AVAILABLE METRICS                               ║")
     print("╚════════════════════════════════════════════════════════════════════╝\n")
 
+    selected_arch = detect_or_default(arch)
+    backend = get_backend(selected_arch)
+    available = set(backend.get_available_metrics())
+    metrics = [name for name in METRIC_CATALOG if name in available]
+
     if category:
-        metrics = get_metrics_by_category(category)
+        metrics = [name for name in metrics if METRIC_CATALOG[name]["category"].value == category]
         print(f"Category: {category}\n")
-    else:
-        metrics = list(METRIC_CATALOG.keys())
+    print(f"Architecture: {backend.device_specs.arch}\n")
 
     # Group by category
     from collections import defaultdict
@@ -40,7 +45,7 @@ def list_metrics(category=None):
     by_category = defaultdict(list)
 
     for metric_name in metrics:
-        metric_def = METRIC_CATALOG[metric_name]
+        metric_def = get_selected_metric_info(metric_name, backend)
         cat = metric_def["category"].value
         by_category[cat].append((metric_name, metric_def))
 

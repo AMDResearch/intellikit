@@ -145,6 +145,7 @@ Examples:
     )
 
     list_parser.add_argument("--category", "-c", help="Filter by category (for metrics)")
+    list_parser.add_argument("--arch", help="GPU architecture for metric discovery")
 
     # Info command
     info_parser = subparsers.add_parser(
@@ -157,6 +158,7 @@ Examples:
 
     metric_info = info_subparsers.add_parser("metric", help="Metric information")
     metric_info.add_argument("name", help="Metric name")
+    metric_info.add_argument("--arch", help="GPU architecture for metric information")
 
     profile_info = info_subparsers.add_parser("profile", help="Profile information")
     profile_info.add_argument("name", help="Profile name")
