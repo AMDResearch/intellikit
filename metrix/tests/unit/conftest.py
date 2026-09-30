@@ -7,6 +7,7 @@ a backend for an architecture not present on this machine.
 
 import pytest
 from metrix.backends.detect import detect_gpu_arch
+from metrix.metrics import METRIC_CATALOG
 
 
 def _hw_arch():
@@ -179,10 +180,18 @@ class FakeBackend:
     GPU.
     """
 
-    def __init__(self, dispatch_keys=None, unsupported=None, available=None, arch="gfx942"):
+    def __init__(
+        self,
+        dispatch_keys=None,
+        unsupported=None,
+        available=None,
+        arch="gfx942",
+        metadata=None,
+    ):
         self.device_specs = FakeDeviceSpecs(arch)
         self._unsupported_metrics = dict(unsupported or {})
         self._available = list(available) if available is not None else [DEFAULT_FAKE_METRIC]
+        self._metadata = dict(metadata or {})
         self._keys = ["dispatch_1:gemm_kernel"] if dispatch_keys is None else dispatch_keys
         self._aggregated = {
             key: {"duration_us": fake_stats(100.0 + i * 50, "us")}
@@ -195,6 +204,15 @@ class FakeBackend:
 
     def get_unsupported_metrics(self):
         return dict(self._unsupported_metrics)
+
+    def get_metric_metadata(self, metric_name):
+        if metric_name not in self._available:
+            raise ValueError(f"Unknown metric: {metric_name}")
+        return {
+            "counters": self.get_metric_counters(metric_name),
+            "unit": METRIC_CATALOG.get(metric_name, {}).get("unit", ""),
+            **self._metadata.get(metric_name, {}),
+        }
 
     def profile(self, **kwargs):
         self.profile_calls.append(kwargs)
