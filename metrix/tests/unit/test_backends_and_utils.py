@@ -609,6 +609,24 @@ def test_weighted_sample_statistics_omit_nonpositive_weights():
     assert stats.count == 2
 
 
+def test_weighted_sample_with_no_positive_activity_is_unavailable():
+    backend = _DummyBackend()
+    metric = "test.weighted"
+    backend._metrics[metric] = {
+        "counters": ["VALUE", "WEIGHT"],
+        "compute": lambda: backend._raw_data["VALUE"],
+        "unit": "Percent",
+        "aggregation": "samples",
+        "weight_counter": "WEIGHT",
+    }
+    results = [_dispatch(0, 1000, {"VALUE": 0, "WEIGHT": 0})]
+    backend._aggregated = backend._aggregate_by_dispatch_across_runs(results)
+    backend._metric_aggregated = backend._aggregate_sample_metric_stats(results, [metric], False)
+
+    with pytest.raises(ValueError, match="WEIGHT must be positive"):
+        backend.compute_metric_stats("dispatch_0:k", metric)
+
+
 def test_correlated_metric_statistics_use_total_work_per_replay():
     backend = _DummyBackend()
     metric = "test.correlated"
