@@ -117,6 +117,12 @@ LDS_METRICS = {
         "unit": "Conflicts per Access",
         "category": MetricCategory.MEMORY_LDS,
     },
+    "memory.lds_bank_conflict_percent": {
+        "name": "LDS Bank Conflict Percent",
+        "description": "Percentage of active shared-memory access cycles with bank conflicts",
+        "unit": "Percent",
+        "category": MetricCategory.MEMORY_LDS,
+    },
 }
 
 # ═══════════════════════════════════════════════════════════════════
