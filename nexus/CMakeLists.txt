@@ -139,6 +139,14 @@ if(TARGET kernelDB64)
         LIBRARY DESTINATION ${NEXUS_PKG_DEST}
         RUNTIME DESTINATION ${NEXUS_PKG_DEST}
     )
+    # Copy libkernelDB64.so next to libnexus.so in the build tree so the
+    # $ORIGIN RPATH works without LD_LIBRARY_PATH or a full install step.
+    add_custom_command(TARGET nexus POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:kernelDB64>
+            $<TARGET_FILE_DIR:nexus>
+        COMMENT "Copying libkernelDB64.so to build/lib/"
+    )
 endif()
 
 
