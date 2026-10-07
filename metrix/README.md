@@ -93,9 +93,9 @@ they ask for can be collected.
 > **gfx1201 qualification:** reads include the locally advertised and hardware-validated
 > 256-byte request bucket at the L2-to-memory interface. These metrics describe requests
 > leaving the L2 cache, not exact off-chip memory transfers. Writes use an empirical
-> 256-byte/request estimate for large
-> cached, coalesced stores; cache effects, compression, atomics, mixed-size requests, and
-> cache-resident traffic can differ from logical or physical bytes.
+> 256-byte/request estimate for large cached, coalesced stores; cache effects, compression,
+> atomics, mixed-size requests, and cache-resident traffic can differ from logical or
+> physical bytes.
 
 ### Cache Performance
 - `memory.l1_hit_rate` - L1 cache hit rate (%)

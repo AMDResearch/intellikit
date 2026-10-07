@@ -28,7 +28,9 @@
 #     Remaining reads are 64B: (RDREQ - RDREQ_32B)
 #   gfx1201 (RDNA4): The installed SDK additionally advertises a 256B read bucket.
 #     This bucket is absent from the exporter reference file but is hardware-validated
-#     by a 512 MiB streaming-read probe, so gfx1201 uses 32B/64B/128B/256B reads.
+#     by a 512 MiB streaming-read probe, so gfx1201 read bandwidth uses 32B/64B/128B/256B reads.
+#     Utilization and total bytes keep GL2C_EA_RDREQ_sum * 256: the four buckets plus
+#     GL2C_EA_WRREQ_sum are five L2 counters, which do not fit in one collection.
 #     GL2C_EA_WRREQ counts 256B write-request units for cached streaming stores.
 #     Mixed and atomic write traffic remains an estimate because no reliable size buckets are exposed.
 #
@@ -402,11 +404,7 @@ rocprofiler-sdk:
             / HBM_BANDWIDTH_GBS * 100
           architectures: [gfx90a]
         - expression: >-
-            ((GL2C_EA_RDREQ_32B_sum * 32
-            + GL2C_EA_RDREQ_64B_sum * 64
-            + GL2C_EA_RDREQ_128B_sum * 128
-            + GL2C_EA_RDREQ_256B_sum * 256
-            + GL2C_EA_WRREQ_sum * 256)
+            ((GL2C_EA_RDREQ_sum + GL2C_EA_WRREQ_sum) * 256
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             / HBM_BANDWIDTH_GBS * 100)
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
@@ -414,9 +412,10 @@ rocprofiler-sdk:
           aggregation: correlated
           requires_consistent_passes: true
           description: >-
-            Bandwidth utilization combines validated read-size buckets with the
-            empirical 256-byte streaming-write estimate and represents L2-to-memory
-            request traffic rather than exact off-chip memory transfers.
+            Bandwidth utilization counts 256 bytes per L2-to-memory read and write
+            request, matching the validated read-request size and the empirical
+            streaming-write estimate, and represents L2-to-memory request traffic
+            rather than exact off-chip memory transfers.
         - expression: >-
             ((GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
@@ -449,19 +448,15 @@ rocprofiler-sdk:
             + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
           architectures: [gfx90a]
         - expression: >-
-            GL2C_EA_RDREQ_32B_sum * 32
-            + GL2C_EA_RDREQ_64B_sum * 64
-            + GL2C_EA_RDREQ_128B_sum * 128
-            + GL2C_EA_RDREQ_256B_sum * 256
-            + GL2C_EA_WRREQ_sum * 256
+            (GL2C_EA_RDREQ_sum + GL2C_EA_WRREQ_sum) * 256
           architectures: [gfx1201]
           aggregation: correlated
           requires_consistent_passes: true
           description: >-
-            Total bytes at the L2-to-memory request interface combine validated
-            read-size buckets with the empirical 256-byte streaming-write estimate;
-            compression, atomics, mixed request sizes, and cache residency can change
-            off-chip memory traffic.
+            Total bytes at the L2-to-memory request interface count 256 bytes per
+            read and write request, matching the validated read-request size and the
+            empirical streaming-write estimate; compression, atomics, mixed request
+            sizes, and cache residency can change off-chip memory traffic.
         - expression: >-
             GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
