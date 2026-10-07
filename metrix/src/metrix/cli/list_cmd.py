@@ -30,14 +30,26 @@ def list_metrics(category=None, arch=None):
     print("╚════════════════════════════════════════════════════════════════════╝\n")
 
     selected_arch = detect_or_default(arch)
-    backend = get_backend(selected_arch)
-    available = set(backend.get_available_metrics())
-    metrics = [name for name in METRIC_CATALOG if name in available]
+    try:
+        backend = get_backend(selected_arch)
+    except (RuntimeError, ValueError) as e:
+        backend = None
+        reason = str(e).splitlines()[0] if str(e) else type(e).__name__
+
+    if backend is None:
+        metrics = list(METRIC_CATALOG)
+    else:
+        available = set(backend.get_available_metrics())
+        metrics = [name for name in METRIC_CATALOG if name in available]
 
     if category:
         metrics = [name for name in metrics if METRIC_CATALOG[name]["category"].value == category]
         print(f"Category: {category}\n")
-    print(f"Architecture: {backend.device_specs.arch}\n")
+    if backend is None:
+        print(f"Architecture: {selected_arch} (backend unavailable: {reason})")
+        print("Showing the full metric catalog; availability on this GPU was not checked.\n")
+    else:
+        print(f"Architecture: {backend.device_specs.arch}\n")
 
     # Group by category
     from collections import defaultdict
@@ -45,7 +57,10 @@ def list_metrics(category=None, arch=None):
     by_category = defaultdict(list)
 
     for metric_name in metrics:
-        metric_def = get_selected_metric_info(metric_name, backend)
+        if backend is None:
+            metric_def = METRIC_CATALOG[metric_name]
+        else:
+            metric_def = get_selected_metric_info(metric_name, backend)
         cat = metric_def["category"].value
         by_category[cat].append((metric_name, metric_def))
 

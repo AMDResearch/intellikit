@@ -369,6 +369,19 @@ def test_list_metrics_uses_backend_description(capsys):
     assert "selected architecture description" in capsys.readouterr().out
 
 
+def test_list_metrics_falls_back_to_catalog_when_backend_unavailable(capsys):
+    error = RuntimeError("hipcc failed (rc=1):\nfatal error: 'hip/hip_runtime.h' file not found")
+    with (
+        patch("metrix.cli.list_cmd.detect_or_default", return_value="gfx1201"),
+        patch("metrix.cli.list_cmd.get_backend", side_effect=error),
+    ):
+        list_metrics()
+    out = capsys.readouterr().out
+    assert f"Total: {len(METRIC_CATALOG)} metrics" in out
+    assert "Architecture: gfx1201 (backend unavailable: hipcc failed (rc=1):)" in out
+    assert "hip_runtime.h" not in out
+
+
 def test_list_profiles_prints_each_profile(capsys):
     list_profiles()
     out = capsys.readouterr().out
