@@ -33,6 +33,9 @@ def list_metrics(category=None, arch=None):
     try:
         backend = get_backend(selected_arch)
     except (RuntimeError, ValueError) as e:
+        # A mistyped --arch is a usage error; an unsupported detected GPU still lists the catalog.
+        if isinstance(e, ValueError) and arch:
+            raise
         backend = None
         reason = str(e).splitlines()[0] if str(e) else type(e).__name__
 

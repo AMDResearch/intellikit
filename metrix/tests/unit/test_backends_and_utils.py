@@ -315,6 +315,28 @@ def test_compile_reports_hipcc_failure(tmp_path):
             device_info._compile_gpu_query(tmp_path / "gpu_query.hip")
 
 
+def test_compile_failure_names_the_compiler_error_first(tmp_path):
+    device_info._compiled_binary = None
+    stderr = (
+        f"{tmp_path}/gpu_query.hip:1:10: fatal error: 'hip/hip_runtime.h' file not found\n"
+        "    1 | #include <hip/hip_runtime.h>\n"
+        "      |          ^~~~~~~~~~~~~~~~~~~\n"
+        "1 error generated when compiling for gfx1201.\n"
+    )
+    failed = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=stderr)
+    with (
+        patch.object(device_info.shutil, "which", return_value="/usr/bin/hipcc"),
+        patch.object(device_info.subprocess, "run", return_value=failed),
+    ):
+        with pytest.raises(RuntimeError) as excinfo:
+            device_info._compile_gpu_query(tmp_path / "gpu_query.hip")
+    message = str(excinfo.value)
+    assert message.splitlines()[0] == (
+        "hipcc failed (rc=1): fatal error: 'hip/hip_runtime.h' file not found"
+    )
+    assert "1 error generated" in message
+
+
 def test_compile_reports_timeout(tmp_path):
     device_info._compiled_binary = None
     with (

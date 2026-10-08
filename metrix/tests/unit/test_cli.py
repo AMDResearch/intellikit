@@ -370,7 +370,11 @@ def test_list_metrics_uses_backend_description(capsys):
 
 
 def test_list_metrics_falls_back_to_catalog_when_backend_unavailable(capsys):
-    error = RuntimeError("hipcc failed (rc=1):\nfatal error: 'hip/hip_runtime.h' file not found")
+    error = RuntimeError(
+        "hipcc failed (rc=1): fatal error: 'hip/hip_runtime.h' file not found\n"
+        "/tmp/gpu_query.hip:1:10: fatal error: 'hip/hip_runtime.h' file not found\n"
+        "1 error generated when compiling for gfx1201.\n"
+    )
     with (
         patch("metrix.cli.list_cmd.detect_or_default", return_value="gfx1201"),
         patch("metrix.cli.list_cmd.get_backend", side_effect=error),
@@ -378,8 +382,24 @@ def test_list_metrics_falls_back_to_catalog_when_backend_unavailable(capsys):
         list_metrics()
     out = capsys.readouterr().out
     assert f"Total: {len(METRIC_CATALOG)} metrics" in out
-    assert "Architecture: gfx1201 (backend unavailable: hipcc failed (rc=1):)" in out
-    assert "hip_runtime.h" not in out
+    assert (
+        "Architecture: gfx1201 (backend unavailable: hipcc failed (rc=1): "
+        "fatal error: 'hip/hip_runtime.h' file not found)"
+    ) in out
+    assert "1 error generated" not in out
+
+
+def test_list_metrics_rejects_unsupported_explicit_arch():
+    with pytest.raises(ValueError, match="Unsupported architecture: gfx9999"):
+        list_metrics(arch="gfx9999")
+
+
+def test_list_metrics_falls_back_when_detected_gpu_is_unsupported(capsys):
+    with patch("metrix.cli.list_cmd.detect_or_default", return_value="gfx908"):
+        list_metrics()
+    out = capsys.readouterr().out
+    assert f"Total: {len(METRIC_CATALOG)} metrics" in out
+    assert "backend unavailable: Unsupported architecture: gfx908" in out
 
 
 def test_list_profiles_prints_each_profile(capsys):
