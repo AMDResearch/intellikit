@@ -113,6 +113,34 @@ def get_metric_info(metric_name: str) -> dict:
     return METRIC_CATALOG[metric_name]
 
 
+def get_selected_metric_info(metric_name: str, backend) -> dict:
+    """Combine shared catalog metadata with the selected backend definition."""
+    info = dict(get_metric_info(metric_name))
+    arch = backend.device_specs.arch
+    info["architecture"] = arch
+
+    if metric_name not in backend.get_available_metrics():
+        info["available"] = False
+        reason = backend.get_unsupported_metrics().get(metric_name)
+        if reason:
+            info["unavailable_reason"] = reason
+        return info
+
+    info["available"] = True
+    selected = backend.get_metric_metadata(metric_name)
+    for key in (
+        "description",
+        "unit",
+        "aggregation",
+        "weight_counter",
+        "requires_consistent_passes",
+    ):
+        if key in selected:
+            info[key] = selected[key]
+    info["counters"] = list(selected.get("counters", []))
+    return info
+
+
 def list_all_metrics() -> list:
     """List all available metrics"""
     return list(METRIC_CATALOG.keys())

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 # gpu_query binary: locate source, compile on first use
 # ---------------------------------------------------------------------------
 _GPU_QUERY_SOURCE = "gpu_query.hip"
+_COMPILER_ERROR = re.compile(r"(?:fatal )?error: .*")
 
 
 def _find_hip_source() -> Optional[Path]:
@@ -85,7 +87,10 @@ def _compile_gpu_query(source: Path) -> Path:
         raise RuntimeError(f"hipcc timed out compiling gpu_query: {exc}") from exc
 
     if proc.returncode != 0:
-        raise RuntimeError(f"hipcc failed (rc={proc.returncode}):\n{proc.stderr}")
+        matches = (_COMPILER_ERROR.search(line) for line in proc.stderr.splitlines())
+        cause = next((m.group(0) for m in matches if m), None)
+        summary = f"hipcc failed (rc={proc.returncode}):" + (f" {cause}" if cause else "")
+        raise RuntimeError(f"{summary}\n{proc.stderr}")
 
     _compiled_binary = binary
     return binary

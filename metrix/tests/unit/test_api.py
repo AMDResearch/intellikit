@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from metrix.api import Metrix, ProfilingResults, KernelResults
 from metrix.backends import Statistics
-from metrix.metrics import METRIC_PROFILES
+from metrix.metrics import METRIC_CATALOG, METRIC_PROFILES
 from .conftest import FakeBackend, requires_arch, requires_metric
 
 
@@ -87,6 +87,8 @@ class TestMetrixMetricListing:
         info = profiler.get_metric_info("memory.l2_hit_rate")
         assert info["name"] == "L2 Cache Hit Rate"
         assert info["unit"] == "Percent"
+        assert info["available"] is True
+        assert info["architecture"] == arch
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_get_compute_metric_info(self, arch):
@@ -217,6 +219,45 @@ class TestProfileResolutionAPI:
 
         assert backend.profile_calls[0]["metrics"] == [_QUICK_METRICS[0]]
         assert _QUICK_METRICS[1] in caplog.text
+
+    def test_category_listing_intersects_backend_availability(self):
+        legacy = "memory.lds_bank_conflicts"
+        unavailable = "memory.lds_utilization"
+        category = METRIC_CATALOG[unavailable]["category"].value
+        backend = _FakeBackend(available=[legacy])
+
+        with _patched(backend) as profiler:
+            metrics = profiler.list_metrics(category=category)
+
+        assert legacy in metrics
+        assert unavailable not in metrics
+
+    def test_metric_info_uses_selected_backend_description(self):
+        metric = "memory.hbm_write_bandwidth"
+        selected_description = "selected backend write-bandwidth description"
+        backend = _FakeBackend(available=[metric])
+        backend.get_metric_metadata = lambda _name: {
+            "counters": ["GL2C_EA_WRREQ_sum"],
+            "unit": "GB/s",
+            "description": selected_description,
+        }
+
+        with _patched(backend) as profiler:
+            info = profiler.get_metric_info(metric)
+
+        assert info["description"] == selected_description
+        assert info["counters"] == ["GL2C_EA_WRREQ_sum"]
+        assert info["available"] is True
+
+    def test_metric_info_marks_catalog_metric_unavailable_on_backend(self):
+        metric = "memory.lds_utilization"
+        backend = _FakeBackend(available=[])
+
+        with _patched(backend) as profiler:
+            info = profiler.get_metric_info(metric)
+
+        assert info["available"] is False
+        assert info["architecture"] == "gfx1030"
 
     def test_wholly_unsupported_profile_raises_naming_the_architecture(self):
         backend = _FakeBackend(available=["memory.l2_hit_rate"])
