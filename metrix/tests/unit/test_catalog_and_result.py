@@ -5,8 +5,12 @@
 
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
 
+import pytest
+import yaml
+
+import metrix.backends as backend_package
 from metrix.metrics import METRIC_CATALOG, METRIC_PROFILES
 from metrix.metrics.catalog import (
     get_metric_info,
@@ -59,6 +63,59 @@ def test_every_profile_references_only_real_metrics():
     for name, definition in METRIC_PROFILES.items():
         for metric in definition["metrics"]:
             assert metric in METRIC_CATALOG, f"profile '{name}' references unknown '{metric}'"
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "memory.hbm_read_bandwidth",
+        "memory.hbm_write_bandwidth",
+        "memory.hbm_bandwidth_utilization",
+        "memory.bytes_transferred_hbm",
+    ],
+)
+def test_shared_vram_catalog_remains_architecture_neutral(metric):
+    description = METRIC_CATALOG[metric]["description"].lower()
+    assert "gfx1201" not in description
+    assert "256-byte" not in description
+    assert "empirical" not in description
+
+
+def test_lds_bank_conflict_percent_is_a_single_gfx1201_semantic_metric():
+    metric = METRIC_CATALOG["memory.lds_bank_conflict_percent"]
+    description = metric["description"].lower()
+    assert metric["unit"] == "Percent"
+    assert "shared-memory" in description
+    assert "gfx1201" not in description
+    assert "lds_audit" not in METRIC_PROFILES
+    assert "SQC_LDS_BANK_CONFLICT" not in METRIC_CATALOG
+    assert "SQC_LDS_IDX_ACTIVE" not in METRIC_CATALOG
+
+
+@pytest.mark.parametrize(
+    "metric_name",
+    [
+        "memory.hbm_read_bandwidth",
+        "memory.hbm_write_bandwidth",
+        "memory.hbm_bandwidth_utilization",
+        "memory.bytes_transferred_hbm",
+    ],
+)
+def test_gfx1201_vram_descriptions_use_public_memory_hierarchy_terms(metric_name):
+    yaml_path = Path(backend_package.__file__).resolve().parent / "counter_defs.yaml"
+    definitions = yaml.safe_load(yaml_path.read_text())["rocprofiler-sdk"]["counters"]
+    metric = next(item for item in definitions if item["name"] == metric_name)
+    selected = next(
+        definition
+        for definition in metric["definitions"]
+        if "gfx1201" in definition.get("architectures", [])
+    )
+    description = selected["description"].lower()
+
+    assert "l2-to-memory" in description
+    assert "gl2c" not in description
+    assert "gddr" not in description
+    assert "_sum" not in description
 
 
 # --------------------------------------------------------------------------
