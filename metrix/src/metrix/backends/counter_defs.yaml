@@ -327,7 +327,6 @@ rocprofiler-sdk:
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
           architectures: [gfx1201]
           aggregation: correlated
-          requires_consistent_passes: true
           description: >-
             Read traffic at the L2-to-memory request interface, reconstructed from
             validated 32-, 64-, 128-, and 256-byte request buckets; this can differ
@@ -365,7 +364,6 @@ rocprofiler-sdk:
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
           architectures: [gfx1201]
           aggregation: correlated
-          requires_consistent_passes: true
           description: >-
             An empirical 256-byte-per-request estimate based on the aggregate
             L2-to-memory write-request count for large cached, coalesced streaming
@@ -410,7 +408,6 @@ rocprofiler-sdk:
             if (DURATION_US > 0 and GRBM_GUI_ACTIVE > 0) else 0.0
           architectures: [gfx1201]
           aggregation: correlated
-          requires_consistent_passes: true
           description: >-
             Bandwidth utilization counts 256 bytes per L2-to-memory read and write
             request, matching the validated read-request size and the empirical
@@ -451,7 +448,6 @@ rocprofiler-sdk:
             (GL2C_EA_RDREQ_sum + GL2C_EA_WRREQ_sum) * 256
           architectures: [gfx1201]
           aggregation: correlated
-          requires_consistent_passes: true
           description: >-
             Total bytes at the L2-to-memory request interface count 256 bytes per
             read and write request, matching the validated read-request size and the

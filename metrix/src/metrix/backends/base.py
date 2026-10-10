@@ -81,6 +81,7 @@ class CounterBackend(ABC):
         self._raw_data = {}  # Current raw counter values (for metric computation)
         self._aggregated = {}  # Aggregated results: {dispatch_key: {counter: Statistics}}
         self._metric_aggregated = {}  # Metrics evaluated from correlated valid raw samples
+        self._population_signature = None  # Dispatches the last profile() ran, for batch checks
 
     @abstractmethod
     def _get_device_specs(self) -> DeviceSpecs:
@@ -169,7 +170,6 @@ class CounterBackend(ABC):
             metadata_keys = (
                 "aggregation",
                 "weight_counter",
-                "requires_consistent_passes",
                 "description",
             )
             metadata = {key: counter_def[key] for key in metadata_keys if key in counter_def}
@@ -591,6 +591,7 @@ class CounterBackend(ABC):
             all_kernel_results = {}
             all_metric_results = {}
             total_batches = len(batches)
+            expected_batch_population = None
 
             # Process each batch
             for batch_num, (batch_label, batch_metrics) in enumerate(batches, 1):
@@ -609,6 +610,23 @@ class CounterBackend(ABC):
                     timeout_seconds=timeout_seconds,
                     use_kernel_iteration_range=use_kernel_iteration_range,
                 )
+
+                # Each batch reruns the target, so its results may only be merged with the others'
+                # when every batch ran the same dispatches.
+                batch_population = batch_result._population_signature
+                if expected_batch_population is None:
+                    expected_batch_population = batch_population
+                elif batch_population != expected_batch_population:
+                    changed_groups = self._changed_population_groups(
+                        expected_batch_population, batch_population
+                    )
+                    raise RuntimeError(
+                        "Metric batches produced different filtered dispatch populations "
+                        f"(batch 1: {sum(expected_batch_population.values()):,}, "
+                        f"batch {batch_num}: {sum(batch_population.values()):,}, "
+                        f"changed groups: {changed_groups}). Profile fewer metrics at once "
+                        "or use a deterministic target."
+                    )
 
                 # Merge batch results
                 for kernel_name, kernel_data in batch_result._aggregated.items():
@@ -636,6 +654,7 @@ class CounterBackend(ABC):
             # Return merged results - set our aggregated counters and replay-correlated metrics.
             self._aggregated = all_kernel_results
             self._metric_aggregated = all_metric_results
+            self._population_signature = expected_batch_population
             return self
 
         # If metrics <= MAX_METRICS_PER_BATCH, continue with normal flow
@@ -651,10 +670,6 @@ class CounterBackend(ABC):
         # Collect all replays across all passes
         all_results_by_kernel = {}
         expected_pass_signature = None
-        requires_consistent_passes = any(
-            self._metrics.get(metric, {}).get("requires_consistent_passes", False)
-            for metric in metrics
-        )
 
         for pass_num, pass_counters in enumerate(counter_passes, 1):
             if True:  # Always show per-pass results
@@ -703,10 +718,11 @@ class CounterBackend(ABC):
                         r.run_id = replay_id
                     pass_results.extend(results)
 
-            if requires_consistent_passes:
-                expected_pass_signature = self._validate_counter_pass_population(
-                    expected_pass_signature, pass_results, pass_num
-                )
+            # Each pass is a separate execution, so its counters may only be merged with the others'
+            # when every pass ran the same dispatches.
+            expected_pass_signature = self._validate_counter_pass_population(
+                expected_pass_signature, pass_results, pass_num
+            )
 
             # Report per-pass statistics for agent visibility
             if True:  # Always show per-pass results
@@ -749,20 +765,37 @@ class CounterBackend(ABC):
         self._metric_aggregated = self._aggregate_metric_stats(
             all_results, metrics, aggregate_by_kernel
         )
+        self._population_signature = expected_pass_signature
 
         return self
 
     @staticmethod
-    def _validate_counter_pass_population(expected, results, pass_num):
-        """Reject multipass results that did not execute the same filtered workload."""
-        current = Counter(
-            (getattr(result, "run_id", 0), result.dispatch_id, result.kernel_name)
+    def _dispatch_population(results) -> Counter:
+        """The dispatches a run executed: replay, dispatch, kernel and launch shape."""
+        return Counter(
+            (
+                getattr(result, "run_id", 0),
+                result.dispatch_id,
+                result.kernel_name,
+                tuple(result.grid_size),
+                tuple(result.workgroup_size),
+            )
             for result in results
         )
+
+    @staticmethod
+    def _changed_population_groups(expected: Counter, current: Counter) -> int:
+        """Dispatch signatures whose occurrence count differs between two populations."""
+        return sum(1 for key in expected.keys() | current.keys() if expected[key] != current[key])
+
+    @classmethod
+    def _validate_counter_pass_population(cls, expected, results, pass_num):
+        """Reject multipass results that did not execute the same filtered workload."""
+        current = cls._dispatch_population(results)
         if expected is None:
             return current
         if current != expected:
-            changed_groups = len(set(current) ^ set(expected))
+            changed_groups = cls._changed_population_groups(expected, current)
             raise RuntimeError(
                 "Counter passes produced different filtered dispatch populations "
                 f"(pass 1: {sum(expected.values()):,}, "
