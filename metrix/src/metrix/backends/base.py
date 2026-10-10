@@ -617,7 +617,9 @@ class CounterBackend(ABC):
                 if expected_batch_population is None:
                     expected_batch_population = batch_population
                 elif batch_population != expected_batch_population:
-                    changed_groups = len(set(batch_population) ^ set(expected_batch_population))
+                    changed_groups = self._changed_population_groups(
+                        expected_batch_population, batch_population
+                    )
                     raise RuntimeError(
                         "Metric batches produced different filtered dispatch populations "
                         f"(batch 1: {sum(expected_batch_population.values()):,}, "
@@ -781,6 +783,11 @@ class CounterBackend(ABC):
             for result in results
         )
 
+    @staticmethod
+    def _changed_population_groups(expected: Counter, current: Counter) -> int:
+        """Dispatch signatures whose occurrence count differs between two populations."""
+        return sum(1 for key in expected.keys() | current.keys() if expected[key] != current[key])
+
     @classmethod
     def _validate_counter_pass_population(cls, expected, results, pass_num):
         """Reject multipass results that did not execute the same filtered workload."""
@@ -788,7 +795,7 @@ class CounterBackend(ABC):
         if expected is None:
             return current
         if current != expected:
-            changed_groups = len(set(current) ^ set(expected))
+            changed_groups = cls._changed_population_groups(expected, current)
             raise RuntimeError(
                 "Counter passes produced different filtered dispatch populations "
                 f"(pass 1: {sum(expected.values()):,}, "

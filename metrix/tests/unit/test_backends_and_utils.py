@@ -703,6 +703,16 @@ def test_counter_pass_population_includes_launch_shape(grid_size, workgroup_size
         backend._validate_counter_pass_population(expected, [reshaped], 2)
 
 
+def test_counter_pass_population_reports_a_changed_occurrence_count():
+    """The same dispatch signatures with different counts are one changed group, not zero."""
+    backend = _DummyBackend()
+    expected = backend._validate_counter_pass_population(None, [_dispatch(1, 1000, {"A": 1})], 1)
+    repeated = [_dispatch(1, 1000, {"B": 1}), _dispatch(1, 1000, {"B": 1})]
+
+    with pytest.raises(RuntimeError, match="changed groups: 1"):
+        backend._validate_counter_pass_population(expected, repeated, 2)
+
+
 class _ScriptedBackend(_DummyBackend):
     """Runs one pass per counter list and returns the next scripted rocprof result per run."""
 
