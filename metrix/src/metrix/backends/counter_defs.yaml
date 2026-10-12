@@ -415,9 +415,9 @@ rocprofiler-sdk:
           requires_consistent_passes: true
           description: >-
             Bandwidth utilization corrects the aggregate read count for its 128-byte
-            subset and uses the empirical 256-byte streaming-write estimate. It
-            represents L2-to-memory request traffic rather than exact off-chip memory
-            transfers.
+            subset. Any 32-byte and 64-byte reads are still counted as 256 bytes, and
+            writes use the empirical 256-byte streaming-write estimate. It represents
+            L2-to-memory request traffic rather than exact off-chip memory transfers.
         - expression: >-
             ((GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
@@ -458,9 +458,10 @@ rocprofiler-sdk:
           requires_consistent_passes: true
           description: >-
             Total bytes at the L2-to-memory request interface correct the aggregate
-            read count for its 128-byte subset and use the empirical 256-byte
-            streaming-write estimate. Compression, atomics, mixed request sizes, and
-            cache residency can change off-chip memory traffic.
+            read count for its 128-byte subset. Any 32-byte and 64-byte reads are still
+            counted as 256 bytes, and writes use the empirical 256-byte streaming-write
+            estimate. Compression, atomics, mixed request sizes, and cache residency can
+            change off-chip memory traffic.
         - expression: >-
             GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
