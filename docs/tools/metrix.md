@@ -113,11 +113,12 @@ Metrix provides 20 metrics organized by category. Availability varies by GPU arc
 | `memory.bytes_transferred_l1` | Total bytes through L1 cache |
 
 > **gfx1201 qualification:** reads include the locally advertised and hardware-validated
-> 256-byte request bucket at the L2-to-memory interface. These metrics describe requests
-> leaving the L2 cache, not exact off-chip memory transfers. Writes use an empirical
-> 256-byte/request estimate for large cached, coalesced stores; cache effects, compression,
-> atomics, mixed-size requests, and cache-resident traffic can differ from logical or
-> physical bytes.
+> 256-byte request bucket at the L2-to-memory interface. Read bandwidth uses all size
+> buckets. Combined utilization and total-byte metrics use the aggregate read count with
+> a correction for 128-byte requests, so read and write traffic fit one counter collection.
+> Writes use an empirical 256-byte/request estimate for large cached, coalesced stores;
+> cache effects, compression, atomics, mixed-size requests, and cache-resident traffic can
+> differ from logical or physical bytes.
 
 ### Cache performance
 
