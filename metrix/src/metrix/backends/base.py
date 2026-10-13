@@ -616,16 +616,23 @@ class CounterBackend(ABC):
                 batch_population = batch_result._population_signature
                 if expected_batch_population is None:
                     expected_batch_population = batch_population
+                    first_batch_run = f"the run for {batch_label}"
                 elif batch_population != expected_batch_population:
-                    changed_groups = self._changed_population_groups(
-                        expected_batch_population, batch_population
-                    )
+                    batch_run = f"the run for {batch_label}"
                     raise RuntimeError(
-                        "Metric batches produced different filtered dispatch populations "
-                        f"(batch 1: {sum(expected_batch_population.values()):,}, "
-                        f"batch {batch_num}: {sum(batch_population.values()):,}, "
-                        f"changed groups: {changed_groups}). Profile fewer metrics at once "
-                        "or use a deterministic target."
+                        "Metrix could not combine the results for the requested metrics. It "
+                        f"profiles at most {MAX_METRICS_PER_BATCH} metrics per run of your program, "
+                        f"so it split the {len(metrics)} requested metrics into {total_batches} "
+                        "groups and ran your program for each group, and "
+                        f"{batch_run} launched different kernels than {first_batch_run}. "
+                        + self._describe_population_change(
+                            expected_batch_population,
+                            batch_population,
+                            first_batch_run,
+                            batch_run,
+                            1 if use_kernel_iteration_range else num_replays,
+                        )
+                        + f" Request at most {MAX_METRICS_PER_BATCH} metrics at once."
                     )
 
                 # Merge batch results
@@ -721,7 +728,12 @@ class CounterBackend(ABC):
             # Each pass is a separate execution, so its counters may only be merged with the others'
             # when every pass ran the same dispatches.
             expected_pass_signature = self._validate_counter_pass_population(
-                expected_pass_signature, pass_results, pass_num
+                expected_pass_signature,
+                pass_results,
+                pass_num,
+                total_passes=len(counter_passes),
+                metrics=metrics,
+                num_replays=1 if use_kernel_iteration_range else num_replays,
             )
 
             # Report per-pass statistics for agent visibility
@@ -784,24 +796,70 @@ class CounterBackend(ABC):
         )
 
     @staticmethod
-    def _changed_population_groups(expected: Counter, current: Counter) -> int:
-        """Dispatch signatures whose occurrence count differs between two populations."""
-        return sum(1 for key in expected.keys() | current.keys() if expected[key] != current[key])
+    def _describe_population_change(
+        expected: Counter, current: Counter, first_run: str, run: str, num_replays: int = 1
+    ) -> str:
+        """How many kernel launches differ between two runs, and where they first diverge."""
+        changed = sorted(
+            (key for key in expected.keys() | current.keys() if expected[key] != current[key]),
+            key=lambda key: (key[0], key[1], str(key[2:])),
+        )
+        first = changed[0]
+        replay, dispatch_id, kernel, grid, workgroup = first
+        if len(kernel) > 120:
+            kernel = kernel[:117] + "..."
+        where = f"dispatch {dispatch_id} ({kernel}, grid {grid}, workgroup {workgroup})"
+        if num_replays > 1:
+            where += f" on replay {replay + 1} of {num_replays}"
 
-    @classmethod
-    def _validate_counter_pass_population(cls, expected, results, pass_num):
+        def times(count):
+            return {0: "never", 1: "once"}.get(count, f"{count} times")
+
+        def launches(count):
+            return f"{count:,} kernel launch" + ("" if count == 1 else "es")
+
+        return (
+            f"{first_run[0].upper()}{first_run[1:]} profiled {launches(sum(expected.values()))} "
+            f"and {run} profiled {sum(current.values()):,}; {launches(len(changed))} "
+            f"differ{'s' if len(changed) == 1 else ''}, "
+            f"starting with {where}, launched {times(expected[first])} in {first_run} and "
+            f"{times(current[first])} in {run}."
+        )
+
+    def _counter_split_advice(self, metrics) -> str:
+        """What to change when counters split across runs could not be combined."""
+        unsplittable = [
+            metric
+            for metric in metrics
+            if metric in self._metrics
+            and len(self._split_counters_into_passes(self.get_required_counters([metric]))) > 1
+        ]
+        if unsplittable:
+            return (
+                "These metrics need more than one run even on their own, so they can only be "
+                "measured on a program that launches the same kernels every time it runs: "
+                + ", ".join(unsplittable)
+                + "."
+            )
+        return "Request fewer metrics at once so that they fit in one run."
+
+    def _validate_counter_pass_population(
+        self, expected, results, pass_num, total_passes=None, metrics=(), num_replays=1
+    ):
         """Reject multipass results that did not execute the same filtered workload."""
-        current = cls._dispatch_population(results)
+        current = self._dispatch_population(results)
         if expected is None:
             return current
         if current != expected:
-            changed_groups = cls._changed_population_groups(expected, current)
+            run = f"run {pass_num}"
             raise RuntimeError(
-                "Counter passes produced different filtered dispatch populations "
-                f"(pass 1: {sum(expected.values()):,}, "
-                f"pass {pass_num}: {sum(current.values()):,}, "
-                f"changed groups: {changed_groups}). Profile the metric groups "
-                "separately or use a deterministic target."
+                "Metrix could not combine the counters for the requested metrics. They need more "
+                "hardware counters than one run of your program can count, so Metrix split them "
+                f"across {total_passes or pass_num} runs, and {run} launched different kernels "
+                "than run 1. "
+                + self._describe_population_change(expected, current, "run 1", run, num_replays)
+                + " "
+                + self._counter_split_advice(metrics)
             )
         return expected
 
