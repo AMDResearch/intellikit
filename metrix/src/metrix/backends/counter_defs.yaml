@@ -29,8 +29,9 @@
 #   gfx1201 (RDNA4): The installed SDK additionally advertises a 256B read bucket.
 #     This bucket is absent from the exporter reference file but is hardware-validated
 #     by a 512 MiB streaming-read probe, so gfx1201 read bandwidth uses 32B/64B/128B/256B reads.
-#     Utilization and total bytes use the aggregate read count corrected by the 128B
-#     subset. Together with writes this needs three L2 counters, which fit one collection.
+#     Utilization and total bytes use the same read buckets plus aggregate writes.
+#     The five L2 counters are split across hardware-compatible passes (four per pass),
+#     requiring a repeatable workload with matching dispatch populations.
 #     GL2C_EA_WRREQ counts 256B write-request units for cached streaming stores.
 #     Mixed and atomic write traffic remains an estimate because no reliable size buckets are exposed.
 #
@@ -404,8 +405,10 @@ rocprofiler-sdk:
             / HBM_BANDWIDTH_GBS * 100
           architectures: [gfx90a]
         - expression: >-
-            ((GL2C_EA_RDREQ_sum * 256
-            - GL2C_EA_RDREQ_128B_sum * 128
+            ((GL2C_EA_RDREQ_32B_sum * 32
+            + GL2C_EA_RDREQ_64B_sum * 64
+            + GL2C_EA_RDREQ_128B_sum * 128
+            + GL2C_EA_RDREQ_256B_sum * 256
             + GL2C_EA_WRREQ_sum * 256)
             * GRBM_COUNT / GRBM_GUI_ACTIVE / DURATION_US / 1e3
             / HBM_BANDWIDTH_GBS * 100)
@@ -414,10 +417,12 @@ rocprofiler-sdk:
           aggregation: correlated
           requires_consistent_passes: true
           description: >-
-            Bandwidth utilization corrects the aggregate read count for its 128-byte
-            subset. Any 32-byte and 64-byte reads are still counted as 256 bytes, and
-            writes use the empirical 256-byte streaming-write estimate. It represents
-            L2-to-memory request traffic rather than exact off-chip memory transfers.
+            Bandwidth utilization accounts for 32-, 64-, 128-, and 256-byte reads
+            at their respective sizes and uses the empirical 256-byte streaming-write
+            estimate. Read and write counters are collected across hardware-compatible
+            passes, requiring a repeatable workload with matching dispatches. It
+            represents L2-to-memory request traffic rather than exact off-chip memory
+            transfers.
         - expression: >-
             ((GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
@@ -450,18 +455,21 @@ rocprofiler-sdk:
             + (TCC_EA_WRREQ_sum - TCC_EA_WRREQ_64B_sum) * 32
           architectures: [gfx90a]
         - expression: >-
-            GL2C_EA_RDREQ_sum * 256
-            - GL2C_EA_RDREQ_128B_sum * 128
+            GL2C_EA_RDREQ_32B_sum * 32
+            + GL2C_EA_RDREQ_64B_sum * 64
+            + GL2C_EA_RDREQ_128B_sum * 128
+            + GL2C_EA_RDREQ_256B_sum * 256
             + GL2C_EA_WRREQ_sum * 256
           architectures: [gfx1201]
           aggregation: correlated
           requires_consistent_passes: true
           description: >-
-            Total bytes at the L2-to-memory request interface correct the aggregate
-            read count for its 128-byte subset. Any 32-byte and 64-byte reads are still
-            counted as 256 bytes, and writes use the empirical 256-byte streaming-write
-            estimate. Compression, atomics, mixed request sizes, and cache residency can
-            change off-chip memory traffic.
+            Total bytes at the L2-to-memory request interface account for 32-, 64-,
+            128-, and 256-byte reads at their respective sizes and use the empirical
+            256-byte streaming-write estimate. Read and write counters are collected
+            across hardware-compatible passes, requiring a repeatable workload with
+            matching dispatches. Compression, atomics, mixed write sizes, and cache
+            residency can change off-chip memory traffic.
         - expression: >-
             GL2C_EA_RDREQ_32B_sum * 32
             + GL2C_EA_RDREQ_64B_sum * 64
