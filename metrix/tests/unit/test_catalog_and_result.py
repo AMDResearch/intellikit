@@ -116,6 +116,13 @@ def test_gfx1201_vram_descriptions_use_public_memory_hierarchy_terms(metric_name
     assert "gl2c" not in description
     assert "gddr" not in description
     assert "_sum" not in description
+    if metric_name in {
+        "memory.hbm_bandwidth_utilization",
+        "memory.bytes_transferred_hbm",
+    }:
+        assert "32-, 64-, 128-, and 256-byte reads" in description
+        assert "respective sizes" in description
+        assert "matching dispatches" in description
 
 
 # --------------------------------------------------------------------------
