@@ -684,5 +684,133 @@ def test_counter_pass_population_includes_dispatch_identity():
     ]
     expected = backend._validate_counter_pass_population(None, first_pass, 1)
 
-    with pytest.raises(RuntimeError, match="different filtered dispatch populations"):
+    with pytest.raises(RuntimeError, match="run 2 launched different kernels than run 1"):
         backend._validate_counter_pass_population(expected, second_pass, 2)
+
+
+@pytest.mark.parametrize(
+    "grid_size,workgroup_size",
+    [((2, 1, 1), (1, 1, 1)), ((1, 1, 1), (64, 1, 1))],
+    ids=["grid", "workgroup"],
+)
+def test_counter_pass_population_includes_launch_shape(grid_size, workgroup_size):
+    """Equal dispatch IDs with a different launch shape are a different dispatch."""
+    backend = _DummyBackend()
+    expected = backend._validate_counter_pass_population(None, [_dispatch(1, 1000, {"A": 1})], 1)
+    reshaped = ProfileResult(1, "k", 0, 1000, grid_size, workgroup_size, {"B": 1})
+
+    with pytest.raises(RuntimeError, match="run 2 launched different kernels than run 1"):
+        backend._validate_counter_pass_population(expected, [reshaped], 2)
+
+
+def test_counter_pass_population_reports_a_changed_occurrence_count():
+    """The same dispatch signatures with different counts are one changed group, not zero."""
+    backend = _DummyBackend()
+    expected = backend._validate_counter_pass_population(None, [_dispatch(1, 1000, {"A": 1})], 1)
+    repeated = [_dispatch(1, 1000, {"B": 1}), _dispatch(1, 1000, {"B": 1})]
+
+    with pytest.raises(RuntimeError, match="1 kernel launch differs, starting with dispatch 1"):
+        backend._validate_counter_pass_population(expected, repeated, 2)
+
+
+class _ScriptedBackend(_DummyBackend):
+    """Runs one pass per counter list and returns the next scripted rocprof result per run."""
+
+    def __init__(self, metrics, passes, runs):
+        super().__init__()
+        self._metrics = {name: {"counters": counters} for name, counters in metrics.items()}
+        self._passes = passes
+        self._runs = iter(runs)
+
+    def _split_counters_into_passes(self, counters):
+        return self._passes(counters)
+
+    def _run_rocprof(self, *args, **kwargs):
+        return next(self._runs)
+
+
+def test_profile_rejects_counter_passes_that_ran_different_dispatches():
+    """Every multi-pass metric is checked, not only those a definition opts in."""
+    backend = _ScriptedBackend(
+        {"m": ["A", "B"]},
+        passes=lambda counters: [["A"], ["B"]],
+        runs=[[_dispatch(1, 1000, {"A": 1})], [_dispatch(2, 2000, {"B": 1})]],
+    )
+
+    with pytest.raises(RuntimeError, match="split them across 2 runs"):
+        backend.profile("./app", ["m"], num_replays=1)
+
+
+def test_profile_rejects_metric_batches_that_ran_different_dispatches():
+    """More than six metrics run as separate batches, each rerunning the target."""
+    metrics = {f"c.m{i}": [f"C{i}"] for i in range(7)}
+    backend = _ScriptedBackend(
+        metrics,
+        passes=lambda counters: [list(counters)],
+        runs=[
+            [_dispatch(1, 1000, {f"C{i}": 1 for i in range(6)})],
+            [_dispatch(2, 1000, {"C6": 1})],
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="at most 6 metrics per run"):
+        backend.profile("./app", list(metrics), num_replays=1)
+
+
+def test_counter_pass_error_names_the_first_differing_launch_and_replay():
+    backend = _DummyBackend()
+    first_pass = [_dispatch(1, 1000, {"A": 1}), _dispatch(1, 1000, {"A": 1})]
+    second_pass = [_dispatch(1, 1000, {"B": 1}), _dispatch(2, 1000, {"B": 1})]
+    for replay, (first, second) in enumerate(zip(first_pass, second_pass)):
+        first.run_id = second.run_id = replay
+    expected = backend._validate_counter_pass_population(None, first_pass, 1, num_replays=2)
+
+    with pytest.raises(RuntimeError) as error:
+        backend._validate_counter_pass_population(expected, second_pass, 2, num_replays=2)
+
+    assert (
+        "Run 1 profiled 2 kernel launches and run 2 profiled 2; 2 kernel launches differ, starting with "
+        "dispatch 1 (k, grid (1, 1, 1), workgroup (1, 1, 1)) on replay 2 of 2, launched once "
+        "in run 1 and never in run 2."
+    ) in str(error.value)
+
+
+def test_profile_advises_fewer_metrics_when_only_their_combination_needs_more_runs():
+    backend = _ScriptedBackend(
+        {"m1": ["A"], "m2": ["B"]},
+        passes=lambda counters: [[counter] for counter in sorted(counters)],
+        runs=[[_dispatch(1, 1000, {"A": 1})], [_dispatch(2, 2000, {"B": 1})]],
+    )
+
+    with pytest.raises(RuntimeError, match="Request fewer metrics at once so that they fit"):
+        backend.profile("./app", ["m1", "m2"], num_replays=1)
+
+
+def test_profile_names_metrics_that_need_more_than_one_run_on_their_own():
+    """Requesting fewer metrics cannot help a metric whose own counters span runs."""
+    backend = _ScriptedBackend(
+        {"split": ["A", "B"], "single": ["A"]},
+        passes=lambda counters: [[counter] for counter in sorted(counters)],
+        runs=[[_dispatch(1, 1000, {"A": 1})], [_dispatch(2, 2000, {"B": 1})]],
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        backend.profile("./app", ["split", "single"], num_replays=1)
+
+    assert str(error.value).endswith("same kernels every time it runs: split."), str(error.value)
+
+
+def test_profile_records_the_population_of_matching_batches():
+    metrics = {f"c.m{i}": [f"C{i}"] for i in range(7)}
+    backend = _ScriptedBackend(
+        metrics,
+        passes=lambda counters: [list(counters)],
+        runs=[
+            [_dispatch(1, 1000, {f"C{i}": 1 for i in range(6)})],
+            [_dispatch(1, 1000, {"C6": 1})],
+        ],
+    )
+
+    backend.profile("./app", list(metrics), num_replays=1)
+
+    assert backend._population_signature == backend._dispatch_population([_dispatch(1, 1000, {})])

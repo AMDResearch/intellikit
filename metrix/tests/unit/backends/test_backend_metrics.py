@@ -709,7 +709,6 @@ class TestRDNA4MetricDiscovery:
         assert len(passes) == 2
         assert sorted(c for group in passes for c in group) == sorted(counters)
         assert all(sum(c.startswith("GL2C_") for c in group) <= 4 for group in passes)
-        assert rdna_backend.get_metric_metadata(metric)["requires_consistent_passes"]
 
     def test_yaml_units_loaded(self, rdna_backend):
         expected_units = {
@@ -1017,7 +1016,7 @@ class TestRDNA4BytesTransferred:
 
         with patch.object(rdna_backend, "_run_rocprof", side_effect=run_pass):
             if change_population:
-                with pytest.raises(RuntimeError, match="different filtered dispatch populations"):
+                with pytest.raises(RuntimeError, match="launched different kernels than run 1"):
                     rdna_backend.profile(
                         "./target", metrics, num_replays=1, aggregate_by_kernel=aggregate_by_kernel
                     )

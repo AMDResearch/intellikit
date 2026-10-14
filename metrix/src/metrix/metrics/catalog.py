@@ -134,7 +134,6 @@ def get_selected_metric_info(metric_name: str, backend) -> dict:
         "unit",
         "aggregation",
         "weight_counter",
-        "requires_consistent_passes",
     ):
         if key in selected:
             info[key] = selected[key]
