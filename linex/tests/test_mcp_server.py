@@ -260,9 +260,22 @@ class TestToolRegistration:
     def test_server_name(self):
         assert mcp_server.mcp.name == "IntelliKit Linex"
 
+    def test_null_default_params_accept_null(self):
+        # A parameter advertised with "default": null must also accept null, or a
+        # client that sends the default explicitly gets a validation error.
+        for tool in _registered_tool_objects():
+            for name, prop in tool.parameters.get("properties", {}).items():
+                if "default" not in prop or prop["default"] is not None:
+                    continue
+                schemas = [prop, *prop.get("anyOf", [])]
+                accepts_null = any(
+                    s.get("type") == "null" or "null" in (s.get("type") or []) for s in schemas
+                )
+                assert accepts_null, f"{tool.name}.{name} defaults to null but rejects it"
 
-def _registered_tools():
-    """Fetch registered tool names across FastMCP versions."""
+
+def _registered_tool_objects():
+    """Fetch registered tool objects across FastMCP versions."""
     import asyncio
     import inspect
 
@@ -275,9 +288,13 @@ def _registered_tools():
     result = getter()
     if inspect.isawaitable(result):
         result = asyncio.run(result)
-    tools = result.values() if hasattr(result, "values") else result
+    return list(result.values() if hasattr(result, "values") else result)
+
+
+def _registered_tools():
+    """Fetch registered tool names across FastMCP versions."""
     names = set()
-    for t in tools:
+    for t in _registered_tool_objects():
         name = getattr(t, "name", None)
         names.add(name if name is not None else str(t))
     return names
