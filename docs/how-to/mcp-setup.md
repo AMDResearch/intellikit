@@ -96,7 +96,7 @@ IntelliKit provides the following MCP servers.
 | `hip-docs-mcp` | `rocm_mcp` | Accesses HIP documentation|
 | `rocminfo-mcp` | `rocm_mcp` | Queries GPU hardware topology|
 | `uprof-profiler-mcp` | `uprof_mcp` | Profiles CPU hotspots using AMD uProf|
-| `omniprobe-mcp` | `omniprobe` | Analyzes memory coalescing and basic-block timing; exposes `get_instrumentation_flags`, `analyze_memory`, `analyze_basic_blocks`, and `list_analyzers`|
+| `omniprobe-mcp` | `omniprobe` | Finds uncoalesced accesses and LDS bank conflicts at source level, and basic-block execution counts; exposes `get_instrumentation_flags`, `analyze_memory`, `analyze_basic_blocks`, and `list_analyzers`|
 
 ## Agent skills
 

@@ -17,7 +17,7 @@ IntelliKit is a monorepo of LLM-ready GPU profiling and analysis tools for AMD R
 | **linex** | Source-line profiling | Map cycle-level timing and stall analysis to source code lines (MCP-only) |
 | **metrix** | Hardware counter metrics | Profile GPU kernels with human-readable performance insights (CLI + MCP) |
 | **nexus** | HSA packet interception | Capture GPU kernel launches and memory operations (MCP-only) |
-| **omniprobe** | Memory coalescing and basic-block timing | Attribute wasted bandwidth and per-block cycle counts to `file:line:column` (CLI + MCP) |
+| **omniprobe** | Source-level memory coalescing and LDS bank conflicts | Attribute wasted bandwidth to `file:line:column`; basic-block execution counts (CLI + MCP) |
 | **rocm_mcp** | ROCm MCP servers | LLM-accessible HIP compilation, docs, system info, and GPU management (amd-smi) |
 | **uprof_mcp** | uProf MCP server | LLM-accessible AMD uProf CPU profiling |
 
@@ -118,7 +118,7 @@ Each tool is a standalone Python package with its own `pyproject.toml`:
 | **linex** | setuptools, setuptools-scm | Source-level SQTT profiling (`src/` layout), MCP-only |
 | **metrix** | setuptools, setuptools-scm | Hardware counter profiling (`src/` layout), CLI + MCP, RDNA support |
 | **nexus** | scikit-build-core (CMake), setuptools-scm | HSA packet interception, C++ shared library, MCP-only |
-| **omniprobe** | setuptools, setuptools-scm | Memory coalescing and basic-block timing (`src/` layout), CLI + MCP, wraps the external Omniprobe tool |
+| **omniprobe** | setuptools, setuptools-scm | Source-level memory coalescing and LDS bank conflicts (`src/` layout), CLI + MCP, wraps the external Omniprobe tool |
 | **rocm_mcp** | setuptools | MCP servers for ROCm tools (`src/` layout) |
 | **uprof_mcp** | setuptools | MCP server for AMD uProf CPU profiling (`src/` layout) |
 

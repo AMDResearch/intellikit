@@ -1,6 +1,6 @@
 ---
 name: omniprobe-analysis
-description: Pinpoint which source lines (file:line:column) of a HIP kernel make uncoalesced global memory accesses or cause LDS bank conflicts, measured by recompiling with Omniprobe instrumentation. Use when you must name the inefficient access, after a kernel-level profiler (metrix) shows poor coalescing or LDS bank conflicts, or to verify a memory-access fix. Also times basic blocks. Not for kernel duration or bandwidth (metrix) or per-line stall cycles (linex).
+description: Pinpoint which source lines (file:line:column) of a HIP kernel make uncoalesced global memory accesses or cause LDS bank conflicts, measured by recompiling with Omniprobe instrumentation. Use when you must name the inefficient access, after a kernel-level profiler (metrix) shows poor coalescing or LDS bank conflicts, or to verify a memory-access fix. Basic-block analysis shows which blocks run and how often, not their cost. Not for kernel duration or bandwidth (metrix) or per-line stall cycles (linex).
 ---
 
 # Omniprobe: which line wastes memory bandwidth
@@ -18,7 +18,8 @@ these to an individual access; it costs a rebuild with a compiler plugin.
 | Which source lines stall the most cycles | **linex** |
 | **Which access (file:line) is uncoalesced, or causes LDS bank conflicts, and how badly** | **Omniprobe memory analysis** |
 | Checking that a coalescing/padding fix worked, per access | **Omniprobe** (before/after) |
-| Per-basic-block cycle distributions | Omniprobe basic-block analysis (see caveat below) |
+| Which basic blocks run, and how many waves reach each | Omniprobe basic-block analysis (see caveat below) |
+| Where kernel **time** goes | **metrix** / rocprof kernel timing, **linex** per-line cycles — not Omniprobe |
 
 When not to use: questions about duration, throughput or occupancy; kernels you cannot rebuild
 (prebuilt libraries such as rocBLAS/Tensile assembly); Triton kernels unless Omniprobe's Triton setup
@@ -47,6 +48,9 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
    **demangled** name, e.g. `'advance'`, `'gstride<16>'`) and `--dispatches 1`.
 3. **Read the ranked summary** ("Top sites", or `summary` from MCP / `summarize_memory()`): worst
    sites first, with file:line:column, read/write, and a per-wave-execution value (below).
+   **Check `warnings` / `uninstrumented_kernels` first**: a kernel listed there ran without
+   instrumentation and is absent from the results — rebuild the file that defines it with the
+   flags, or report the gap; never conclude "no problem" for a kernel that was not measured.
 4. **Explain and fix**, then rebuild and rerun to show the per-execution number dropped.
 
 ## Reading the results (calibrated on gfx90a)
@@ -86,6 +90,7 @@ instruction) to get the per-wave-execution value the summary prints.
 | `NoInstrumentedKernelsError` / "no instrumented kernels" | Binary built without the plugin, or wrong plugin | Rebuild with `$(omniprobe-ik flags memory)`; `make clean` first |
 | `ImportError: omniprobe.api` | Omniprobe source tree not on `PYTHONPATH` (MCP servers start with a minimal env) | Set `PYTHONPATH` (and `ROCR_VISIBLE_DEVICES`) in the shell or MCP `env` |
 | Link error `duplicate symbol: __hip_cuid_...` | `-fgpu-rdc` with ≥ 2 files | Drop `-fgpu-rdc` unless the project needs it |
+| `WARNING: … ran WITHOUT instrumentation` / `uninstrumented_kernels` non-empty | That kernel's file was built without the plugin, or a known non-match (no parameters; internal linkage under `-fgpu-rdc`) | Rebuild that file with the flags; see Blind spots |
 | A kernel or line is missing | Blind spot above, or `--kernel` regex too narrow | See Blind spots; filter on demangled names |
 | `RuntimeError: omniprobe exited with code N` | The application itself failed | Run the binary alone first; fix arguments/inputs |
 | No GPU / runs on the wrong GPU | `HIP_VISIBLE_DEVICES` set to the same id as `ROCR_VISIBLE_DEVICES` selects nothing | Set only `ROCR_VISIBLE_DEVICES` |
@@ -95,11 +100,15 @@ instruction) to get the per-wave-execution value the summary prints.
 | Analysis | Build flags | CLI | MCP tool | Python |
 |---|---|---|---|---|
 | Memory (coalescing + LDS bank conflicts) | `omniprobe-ik flags memory` (AddressMessages plugin) | `omniprobe-ik memory` | `analyze_memory` | `analyze_memory`, `summarize_memory` |
-| Basic-block timing | `omniprobe-ik flags basic-blocks` (BBStart plugin) — a **separate build** | `omniprobe-ik basic-blocks` | `analyze_basic_blocks` | `analyze_basic_blocks` |
+| Basic blocks (execution counts) | `omniprobe-ik flags basic-blocks` (BBStart plugin) — a **separate build** | `omniprobe-ik basic-blocks` | `analyze_basic_blocks` | `analyze_basic_blocks` |
 
-`list_analyzers` (MCP) reports these and the blind spots. Basic-block cycle magnitudes are not yet
-documented by Omniprobe: use them to compare blocks within one run, not as absolute times. Never run
-the basic-block analysis on a binary built for memory analysis.
+`list_analyzers` (MCP) reports these and the blind spots.
+
+**Basic-block analysis: which blocks run and how often — its cycles are not per-block cost.** Use `wave_count` (how
+many waves reached a block) to see which paths execute. Do **not** use its cycle fields
+(`min_cycles`…`p99`) as per-block cost: Omniprobe's basic-block "cycles" are currently intervals between instrumentation submits, dominated by instrumentation overhead (millions of cycles at thousands of waves, thousands at a few waves, for the same kernel), and block ids and source lines are not yet reliably attributed. Omniprobe is reworking this (2026-11-08). For time hotspots use metrix or rocprof kernel
+timing, and linex for per-line cycles. Never run the basic-block analysis on a binary built for
+memory analysis.
 
 Further detail: `docs/tools/omniprobe.md` in the IntelliKit repository
 (https://github.com/AMDResearch/intellikit/blob/main/docs/tools/omniprobe.md).

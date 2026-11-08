@@ -93,9 +93,9 @@ for kernel in result.kernels:
               f"{access.bank_conflicts} bank conflicts")
 ```
 
-Omniprobe also reports per-basic-block cycle counts as a distribution through
-`analyze_basic_blocks` (from a separate build with `omniprobe-ik flags basic-blocks`), so a block whose `p99` sits far above its `p50` stands out as one being
-reached under very different conditions — something an average hides.
+Omniprobe also reports which basic blocks execute and how many waves reach each through
+`analyze_basic_blocks` (from a separate build with `omniprobe-ik flags basic-blocks`). Its cycle
+fields are not per-block cost today; use Metrix or Linex for where time goes.
 
 ```{note}
 Omniprobe drives a separate tool of the same name. The `omniprobe` executable must be on `PATH`

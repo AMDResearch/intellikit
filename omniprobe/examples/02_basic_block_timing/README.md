@@ -1,25 +1,25 @@
-# Example 02: Basic-Block Timing Analysis
+# Example 02: Basic-Block Execution
 
-Demonstrates using Omniprobe to measure how long each basic block of a kernel takes.
+Demonstrates using Omniprobe to see which basic blocks of a kernel execute and how
+many waves reach each.
 
 ## What it does
 
 The Python script:
 
 1. Writes a HIP kernel with a data-dependent branch to a temporary directory
-2. Compiles it with `hipcc -O2 -g` plus the Omniprobe instrumentation flags from `instrumentation_flags()` (`-fpass-plugin=...`, `--offload-arch=...`)
-3. Runs `analyze_basic_blocks` and prints the costliest blocks by median cycles
-
-The kernel branches on thread index. One side does a couple of multiplies; the other
-runs a short loop of transcendentals. They become separate basic blocks with clearly
-different cycle counts.
+2. Compiles it with `hipcc -O2 -g` plus `instrumentation_flags("basic_blocks")`
+   (`-fpass-plugin=...BBStart...`, `--offload-arch=...`)
+3. Runs `analyze_basic_blocks` and prints each block's `wave_count`, most-reached first
 
 ## Reading the output
 
-The report gives `p50`, `p99` and `max_cycles` per block rather than one average.
-That is deliberate — a block whose p99 sits far above its p50 is being reached by
-waves under very different conditions, and averaging the two together hides exactly
-the case worth investigating.
+`wave_count` is how many waves reached a block, which shows which paths run.
+Omniprobe's per-block cycle fields (`min_cycles` … `p99`) are **not** per-block cost
+today: they are intervals between instrumentation submits, dominated by
+instrumentation overhead, and block ids and lines are not yet reliably attributed.
+Omniprobe is reworking this. For where time goes, use Metrix kernel timing or Linex
+per-line cycles.
 
 ## Run it
 
@@ -29,12 +29,6 @@ python3 analyze_basic_blocks.py
 
 If Omniprobe is not available, the script says why and runs the compiled kernel
 directly, so a toolchain failure is distinguishable from an Omniprobe failure.
-
-## Why `-g`
-
-Without debug information, `bb.source_file` and `bb.line` come back empty and you get
-block ids with no way to map them to code. The timings are still correct, just much
-harder to act on.
 
 ## Requirements
 

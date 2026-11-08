@@ -58,7 +58,7 @@ intellikit/
 ├── linex/          Source-line GPU profiling
 ├── metrix/         Human-readable GPU metrics
 ├── nexus/          HSA packet source extraction
-├── omniprobe/      Memory coalescing and basic-block timing
+├── omniprobe/      Memory coalescing / LDS bank conflicts at source level, basic-block execution
 ├── rocm_mcp/       ROCm MCP servers
 ├── uprof_mcp/      AMD uProf MCP server
 ├── install/        Install scripts (tools + skills)

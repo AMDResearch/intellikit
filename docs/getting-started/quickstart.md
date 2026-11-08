@@ -75,7 +75,7 @@ After profiling your first application, explore the rest of the IntelliKit toolk
 
 - **Dive deeper into profiling:** see [Metrix](../tools/metrix.md) for a full list of available metrics
 - **Map performance to source lines:** see [Linex](../tools/linex.md) for source-level profiling
-- **Find the accesses wasting bandwidth:** see [Omniprobe](../tools/omniprobe.md) for memory coalescing and basic-block timing
+- **Find the accesses wasting bandwidth:** see [Omniprobe](../tools/omniprobe.md) for uncoalesced accesses and LDS bank conflicts at source level
 - **Extract and isolate a kernel:** see [Kerncap](../tools/kerncap.md) for standalone reproducers
 - **Inspect GPU execution:** see [Nexus](../tools/nexus.md) for HSA packet tracing
 - **Validate optimizations:** see [Accordo](../tools/accordo.md) for correctness checking

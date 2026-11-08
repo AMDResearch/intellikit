@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "omniprobe-ik"
 dynamic = ["version"]
-description = "Omniprobe: GPU Memory Coalescing and Basic-Block Timing Analysis"
+description = "Omniprobe: source-level GPU memory coalescing and LDS bank-conflict analysis"
 authors = [
     { name = "AMD Research", email = "dl.amd.intellikit@amd.com" },
 ]

@@ -4,7 +4,7 @@ This topic summarizes the features included in each IntelliKit release.
 
 ## Unreleased
 
-- **Omniprobe** — new tool for GPU memory coalescing analysis and basic-block ISA timing. It attributes wasted memory bandwidth to a source file, line, and column, reporting excess cache lines and LDS bank conflicts per access, and reports per-basic-block cycle counts as a distribution rather than an average. Available through the Python API, the `omniprobe-ik` CLI, the `omniprobe-mcp` server, and an agent skill.
+- **Omniprobe** — new tool that attributes uncoalesced global accesses and LDS bank conflicts to source lines, and reports basic-block execution counts. It reports excess cache lines and LDS bank conflicts per access, ranked worst first, and names any dispatched kernel that ran without instrumentation. Available through the Python API, the `omniprobe-ik` CLI, the `omniprobe-mcp` server, and an agent skill.
 
 ## IntelliKit 0.1.1
 

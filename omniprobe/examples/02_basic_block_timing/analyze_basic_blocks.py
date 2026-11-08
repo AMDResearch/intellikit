@@ -3,16 +3,15 @@
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
 """
-Omniprobe Example: Basic-Block Timing Analysis
+Omniprobe Example: Basic-Block Execution
 
 Writes a HIP kernel with a data-dependent branch to a temporary directory,
-compiles it, and uses Omniprobe to show how long each basic block took.
+compiles it, and uses Omniprobe to show which basic blocks execute and how many
+waves reach each.
 
-The kernel branches on thread index, so the two sides of the branch are
-separate basic blocks with different costs. Reporting min/max and percentiles
-rather than a single average is what makes divergence visible: a block whose
-p50 and p99 are far apart is being reached by waves under very different
-conditions, which an average would hide.
+Omniprobe's per-block cycle fields are not per-block cost today (they are
+dominated by instrumentation overhead), so this example reports wave counts
+only. For where time goes, use metrix kernel timing or linex per-line cycles.
 """
 
 import subprocess
@@ -81,7 +80,7 @@ int main() {
 
 def main():
     print("=" * 80)
-    print("Omniprobe Example: Basic-Block Timing Analysis")
+    print("Omniprobe Example: Basic-Block Execution")
     print("=" * 80)
     print()
 
@@ -131,7 +130,7 @@ def main():
 
             print()
             print("=" * 80)
-            print("BASIC-BLOCK TIMING")
+            print("BASIC-BLOCK EXECUTION")
             print("=" * 80)
 
             if not result.kernels:
@@ -142,26 +141,19 @@ def main():
                 print(f"\nKernel: {kernel.kernel_name} (dispatch {kernel.dispatch_id})")
                 print(f"  Basic blocks: {len(kernel.basic_blocks)}")
                 print()
-                print(f"  {'BB':>4}  {'p50':>10}  {'p99':>10}  {'max':>10}  location")
-                print(f"  {'-' * 4}  {'-' * 10}  {'-' * 10}  {'-' * 10}  {'-' * 20}")
+                print(f"  {'BB':>4}  {'waves':>8}  location")
+                print(f"  {'-' * 4}  {'-' * 8}  {'-' * 20}")
 
-                # Costliest blocks first.
-                hottest = sorted(
-                    kernel.basic_blocks,
-                    key=lambda b: b.p50,
-                    reverse=True,
-                )
-                for bb in hottest[:10]:
+                # Most-reached blocks first. Wave counts, not cost.
+                reached = sorted(kernel.basic_blocks, key=lambda b: b.wave_count, reverse=True)
+                for bb in reached[:10]:
                     loc = f"{bb.source_file}:{bb.line}" if bb.source_file else "(no debug info)"
-                    print(
-                        f"  {bb.bb_id:>4}  {bb.p50:>10.1f}  {bb.p99:>10.1f}  "
-                        f"{bb.max_cycles:>10.1f}  {loc}"
-                    )
+                    print(f"  {bb.bb_id:>4}  {bb.wave_count:>8}  {loc}")
 
             print()
             print("=" * 80)
-            print("A block whose p99 is far above its p50 is worth a look — waves are")
-            print("reaching it under very different conditions.")
+            print("Wave counts show which paths run. Omniprobe's per-block cycle fields")
+            print("are not per-block cost yet; use metrix or linex for where time goes.")
             print("=" * 80)
 
         except ImportError as e:

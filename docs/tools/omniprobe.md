@@ -1,13 +1,13 @@
 ---
 myst:
     html_meta:
-        "description": "Omniprobe detects uncoalesced global memory accesses, LDS bank conflicts, and basic-block ISA timing in AMD GPU kernels with ROCm."
+        "description": "Omniprobe detects uncoalesced global memory accesses and LDS bank conflicts at source level in AMD GPU kernels, and reports which basic blocks execute with ROCm."
         "keywords": "Omniprobe, AMD GPU, ROCm, memory coalescing, bank conflicts, basic block, ISA timing, cache lines, HIP"
 ---
 
 # Omniprobe
 
-Omniprobe finds memory access patterns that waste bandwidth, and measures how long each basic block of a kernel takes.
+Omniprobe finds the memory accesses that waste bandwidth, at source level, and reports which basic blocks of a kernel execute and how often.
 
 It answers a question raw counters cannot: *which source line* caused the wasted traffic. Where a bandwidth metric tells you a kernel moved more bytes than it needed to, Omniprobe attributes the excess to a `file:line:column` and tells you how many extra cache lines that access cost.
 
@@ -65,7 +65,7 @@ Omniprobe exposes two analyses.
 | Analysis | Method | Detects |
 |----------|--------|---------|
 | **Memory** | `analyze_memory` | Uncoalesced global accesses, LDS bank conflicts, excess cache lines |
-| **Basic blocks** | `analyze_basic_blocks` | Per-block cycle counts and latency percentiles |
+| **Basic blocks** | `analyze_basic_blocks` | Which blocks execute and how many waves reach each (`wave_count`); see the caveat below |
 
 Memory analysis reports these fields per access site:
 
@@ -77,7 +77,7 @@ Memory analysis reports these fields per access site:
 | `access_type` | Read or write |
 | `execution_count` | Number of times the access executed |
 
-Basic-block analysis reports cycle counts as a distribution — `min_cycles`, `max_cycles`, and the `p25`/`p50`/`p75`/`p95`/`p99` percentiles — rather than a single average. A block whose p99 sits far above its p50 is being reached by waves under very different conditions, which an average hides.
+**Basic-block analysis tells you which blocks run and how often; its cycle fields are not per-block cost.** Use `wave_count`. Do not read its cycle fields (`min_cycles`, `max_cycles`, `p25`…`p99`) as per-block cost: Omniprobe's basic-block "cycles" are currently intervals between instrumentation submits, dominated by instrumentation overhead (millions of cycles at thousands of waves, thousands at a few waves, for the same kernel), and block ids and source lines are not yet reliably attributed. Omniprobe is reworking this (2026-11-08). For time hotspots use Metrix kernel timing or Linex per-line cycles.
 
 ## Reading the results
 
@@ -106,6 +106,15 @@ To rank findings, divide by `execution_count`. `excess_cache_lines / execution_c
 wasted lines per wave execution: 0 is perfectly coalesced and 62 is the worst case (every lane on
 its own line). The raw total ranks sites by how much bandwidth they waste overall, so use it to
 choose what to fix first.
+
+### Kernels that ran without instrumentation
+
+If some dispatched kernels have no instrumented clone (their file was built without the plugin, or
+one of the cases below), Omniprobe still runs them, uninstrumented, and they are simply absent from
+the results. The wrapper reads Omniprobe's log and lists them in `result.uninstrumented_kernels`;
+`summarize_memory`, the MCP tools and the CLI turn that into a warning. `None` means the log could
+not be read, not that nothing was missed. The HIP runtime's own helper kernels (`__amd_rocclr_*`)
+are never instrumented and are not listed.
 
 ### What Omniprobe cannot see
 
@@ -228,15 +237,15 @@ access.execution_count      # How many times it executed
 
 ### `BasicBlock`
 
-Timing data for a single basic block.
+Data for a single basic block. Rely on `wave_count`; the cycle fields are not per-block cost (see [What you get](#what-you-get)).
 
 ```python
 bb.bb_id                    # Basic block identifier
 bb.source_file              # Source file path (empty without -g)
 bb.line                     # Line number (0 without -g)
-bb.min_cycles               # Fastest observed execution
-bb.max_cycles               # Slowest observed execution
-bb.p25, bb.p50, bb.p75      # Cycle count percentiles
+bb.min_cycles               # Not per-block cost today (see above)
+bb.max_cycles               # Not per-block cost today
+bb.p25, bb.p50, bb.p75      # Not per-block cost today
 bb.p95, bb.p99
 bb.wave_count               # Waves that executed this block
 ```
@@ -282,7 +291,7 @@ The server exposes four tools:
 |------|---------|
 | `get_instrumentation_flags` | Returns the `hipcc` flags that instrument kernels for an analysis |
 | `analyze_memory` | Runs memory analysis; returns a ranked `summary` (worst sites first, per-wave-execution values, `how_to_read`) and the raw per-kernel findings |
-| `analyze_basic_blocks` | Runs basic-block analysis, returns per-kernel timing data |
+| `analyze_basic_blocks` | Runs basic-block analysis; returns which blocks ran and their wave counts |
 | `list_analyzers` | Reports the available analysis types, which tool and plugin each needs, and Omniprobe's known blind spots |
 
 Omniprobe's Python API lives only in its **source** tree (the install tree does not include it), so
@@ -327,14 +336,13 @@ conflicts = [
     if a.bank_conflicts > 0
 ]
 
-# Basic blocks with a long tail — p99 far above the median
-bb_result = probe.analyze_basic_blocks("./my_gpu_app")
-divergent = [
-    bb
-    for kernel in bb_result.kernels
-    for bb in kernel.basic_blocks
-    if bb.p50 > 0 and bb.p99 > bb.p50 * 4
-]
+# Basic blocks that executed, most-reached first (wave_count, not cost)
+bb_result = probe.analyze_basic_blocks("./my_gpu_app_bb")
+reached = sorted(
+    (bb for kernel in bb_result.kernels for bb in kernel.basic_blocks if bb.wave_count > 0),
+    key=lambda bb: bb.wave_count,
+    reverse=True,
+)
 ```
 
 Runnable versions of both analyses live in [`omniprobe/examples/`](https://github.com/AMDResearch/intellikit/tree/main/omniprobe/examples). Each writes a HIP kernel to a temporary directory, compiles it, and analyses it, so they run without a prepared workload.

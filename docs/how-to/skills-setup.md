@@ -27,7 +27,7 @@ IntelliKit includes the following skills and their trigger conditions.
 | `metrix-profiling` | Metrix | Performance analysis, GPU metrics, bandwidth, cache hit rates |
 | `test-kerncap` | Kerncap | Kernel extraction, reproducer validation, HIP/Triton isolation |
 | `linex-profiling` | Linex | Source-line profiling, stall analysis, cycle mapping |
-| `omniprobe-analysis` | Omniprobe | Uncoalesced memory accesses, LDS bank conflicts, basic-block ISA timing |
+| `omniprobe-analysis` | Omniprobe | Which source line makes uncoalesced accesses or LDS bank conflicts; basic-block execution counts |
 | `nexus-trace` | Nexus | GPU execution inspection, HSA packet tracing, assembly extraction |
 | `accordo-validation` | Accordo | Kernel correctness checking, output comparison |
 

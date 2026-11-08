@@ -25,7 +25,7 @@ Rough workflow: **isolate** a kernel → **profile** it (counters and/or source 
 | **[Kerncap](kerncap/)** | **Isolate** — capture dispatches and build **standalone reproducers** (HIP, Triton). | [README](kerncap/README.md) · [examples](kerncap/examples/) |
 | **[Metrix](metrix/)** | **Profile** — **human-readable** metrics from hardware counters (bandwidth, cache, etc.). | [README](metrix/README.md) · [examples](metrix/examples/) |
 | **[Linex](linex/)** | **Profile** — **source-line** timing and stalls (compile with `-g` for file:line mapping). | [README](linex/README.md) · [examples](linex/examples/) |
-| **[Omniprobe](omniprobe/)** | **Profile** — **memory coalescing** and **basic-block** timing, attributed to `file:line:column`. | [README](omniprobe/README.md) · [examples](omniprobe/examples/) |
+| **[Omniprobe](omniprobe/)** | **Profile** — **uncoalesced accesses** and **LDS bank conflicts**, attributed to `file:line:column`. | [README](omniprobe/README.md) · [examples](omniprobe/examples/) |
 | **[Nexus](nexus/)** | **Inspect** — from **HSA packets**, see what ran: source and assembly. | [README](nexus/README.md) · [examples](nexus/examples/) |
 | **[rocm_mcp](rocm_mcp/)** | **MCP** — HIP compile, HIP docs, **rocminfo**, **amd-smi**, and related servers for agents. | [README](rocm_mcp/README.md) · [examples](rocm_mcp/examples/) |
 | **[uprof_mcp](uprof_mcp/)** | **CPU** — MCP bridge to **AMD uProf** for host-side hotspots. | [README](uprof_mcp/README.md) · [examples](uprof_mcp/examples/) |

@@ -1,8 +1,8 @@
 # Omniprobe (IntelliKit)
 
-GPU memory coalescing analysis and basic-block ISA timing for IntelliKit.
+GPU memory coalescing and LDS bank-conflict analysis at source level, plus basic-block execution counts, for IntelliKit.
 
-This package wraps [Omniprobe](https://github.com/AMDResearch/omniprobe)'s Python API to provide memory access pattern analysis and basic-block timing through IntelliKit's standard Python API, MCP server, CLI, and agent skill interfaces.
+This package wraps [Omniprobe](https://github.com/AMDResearch/omniprobe)'s Python API to provide memory access pattern analysis and basic-block execution counts through IntelliKit's standard Python API, MCP server, CLI, and agent skill interfaces.
 
 ## Prerequisites
 
@@ -44,11 +44,11 @@ for kernel in result.kernels:
         print(f"{access.source_file}:{access.line} "
               f"bank_conflicts={access.bank_conflicts}")
 
-# Basic-block timing
-result = probe.analyze_basic_blocks("./my_gpu_app")
+# Basic blocks: which ran and how many waves reached each (not their cost)
+result = probe.analyze_basic_blocks("./my_gpu_app_bb")
 for kernel in result.kernels:
     for bb in kernel.basic_blocks:
-        print(f"BB {bb.bb_id}: {bb.p50:.1f} cycles (p50)")
+        print(f"BB {bb.bb_id}: reached by {bb.wave_count} waves")
 ```
 
 ### CLI
@@ -83,7 +83,7 @@ The MCP server exposes four tools: `get_instrumentation_flags`, `analyze_memory`
 | Analysis | Detects | Key Fields |
 |----------|---------|------------|
 | **Memory** | Uncoalesced global accesses, LDS bank conflicts, excess cache lines | `bank_conflicts`, `excess_cache_lines`, `memory_space` |
-| **Basic Blocks** | Per-block cycle timing, latency distribution | `min_cycles`, `max_cycles`, `p50`, `p95`, `p99` |
+| **Basic Blocks** | Which blocks execute and how often (cycle fields are not per-block cost yet; use metrix for time) | `wave_count` |
 
 ## License
 
