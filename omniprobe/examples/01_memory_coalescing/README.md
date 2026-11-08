@@ -31,9 +31,10 @@ directly, so a failure in the toolchain is distinguishable from a failure in Omn
 
 ## Why `-g`
 
-Omniprobe reports each finding against `source_file`, `line` and `column`. Compiled
-without debug information, those fields come back empty — the counts are still correct
-but you cannot tell which line produced them.
+Omniprobe reports each finding against `source_file`, `line` and `column`, and memory
+analysis matches each access to its instruction through the source line. Compiled without
+debug information, no access can be matched: they are dropped and counted in
+`unattributed_accesses`, and `summarize_memory` warns.
 
 ## Requirements
 

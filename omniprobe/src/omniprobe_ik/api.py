@@ -151,10 +151,11 @@ def instrumentation_flags(
         rdc: Add ``-fgpu-rdc``. Instrumentation does not need it; set it only
             when the application already builds with relocatable device code,
             and keep its build mode otherwise. Measured on gfx90a (Omniprobe
-            9b8a3c4): without RDC, every kernel -- including ``static`` and
-            anonymous-namespace ones, across translation units -- is matched;
-            with RDC and the plugin, linking two or more translation units
-            fails with ``duplicate symbol: __hip_cuid_...``.
+            13ca707): every kernel -- including ``static`` and
+            anonymous-namespace ones, across translation units -- is matched
+            with or without RDC. Omniprobe older than 3003058 fails to link
+            RDC builds of two or more translation units (``duplicate symbol:
+            __hip_cuid_...``).
 
     Returns:
         A list such as ``["-fpass-plugin=/.../libAMDGCNSubmitAddressMessages-rocm.so",

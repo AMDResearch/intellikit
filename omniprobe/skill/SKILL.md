@@ -31,7 +31,8 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
 1. **Build instrumented.** Omniprobe sees only kernels compiled with its plugin. Get the flags:
    `omniprobe-ik flags memory` (or MCP `get_instrumentation_flags`, or Python
    `instrumentation_flags("memory")`). They are `-fpass-plugin=<omniprobe>/lib/plugins/
-   libAMDGCNSubmitAddressMessages-rocm.so --offload-arch=<arch>`. Add `-g` for source lines.
+   libAMDGCNSubmitAddressMessages-rocm.so --offload-arch=<arch>`. **Add `-g`**: without it memory
+   analysis cannot match accesses to source lines and drops them (`unattributed_accesses`, warned).
    - Single file: `hipcc -O2 -g $(omniprobe-ik flags memory) app.hip -o app`
    - Makefile: rebuild from clean, keeping the project's own flags and adding ours, e.g.
      `make clean && make HIPFLAGS="-O2 -g $(omniprobe-ik flags memory)"` (read the Makefile for the
@@ -44,8 +45,8 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
      `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
    - **Do not add `-fgpu-rdc`** unless the project already uses it: instrumentation does not need
      it. If it does, keep it (`omniprobe-ik flags memory --rdc`); static kernels are then named
-     `<name> [clone .intern] [clone .<hash>]`. Measured with Omniprobe 75ef62b: an RDC build of two or
-     more files with the plugin still fails to link (`duplicate symbol: __hip_cuid_...`).
+     `<name> [clone .intern] [clone .<hash>]`. Multi-file RDC builds link and every kernel is
+     matched with Omniprobe 3003058 or later (older versions fail with `duplicate symbol: __hip_cuid_...`).
 2. **Run the analysis.** `omniprobe-ik memory [options] ./app [app args]` (or
    `omniprobe-ik memory [options] -- ./app --app-option`; MCP `analyze_memory`, Python
    `Omniprobe().analyze_memory("./app arg")`). The command is split on whitespace (no shell
@@ -88,8 +89,8 @@ instruction) to get the per-wave-execution value the summary prints.
   you did so and why.
 - **Code built at `-O0`**: accesses are flat; the summary warns with per-kernel counts of
   `unanalyzed_flat_accesses`. Rebuild with `-O1` or higher.
-- **Kernels without parameters** are not matched at run time ("No instrumented alternative found").
-  Temporarily add an unused pointer parameter to measure them.
+- **Code built without `-g`**: global accesses cannot be matched to a source line and are dropped;
+  the summary warns with per-kernel `unattributed_accesses`. Rebuild with `-g`.
 - **Architecture**: cache-line analysis exists for gfx906/908 (64-B lines) and gfx90a/940-942
   (128-B). Elsewhere only LDS analysis is reported.
 - If a kernel is absent from the results entirely, check Omniprobe's stderr for
@@ -101,8 +102,8 @@ instruction) to get the per-wave-execution value the summary prints.
 |---|---|---|
 | `NoInstrumentedKernelsError` / "no instrumented kernels" | Binary built without the plugin, or wrong plugin | Rebuild with `$(omniprobe-ik flags memory)`; `make clean` first |
 | `ImportError: omniprobe.api` | Omniprobe's install prefix (or source tree) not on `PYTHONPATH` (MCP servers start with a minimal env) | Set `PYTHONPATH` (and `ROCR_VISIBLE_DEVICES`) in the shell or MCP `env` |
-| Link error `duplicate symbol: __hip_cuid_...` | `-fgpu-rdc` with ≥ 2 files | Drop `-fgpu-rdc` unless the project needs it |
-| `WARNING: … ran WITHOUT instrumentation` / `uninstrumented_kernels` non-empty | That kernel's file was built without the plugin, or a known non-match (no parameters; internal linkage under `-fgpu-rdc`) | Rebuild that file with the flags; see Blind spots |
+| Link error `duplicate symbol: __hip_cuid_...` | `-fgpu-rdc` with ≥ 2 files on Omniprobe older than 3003058 | Update Omniprobe, or drop `-fgpu-rdc` unless the project needs it |
+| `WARNING: … ran WITHOUT instrumentation` / `uninstrumented_kernels` non-empty | That kernel's file was built without the plugin | Rebuild that file with the flags (every file that defines a kernel) |
 | A kernel or line is missing | Blind spot above, or `--kernel` regex too narrow | See Blind spots; filter on demangled names |
 | `RuntimeError: omniprobe exited with code N` | The application itself failed | Run the binary alone first; fix arguments/inputs |
 | No GPU / runs on the wrong GPU | `HIP_VISIBLE_DEVICES` set to the same id as `ROCR_VISIBLE_DEVICES` selects nothing | Set only `ROCR_VISIBLE_DEVICES` |
@@ -115,7 +116,8 @@ analyzer: `Heatmap` (accesses per 1 MiB page), `AddressLogger` (every wave's add
 for the first two, basic-block build for the last.
 
 When no analyzer counts what you need (e.g. executions by partially active waves, a stride
-histogram, accesses to one buffer), **write a message handler** — about 60 lines of C++:
+histogram, accesses to one buffer), **write a message handler**: about 60 lines of C++ (below), or
+a few lines of Python for questions about addresses alone (after it).
 
 ```cpp
 #include "dh_comms.h"           // Omniprobe installs these in <prefix>/omniprobe/include/dh_comms
@@ -145,11 +147,40 @@ extern "C" __attribute__((visibility("default"))) void getMessageHandlers(const 
   `-fPIC -shared`, Omniprobe's `include/dh_comms`, `-ldh_comms`; Python `handler_build_flags()`).
 - Build the application with `$(omniprobe-ik flags memory)` (address messages) or
   `basic-blocks` (block messages, `user_type == basic_block_start`), then run
-  `omniprobe-ik run /absolute/path/libmy_counter.so ./app`. Read what `report()` prints from
-  the run's output (Python: `run.log`, which holds stdout and stderr).
+  `omniprobe-ik run /absolute/path/libmy_counter.so ./app`. What `report()` prints is on the
+  run's stdout (Python `run.stdout`, MCP `stdout`); Omniprobe's own messages are on stderr.
 - **Test it first** on a small kernel whose answer you can compute by hand (e.g. 1000 threads in
   blocks of 256 → 16 waves, the last with 40 active lanes), then run it on the real application.
 - Every wave also loads its kernel arguments (`constant` space) — filter on `space` as needed.
+
+**Python handlers — the quicker path, for address-level analyses only.** A module with
+`handleAddressMessage(msg)`, `handleTimeMessage(msg)` and optionally `handleReport(msg)` (once per
+dispatch) runs through Omniprobe's `PythonHandler` (Omniprobe 13ca707 or later):
+`omniprobe-ik run ./my_handler.py ./app` (Python `run_analyzer("my_handler.py", "./app")`, MCP
+`run_analyzer` with the `.py` path), on a **memory** build. Its prints are on stdout.
+
+```python
+from collections import Counter
+pages = Counter()                       # module state persists across dispatches
+def handleAddressMessage(msg):          # once per ACTIVE LANE: msg = {address, kernel, dispatch_id}
+    pages[msg["address"] >> 12] += 1
+def handleTimeMessage(msg): pass
+def handleReport(msg):                  # end of each dispatch
+    print("MY_PAGES", msg["kernel"], msg["dispatch_id"], len(pages), flush=True); pages.clear()
+```
+
+- Each call sees **only** `address`, `kernel` and `dispatch_id`: no source line, read/write,
+  address space, access size, exec mask or wave id. Kernel-argument loads (all 64 lanes of every
+  wave) are mixed in. Use it for which buffers/pages are touched, distinct addresses or lines,
+  address histograms. For per-line, per-wave, read/write or address-space questions, or high
+  message rates, write the C++ handler above.
+- ~10 µs per call: narrow with `--kernel` and `--dispatches 1`. If the module cannot be imported
+  or lacks a function, Omniprobe falls back to its default handler and still exits 0;
+  `run_analyzer` turns that into an error naming the cause.
+- Untested: a Python handler inside an application that is itself Python (e.g. Triton) may
+  deadlock on the GIL.
+- Test it like the C++ handler: `omniprobe/examples/06_python_handler/` checks a counter on a
+  kernel with a hand-computed answer (16 waves → 2000 lane accesses + 1024 kernel-argument loads).
 
 ## Analyses and their plugins
 

@@ -75,3 +75,23 @@ def test_named_analyzer_keeps_the_environment(monkeypatch, tmp_path):
     calls, exe = _fake_omniprobe(monkeypatch, tmp_path)
     run_analyzer("Heatmap", "./app", omniprobe_path=exe)
     assert calls[0][1] is None
+
+
+def test_unusable_python_handler_is_an_error(monkeypatch, tmp_path):
+    import subprocess
+
+    import pytest
+
+    from omniprobe_ik import raw, run_analyzer
+
+    def fake_run(args, **kwargs):
+        err = "PythonHandler: module 'h' has no callable handleTimeMessage; no Python handler installed\n"
+        return subprocess.CompletedProcess(args, 0, "heatmap report\n", err)
+
+    monkeypatch.setattr(raw.subprocess, "run", fake_run)
+    exe = tmp_path / "omniprobe"
+    exe.write_text("")
+    handler = tmp_path / "h.py"
+    handler.write_text("")
+    with pytest.raises(RuntimeError, match="handleTimeMessage"):
+        run_analyzer(str(handler), "./app", omniprobe_path=str(exe))

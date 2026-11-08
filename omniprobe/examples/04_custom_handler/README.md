@@ -8,9 +8,9 @@ and kind, the lanes involved, and executions by partially active waves.
 `analyze_custom.py`:
 
 1. Builds the handler with the flags from `handler_build_flags()` /
-   `omniprobe-ik handler-flags`. Omniprobe does not install its headers, so a
-   handler is compiled against the Omniprobe **source** tree and linked against
-   `libdh_comms`, with `hipcc`.
+   `omniprobe-ik handler-flags`: `hipcc` against the `dh_comms` headers Omniprobe
+   installs (`<prefix>/omniprobe/include/dh_comms`; the source tree is the fallback),
+   linked against `libdh_comms`.
 2. Builds a kernel whose counts are known in advance (1000 threads, blocks of 256:
    16 waves, the last with 40 active lanes) with `instrumentation_flags("memory")`.
 3. Runs it with `run_analyzer("/abs/path/libaccess_counter.so", "./app")` and checks

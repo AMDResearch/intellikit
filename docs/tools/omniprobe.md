@@ -18,7 +18,7 @@ Omniprobe is a **separate tool** that this package drives — it is not a pip de
 - Python >= 3.10
 - ROCm 7.0+ and a supported AMD GPU
 - The `omniprobe` executable on `PATH`
-- Omniprobe's Python API importable, so that `from omniprobe.api import Omniprobe` works — the [Omniprobe repository](https://github.com/AMDResearch/omniprobe) must be on `PYTHONPATH` or installed
+- Omniprobe's Python API importable, so that `from omniprobe.api import Omniprobe` works — put Omniprobe's install prefix (it contains `omniprobe/api`) or the [Omniprobe repository](https://github.com/AMDResearch/omniprobe) on `PYTHONPATH`; failing that, the package looks next to the `omniprobe` executable
 
 The package wraps the existing installation through a subprocess. It does not bundle or build Omniprobe's C++ components.
 
@@ -135,8 +135,10 @@ are never instrumented and are not listed.
   `Debug` type. Build with `-O1` or higher (CMake: `-DCMAKE_BUILD_TYPE=RelWithDebInfo`).
   Omniprobe counts these accesses per kernel (`unanalyzed_flat_accesses`), and `summarize_memory`
   warns with the counts.
-- **Kernels without parameters.** They are cloned at compile time but not matched at run time
-  ("No instrumented alternative found"), so they report nothing.
+- **Code built without `-g`.** Memory analysis matches each access to its instruction through
+  the source line; without debug information no access can be matched and all are dropped.
+  Omniprobe counts them per kernel (`unattributed_accesses`, Omniprobe 821ba07 and later), and
+  `summarize_memory` warns with the counts. Build with `-g`.
 - **Architectures without a cache-line size in Omniprobe's table** (gfx906/908: 64 bytes;
   gfx90a/940/941/942: 128 bytes). On any other architecture, global cache-line analysis is
   skipped and only LDS analysis remains.
@@ -168,35 +170,37 @@ From a shell, `omniprobe-ik flags memory` or `omniprobe-ik flags basic-blocks` p
 
 Instrumentation does **not** need `-fgpu-rdc`.
 Add the flags to the application's existing device-compile flags and keep its build mode. Measured
-on gfx90a with Omniprobe `75ef62b`:
+on gfx90a with Omniprobe `13ca707`:
 
 | Build mode | Result |
 |------------|--------|
 | Without `-fgpu-rdc` (one-step or separate compile and link) | Every kernel is matched, including `static` and anonymous-namespace kernels and kernels in other translation units |
 | With `-fgpu-rdc`, one translation unit | Works; internal-linkage kernels are named `<name> [clone .intern] [clone .<hash>]` and are instrumented and attributed (Omniprobe 75ef62b) |
-| With `-fgpu-rdc`, two or more translation units | Linking fails: `lld: error: duplicate symbol: __hip_cuid_...` |
+| With `-fgpu-rdc`, two or more translation units | Every kernel is matched, as without RDC (Omniprobe 3003058 and later; older versions fail to link with `duplicate symbol: __hip_cuid_...`) |
 
 If an application must build with RDC, use `instrumentation_flags(..., rdc=True)` or
 `omniprobe-ik flags --rdc` and pass `-fgpu-rdc` to the link step as well.
 
 ### Adding `-g`
 
-Both analyses attribute their findings to source locations, so debug information changes what you can act on.
+Both analyses attribute their findings to source locations, and memory analysis needs debug
+information to match accesses at all. Measured with Omniprobe `13ca707`:
 
-| Build | Counts and timings | `source_file` / `line` / `column` |
-|-------|--------------------|-----------------------------------|
+| Build | Memory analysis | `source_file` / `line` / `column` |
+|-------|-----------------|-----------------------------------|
 | **With `-g`** | Correct | Real file path, line, and column |
-| **Without `-g`** | Correct | Empty |
+| **Without `-g`** | **No accesses**: every global access is dropped and counted in `unattributed_accesses`; `summarize_memory` warns | — |
 
-Compile with `-g` unless you only need aggregate counts. The numbers are right either way; without it you cannot map them back to code.
+Always compile with `-g`.
 
 ## Other analyzers and bespoke handlers
 
 `run_analyzer(analyzer, command, ...)` (CLI `omniprobe-ik run`, MCP `run_analyzer`) runs any Omniprobe
 analyzer — `Heatmap`, `AddressLogger`, `BasicBlockLogger`, `MemoryAnalysis`, `BasicBlockAnalysis` —
-or a message-handler plugin you built, and returns everything it produced (`output` for JSON
-formats; `log` for what was printed — stdout and stderr together). `analyze_heatmap`, `log_addresses` and `log_basic_blocks` parse
-the first three into typed results.
+or a message handler you wrote (a `.so` plugin or a `.py` module), and returns everything it
+produced: `output` for JSON formats, `stdout` for what the application and handlers printed, and
+`stderr` for Omniprobe's own messages (`log` joins the two). `analyze_heatmap`, `log_addresses` and
+`log_basic_blocks` parse the first three into typed results.
 
 A **bespoke handler** is a C++ class derived from `dh_comms::message_handler_base` with
 `handle(message)` (return `true` if it consumed the message) and `report()` (called once per
@@ -207,6 +211,26 @@ access kind (bits 0–1), address space (bits 2–5) and size in bytes (bits 6 a
 `omniprobe-ik handler-flags` give the command. `omniprobe/examples/04_custom_handler/` is a
 complete handler with a test against hand-computed counts; test any handler that way before using
 it on a real application. `omniprobe/examples/05_cmake_app/` shows instrumenting a CMake project.
+
+A **Python handler** (Omniprobe 13ca707 and later) is the quicker path for analyses of addresses
+alone. Pass the module's path as the analyzer (`omniprobe-ik run ./h.py ./app`,
+`run_analyzer("h.py", "./app")`, or `python_handler=`); it runs through Omniprobe's
+`PythonHandler` on a memory build. The module defines `handleAddressMessage(msg)` (once per active
+lane of each instrumented memory instruction), `handleTimeMessage(msg)` and optionally
+`handleReport(msg)` (once per dispatch; print the results there). One interpreter serves the whole
+process, so module state persists across dispatches; calls never overlap.
+
+| | Python handler | C++ handler |
+|---|---|---|
+| Per-message data | `address`, `kernel`, `dispatch_id` only | wave header (exec mask, source line and column, read/write, address space, access size, timestamp) and every lane's address |
+| Kernel-argument loads | Mixed in, distinguishable only by address | Filter on address space |
+| Cost | ~10 µs per lane: narrow with `-k`/`-d` | Native |
+| Good for | which buffers or pages are touched, distinct addresses or lines, address histograms | per-line, per-wave, divergence, read/write or space-aware counts; full applications |
+
+If the module cannot be imported or lacks a required function, Omniprobe falls back to its default
+handler and exits 0; `run_analyzer` raises instead. Untested: a Python handler inside an
+application that is itself a Python process (e.g. Triton), where the GIL may deadlock.
+`omniprobe/examples/06_python_handler/` is a handler with a test against hand-computed counts.
 
 ## API
 
@@ -320,6 +344,7 @@ The server exposes four tools:
 | `get_instrumentation_flags` | Returns the `hipcc` flags that instrument kernels for an analysis |
 | `analyze_memory` | Runs memory analysis; returns a ranked `summary` (worst sites first, per-wave-execution values, `how_to_read`) and the raw per-kernel findings |
 | `analyze_basic_blocks` | Runs basic-block analysis; returns exact per-block execution counts |
+| `run_analyzer` | Runs any analyzer, a C++ handler plugin (`.so`) or a Python handler (`.py`); returns `output`, `stdout`, `stderr` |
 | `list_analyzers` | Reports the available analysis types, which tool and plugin each needs, and Omniprobe's known blind spots |
 
 The server needs Omniprobe's Python API on `PYTHONPATH`: its install prefix (Omniprobe 5cbb8e2 and
@@ -330,7 +355,7 @@ environment, so set it, and the GPU selection, in the server's configuration:
 "omniprobe": {
   "command": "omniprobe-mcp",
   "env": {
-    "PATH": "/opt/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
+    "PATH": "/opt/omniprobe-install/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
     "PYTHONPATH": "/opt/omniprobe-install",
     "ROCR_VISIBLE_DEVICES": "0"
   }

@@ -235,9 +235,9 @@ def _compile(tmp_path_factory, source_text, name, analysis):
 
     *analysis* selects the instrumentation plugin (``"memory"`` or
     ``"basic_blocks"``); ``None`` compiles without one. Always ``-g``: without
-    debug info Omniprobe still reports correct counts, but ``source_file``,
-    ``line`` and ``column`` come back empty, and the location fields are most of
-    what these tests check. A failed build is a test failure, not a skip -- the
+    debug info memory analysis cannot match accesses to source lines and drops
+    them (``unattributed_accesses``), and the location fields are most of what
+    these tests check. A failed build is a test failure, not a skip -- the
     prerequisites are already guarded, so a failure here is a real problem.
     """
     tmp_path = tmp_path_factory.mktemp(f"omniprobe_{name}")

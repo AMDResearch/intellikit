@@ -99,8 +99,8 @@ def main():
         print(f"  Wrote: {kernel_file}")
         print()
 
-        # -g matters here: Omniprobe reports findings against source_file:line:column,
-        # and without debug info those fields come back empty.
+        # -g matters here: Omniprobe matches accesses to source_file:line:column,
+        # and without debug info memory analysis drops them (unattributed_accesses).
         # Omniprobe only sees kernels compiled with its instrumentation plugin, and
         # each analysis needs its own plugin; instrumentation_flags() returns the
         # -fpass-plugin and --offload-arch flags for this one.

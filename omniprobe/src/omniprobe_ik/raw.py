@@ -145,6 +145,13 @@ def run_analyzer(
             f"{completed.stdout}\n{completed.stderr}"
         ),
     )
+    if python_handler is not None:
+        # Omniprobe falls back to its default handler (exit 0) when the module is unusable.
+        failed = [
+            line for line in completed.stderr.splitlines() if "no Python handler installed" in line
+        ]
+        if failed and check:
+            raise RuntimeError(f"Python handler not used: {failed[0]}")
     if check and completed.returncode != 0:
         raise RuntimeError(
             f"omniprobe exited with code {completed.returncode}: "
