@@ -198,7 +198,7 @@ def test_pointers_in_a_by_value_struct_are_seen(calibration):
 
 
 def test_indirect_gather_is_seen(calibration):
-    """Pennant's pattern: an index array, then a data-dependent load."""
+    """An index array, then a data-dependent load."""
     kernel = _kernel(calibration, "gather")
     reads = [
         a for a in kernel.accesses if a.line == _line_of("CAL_GATHER") and a.access_type == "read"

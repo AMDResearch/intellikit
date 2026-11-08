@@ -51,10 +51,10 @@ class TestCLIParser:
 
         parser = create_parser()
         args = parser.parse_args(
-            ["memory", "--kernel", "gpuMain", "--output", "x.json", "./app", "deck.pnt"]
+            ["memory", "--kernel", "my_kernel", "--output", "x.json", "./app", "input.dat"]
         )
-        assert args.kernel == "gpuMain" and args.output == "x.json"
-        assert _command(args) == "./app deck.pnt"
+        assert args.kernel == "my_kernel" and args.output == "x.json"
+        assert _command(args) == "./app input.dat"
 
     def test_double_dash_passes_options_to_the_application(self):
         from omniprobe_ik.cli.main import _command
@@ -66,5 +66,5 @@ class TestCLIParser:
     def test_quoted_command_still_works(self):
         from omniprobe_ik.cli.main import _command
 
-        args = create_parser().parse_args(["basic-blocks", "./app deck.pnt"])
-        assert _command(args) == "./app deck.pnt"
+        args = create_parser().parse_args(["basic-blocks", "./app input.dat"])
+        assert _command(args) == "./app input.dat"
