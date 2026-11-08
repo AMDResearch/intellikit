@@ -315,3 +315,43 @@ def test_both_tools_are_registered():
     # dict keyed by name in some versions, iterable of tool objects in others
     names = set(tools) if isinstance(tools, dict) else {getattr(t, "name", t) for t in tools}
     assert {"profile_metrics", "list_available_metrics"} <= names
+
+
+# --------------------------------------------------------------------------
+# notes: interpreting memory-pattern metrics, pointing to the next tool
+# --------------------------------------------------------------------------
+
+
+def _profile_one(metrics):
+    kernel = FakeKernel(
+        "k", 1.0, {name: FakeStat(value, "Percent") for name, value in metrics.items()}
+    )
+    with patch.object(mcp_server, "Metrix", return_value=FakeProfiler([kernel])):
+        return profile_metrics("./app", list(metrics))
+
+
+def test_scattered_loads_get_a_note_naming_omniprobe():
+    out = _profile_one({"memory.global_load_efficiency": 1.84})
+    notes = out["kernels"][0]["notes"]
+    assert len(notes) == 1
+    assert "54 L2 requests per load" in notes[0]
+    assert "Omniprobe" in notes[0] and "analyze_memory" in notes[0]
+
+
+def test_coalesced_fp64_loads_get_no_note():
+    # 12.5% is a fully coalesced 8-byte access: 8 requests per instruction.
+    out = _profile_one({"memory.global_load_efficiency": 12.5})
+    assert "notes" not in out["kernels"][0]
+
+
+def test_scattered_stores_and_lds_conflicts_are_noted():
+    out = _profile_one({"memory.global_store_efficiency": 3.0, "memory.lds_bank_conflicts": 1.5})
+    notes = out["kernels"][0]["notes"]
+    assert any("store instruction" in n for n in notes)
+    assert any("LDS bank conflicts" in n for n in notes)
+
+
+def test_coalescing_efficiency_comes_with_a_caveat():
+    out = _profile_one({"memory.coalescing_efficiency": 25.0})
+    assert out["notes"] == [mcp_server.COALESCING_CAVEAT]
+    assert "notes" not in _profile_one({"memory.global_load_efficiency": 50.0})

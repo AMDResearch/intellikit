@@ -82,7 +82,11 @@ CACHE_METRICS = {
 MEMORY_PATTERN_METRICS = {
     "memory.coalescing_efficiency": {
         "name": "Memory Coalescing Efficiency",
-        "description": "How well memory accesses from threads in a wavefront coalesce into fewer transactions",
+        "description": (
+            "How well memory accesses from threads in a wavefront coalesce into fewer "
+            "transactions. Assumes 4-byte accesses: 8-byte (double) data reads 25% even when "
+            "perfectly coalesced; prefer global_load_efficiency to judge scattering"
+        ),
         "unit": "Percent",
         "category": MetricCategory.MEMORY_PATTERN,
     },

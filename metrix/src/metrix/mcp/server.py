@@ -12,6 +12,44 @@ from metrix import Metrix
 
 mcp = FastMCP("IntelliKit Metrix")
 
+# Below this, a load (or store) instruction generates more L2 requests than even a
+# fully coalesced 8-byte-per-lane access would (100 / 12.5 = 8 requests).
+_SCATTERED_EFFICIENCY = 12.5
+
+COALESCING_CAVEAT = (
+    "memory.coalescing_efficiency assumes 4-byte accesses: a perfectly coalesced kernel on "
+    "8-byte (double) data reads 25%, and a random gather can read higher than a strided "
+    "access. Do not use it to rule coalescing in or out; use memory.global_load_efficiency "
+    "and memory.global_store_efficiency, and Omniprobe to find the source line."
+)
+
+
+def _memory_notes(metrics: dict) -> list[str]:
+    """Plain-language notes on a kernel's memory-pattern metrics, pointing to the next tool."""
+    notes = []
+    for metric, kind in (
+        ("memory.global_load_efficiency", "load"),
+        ("memory.global_store_efficiency", "store"),
+    ):
+        value = metrics.get(metric, {}).get("avg")
+        if value is not None and 0 < value < _SCATTERED_EFFICIENCY:
+            notes.append(
+                f"Low {metric} ({value:.1f}%): about {100 / value:.0f} L2 requests per {kind} "
+                "instruction, where a fully coalesced wave needs about 4 (4-byte elements), "
+                "8 (8-byte) or 16 (16-byte). Far more than the element size explains means "
+                f"scattered or uncoalesced {kind}s, e.g. through an index array. Achieved "
+                "bandwidth includes the wasted bytes, so a high GB/s does not rule this out. "
+                "To find which source line is responsible, use Omniprobe (omniprobe-mcp "
+                "analyze_memory, after get_instrumentation_flags)."
+            )
+    conflicts = metrics.get("memory.lds_bank_conflicts", {}).get("avg")
+    if conflicts is not None and conflicts > 0:
+        notes.append(
+            f"LDS bank conflicts ({conflicts:.2f} per LDS access). To find which LDS access "
+            "causes them, use Omniprobe (omniprobe-mcp analyze_memory)."
+        )
+    return notes
+
 
 @mcp.tool()
 def profile_metrics(command: str, metrics: list[str] = None) -> dict:
@@ -23,6 +61,8 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
     intensity, and FLOP counts.
 
     Call list_available_metrics first to discover valid metric names.
+    A kernel may carry 'notes' interpreting its memory-pattern metrics (e.g.
+    scattered loads) and naming the tool that localises the problem; read them.
 
     Args:
         command: Shell command to profile (e.g., 'python train.py' or './my_app --size 1024').
@@ -36,6 +76,8 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
         - duration_us_avg: Average execution time of a single dispatch, in microseconds
         - dispatch_count: Number of times the kernel was launched per run
         - metrics: Dictionary mapping metric name to {avg, unit}
+        - notes (when there is something to say): findings with a next step
+        Top-level 'notes', when present, carries caveats about the metrics requested.
     """
     profiler = Metrix()
 
@@ -64,8 +106,13 @@ def profile_metrics(command: str, metrics: list[str] = None) -> dict:
                     "unit": getattr(metric_obj, "unit", ""),
                 }
 
+        notes = _memory_notes(kernel_data["metrics"])
+        if notes:
+            kernel_data["notes"] = notes
         results["kernels"].append(kernel_data)
 
+    if "memory.coalescing_efficiency" in metrics and results["kernels"]:
+        results["notes"] = [COALESCING_CAVEAT]
     return results
 
 
