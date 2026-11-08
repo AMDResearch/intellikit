@@ -5,8 +5,8 @@
 // reports these counts.
 //
 // Build (flags from `omniprobe-ik handler-flags`):
-//   hipcc -std=c++20 -fPIC -shared -O2 -I<src>/plugins -I<src>/external/dh_comms/include \
-//         -I<src>/inc access_counter.cc -o libaccess_counter.so -L<lib> -ldh_comms -Wl,-rpath,<lib>
+//   hipcc -std=c++20 -fPIC -shared -O2 -I<omniprobe>/include/dh_comms access_counter.cc \
+//         -o libaccess_counter.so -L<omniprobe>/lib -ldh_comms -Wl,-rpath,<omniprobe>/lib
 // Run (the application built with `omniprobe-ik flags memory`):
 //   omniprobe -i -a /abs/path/libaccess_counter.so -- ./app
 //   omniprobe-ik run /abs/path/libaccess_counter.so ./app
@@ -22,7 +22,8 @@
 #include <string>
 #include <vector>
 
-#include "plugin.h"
+#include "dh_comms.h"
+#include "message_handlers.h"
 
 namespace {
 
@@ -90,7 +91,7 @@ private:
 }  // namespace
 
 extern "C" {
-PUBLIC_API void getMessageHandlers(const std::string &kernel, uint64_t dispatch_id,
+__attribute__((visibility("default"))) void getMessageHandlers(const std::string &kernel, uint64_t dispatch_id,
                                    std::vector<dh_comms::message_handler_base *> &outHandlers) {
   outHandlers.push_back(new access_counter_t(kernel, dispatch_id));
 }

@@ -236,3 +236,10 @@ def test_kernel_without_arguments_is_reported_as_uninstrumented(calibration):
     missing = calibration["__uninstrumented__"]
     assert missing is not None
     assert [k for k in missing if k.startswith("no_args")], missing
+
+
+def test_pointer_loaded_from_memory_is_reported_as_unanalyzed(calibration):
+    """The flat-pointer blind spot is at least loud: Omniprobe counts what it could not analyze."""
+    kernel = _kernel(calibration, "via_table")
+    # in[i * 16] and out[i] through table pointers: 2 flat accesses per wave execution.
+    assert kernel.unanalyzed_flat_accesses == 2 * WAVES

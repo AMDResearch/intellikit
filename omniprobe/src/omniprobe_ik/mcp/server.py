@@ -75,12 +75,15 @@ def analyze_memory(
             {
                 "kernel_name": k.kernel_name,
                 "dispatch_id": k.dispatch_id,
+                "unanalyzed_flat_accesses": k.unanalyzed_flat_accesses,
                 "accesses": [
                     {
                         "source_file": a.source_file,
                         "line": a.line,
                         "column": a.column,
                         "excess_cache_lines": a.excess_cache_lines,
+                        "cache_lines_needed": a.cache_lines_needed,
+                        "cache_lines_used": a.cache_lines_used,
                         "bank_conflicts": a.bank_conflicts,
                         "memory_space": a.memory_space,
                         "access_type": a.access_type,
@@ -100,7 +103,7 @@ def analyze_basic_blocks(
     kernel_filter: str = None,
     dispatches: str = "all",
 ) -> dict:
-    """Report which basic blocks of a GPU kernel execute and how many waves reach each.
+    """Count exactly how often each basic block of a GPU kernel executes (wave entries, active lanes), with source lines. Not timing.
 
     First build the application with the flags from
     get_instrumentation_flags('basic_blocks') (plus -g) -- a different plugin
@@ -116,10 +119,10 @@ def analyze_basic_blocks(
         Dictionary with 'kernels' list. Each kernel contains:
         - kernel_name: GPU kernel function name
         - dispatch_id: Dispatch identifier
-        - basic_blocks: List of basic blocks with bb_id, source location and
-          wave_count (waves that reached the block). The cycle fields
-          (min/max, p25-p99) are intervals dominated by instrumentation
-          overhead, NOT per-block cost; use metrix/rocprof for time.
+        - basic_blocks: List of basic blocks with bb_id, source location,
+          wave_visits (exact number of wave entries) and active_lanes (lanes
+          summed over those entries; active_lanes / wave_visits = mean lane
+          occupancy). No timing: use metrix/rocprof for where time goes.
     """
     probe = Omniprobe()
     result = probe.analyze_basic_blocks(
@@ -141,14 +144,9 @@ def analyze_basic_blocks(
                         "bb_id": b.bb_id,
                         "source_file": b.source_file,
                         "line": b.line,
-                        "min_cycles": b.min_cycles,
-                        "max_cycles": b.max_cycles,
-                        "p25": b.p25,
-                        "p50": b.p50,
-                        "p75": b.p75,
-                        "p95": b.p95,
-                        "p99": b.p99,
-                        "wave_count": b.wave_count,
+                        "column": b.column,
+                        "wave_visits": b.wave_visits,
+                        "active_lanes": b.active_lanes,
                     }
                     for b in k.basic_blocks
                 ],
@@ -252,9 +250,9 @@ def list_analyzers() -> dict:
             {
                 "name": "basic_blocks",
                 "description": (
-                    "Basic-block execution — which blocks run and how many waves "
-                    "reach each (wave_count). Its cycle fields are not per-block "
-                    "cost; use metrix/rocprof kernel timing for time hotspots."
+                    "Basic-block execution counts — exact wave entries and active "
+                    "lanes per block, with source lines. Not timing: use "
+                    "metrix/rocprof kernel timing for time hotspots."
                 ),
                 "tool": "analyze_basic_blocks",
                 "plugin": ANALYSIS_PLUGINS["basic_blocks"],

@@ -9,9 +9,9 @@ Writes a HIP kernel with a data-dependent branch to a temporary directory,
 compiles it, and uses Omniprobe to show which basic blocks execute and how many
 waves reach each.
 
-Omniprobe's per-block cycle fields are not per-block cost today (they are
-dominated by instrumentation overhead), so this example reports wave counts
-only. For where time goes, use metrix kernel timing or linex per-line cycles.
+The counts are exact: wave entries per block and the lanes active in them.
+Basic-block analysis does not time blocks; for where time goes, use metrix
+kernel timing or linex per-line cycles.
 """
 
 import subprocess
@@ -141,19 +141,22 @@ def main():
                 print(f"\nKernel: {kernel.kernel_name} (dispatch {kernel.dispatch_id})")
                 print(f"  Basic blocks: {len(kernel.basic_blocks)}")
                 print()
-                print(f"  {'BB':>4}  {'waves':>8}  location")
-                print(f"  {'-' * 4}  {'-' * 8}  {'-' * 20}")
+                print(f"  {'BB':>4}  {'entries':>8}  {'lanes':>9}  {'lanes/entry':>11}  location")
+                print(f"  {'-' * 4}  {'-' * 8}  {'-' * 9}  {'-' * 11}  {'-' * 20}")
 
-                # Most-reached blocks first. Wave counts, not cost.
-                reached = sorted(kernel.basic_blocks, key=lambda b: b.wave_count, reverse=True)
+                # Most-executed blocks first. Counts, not cost.
+                reached = sorted(kernel.basic_blocks, key=lambda b: b.wave_visits, reverse=True)
                 for bb in reached[:10]:
                     loc = f"{bb.source_file}:{bb.line}" if bb.source_file else "(no debug info)"
-                    print(f"  {bb.bb_id:>4}  {bb.wave_count:>8}  {loc}")
+                    per = bb.active_lanes / bb.wave_visits if bb.wave_visits else 0.0
+                    print(
+                        f"  {bb.bb_id:>4}  {bb.wave_visits:>8}  {bb.active_lanes:>9}  {per:>11.1f}  {loc}"
+                    )
 
             print()
             print("=" * 80)
-            print("Wave counts show which paths run. Omniprobe's per-block cycle fields")
-            print("are not per-block cost yet; use metrix or linex for where time goes.")
+            print("Each side of the branch is entered by every wave with half its lanes")
+            print("(32 lanes/entry): that is divergence. Counts, not time.")
             print("=" * 80)
 
         except ImportError as e:

@@ -3,12 +3,15 @@
 
 """End-to-end basic-block analysis against a real Omniprobe installation.
 
-Companion to ``test_memory_analysis.py``, covering the second of the two
-analyses the package exposes. The main tests use a single-kernel program, and
-``test_multi_kernel_program`` covers a program with two.
+Basic-block analysis reports exact execution counts per block -- how many times
+a wave entered it (``wave_visits``) and how many lanes were active over those
+entries (``active_lanes``) -- with the block's source line. It does not time
+blocks. Every expectation below is computed by hand from the test kernels.
 """
 
 from .conftest import (
+    BRANCHING_KERNEL,
+    STRIDED_KERNEL,
     skip_no_gpu,
     skip_no_hipcc,
     skip_no_omniprobe,
@@ -17,61 +20,71 @@ from .conftest import (
 
 pytestmark = [skip_no_omniprobe, skip_no_upstream_api, skip_no_gpu, skip_no_hipcc]
 
+# BRANCHING_KERNEL: 256 * 1024 threads in blocks of 256 = 4096 waves of 64 lanes.
+BRANCH_THREADS = 256 * 1024
+BRANCH_WAVES = BRANCH_THREADS // 64
 
-def test_basic_block_analysis_reports_blocks(probe, branching_bb_binary):
-    """A real run reports at least one kernel carrying at least one basic block."""
+
+def _line(source, text, after=None):
+    """1-based line of *text* in a kernel source string (as written to the .hip file),
+    optionally the first one after the line containing *after*."""
+    seen_after = after is None
+    for number, line in enumerate(source.splitlines(), start=1):
+        if not seen_after:
+            seen_after = after in line
+            continue
+        if text in line:
+            return number
+    raise AssertionError(text)
+
+
+def _blocks_at(kernel, line):
+    return [b for b in kernel.basic_blocks if b.line == line]
+
+
+def test_basic_block_analysis_reports_blocks_with_source_lines(probe, branching_bb_binary):
     result = probe.analyze_basic_blocks(command=str(branching_bb_binary))
 
-    assert result.kernels, "analysis returned no kernels for a binary that launched one"
-    assert any(kernel.basic_blocks for kernel in result.kernels), (
-        "kernels were reported but none carried any basic blocks"
-    )
+    assert len(result.kernels) == 1
+    blocks = result.kernels[0].basic_blocks
+    assert blocks, "kernel reported no basic blocks"
+    assert all(b.source_file.endswith(".hip") and b.line > 0 for b in blocks)
 
 
-def test_cycle_percentiles_are_ordered(probe, branching_bb_binary):
-    """Percentiles must be monotonic and bounded by min/max.
+def test_every_lane_passes_through_entry_and_exit(probe, branching_bb_binary):
+    kernel = probe.analyze_basic_blocks(command=str(branching_bb_binary)).kernels[0]
 
-    A distribution whose p50 sits outside [min, max], or whose p99 falls below
-    its p50, is not a distribution -- it is a conversion bug. This is the
-    cheapest assertion that would catch one, and it needs no knowledge of what
-    the true cycle counts should be.
-    """
-    result = probe.analyze_basic_blocks(command=str(branching_bb_binary))
-
-    checked = 0
-    for kernel in result.kernels:
-        for bb in kernel.basic_blocks:
-            assert bb.min_cycles <= bb.max_cycles, (
-                f"block {bb.bb_id}: min_cycles {bb.min_cycles} > max_cycles {bb.max_cycles}"
-            )
-            percentiles = [bb.p25, bb.p50, bb.p75, bb.p95, bb.p99]
-            assert percentiles == sorted(percentiles), (
-                f"block {bb.bb_id}: percentiles not monotonic: {percentiles}"
-            )
-            assert bb.min_cycles <= bb.p50 <= bb.max_cycles, (
-                f"block {bb.bb_id}: p50 {bb.p50} outside [{bb.min_cycles}, {bb.max_cycles}]"
-            )
-            checked += 1
-
-    assert checked > 0, "no basic blocks were available to check"
+    for text in ("int idx = blockIdx.x", "out[idx] = acc;"):
+        blocks = _blocks_at(kernel, _line(BRANCHING_KERNEL, text))
+        assert blocks, text
+        assert all(b.wave_visits == BRANCH_WAVES for b in blocks), text
+        assert all(b.active_lanes == BRANCH_THREADS for b in blocks), text
 
 
-def test_wave_counts_are_positive(probe, branching_bb_binary):
-    """Any block that was timed must have been executed by at least one wave."""
-    result = probe.analyze_basic_blocks(command=str(branching_bb_binary))
+def test_branch_sides_split_lanes_exactly(probe, branching_bb_binary):
+    """Every wave has even and odd lanes, so it enters both sides with half its lanes."""
+    kernel = probe.analyze_basic_blocks(command=str(branching_bb_binary)).kernels[0]
 
-    timed = [bb for kernel in result.kernels for bb in kernel.basic_blocks if bb.max_cycles > 0]
-
-    assert timed, "no basic block reported a nonzero cycle count"
-    assert all(bb.wave_count > 0 for bb in timed), (
-        "a block reported timing data but a wave_count of zero"
-    )
+    for text in ("acc = acc * 2.0f + 1.0f;", "acc = __sinf(acc) + __cosf(acc);"):
+        blocks = _blocks_at(kernel, _line(BRANCHING_KERNEL, text))
+        assert len(blocks) == 1, (text, blocks)
+        assert blocks[0].wave_visits == BRANCH_WAVES
+        assert blocks[0].active_lanes == BRANCH_THREADS // 2
 
 
 def test_multi_kernel_program(probe, strided_bb_binary):
-    """Both kernels of a two-kernel program are reported."""
+    """Both kernels are reported; the strided guard admits only 1 thread in 16."""
     result = probe.analyze_basic_blocks(command=str(strided_bb_binary))
+    kernels = {k.kernel_name.split("(")[0]: k for k in result.kernels}
+    assert set(kernels) == {"coalesced_copy", "strided_copy"}
 
-    names = {kernel.kernel_name for kernel in result.kernels}
-    assert any("coalesced" in name for name in names), sorted(names)
-    assert any("strided" in name for name in names), sorted(names)
+    threads = 1024 * 1024
+    for block in kernels["coalesced_copy"].basic_blocks:
+        assert (block.wave_visits, block.active_lanes) == (threads // 64, threads)
+
+    # strided_copy: idx = gid * 16 < N holds for gid < N / 16 = 65536 threads = 1024 waves.
+    guarded = _blocks_at(
+        kernels["strided_copy"],
+        _line(STRIDED_KERNEL, "out[idx] = in[idx] * 2.0f;", after="strided_copy"),
+    )
+    assert [(b.wave_visits, b.active_lanes) for b in guarded] == [(1024, 65536)]

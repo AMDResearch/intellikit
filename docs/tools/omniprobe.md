@@ -7,7 +7,7 @@ myst:
 
 # Omniprobe
 
-Omniprobe finds the memory accesses that waste bandwidth, at source level, and reports which basic blocks of a kernel execute and how often.
+Omniprobe finds the memory accesses that waste bandwidth, at source level, and counts exactly how often each basic block of a kernel executes.
 
 It answers a question raw counters cannot: *which source line* caused the wasted traffic. Where a bandwidth metric tells you a kernel moved more bytes than it needed to, Omniprobe attributes the excess to a `file:line:column` and tells you how many extra cache lines that access cost.
 
@@ -65,7 +65,7 @@ Omniprobe exposes two analyses.
 | Analysis | Method | Detects |
 |----------|--------|---------|
 | **Memory** | `analyze_memory` | Uncoalesced global accesses, LDS bank conflicts, excess cache lines |
-| **Basic blocks** | `analyze_basic_blocks` | Which blocks execute and how many waves reach each (`wave_count`); see the caveat below |
+| **Basic blocks** | `analyze_basic_blocks` | Exact per-block execution counts (`wave_visits`, `active_lanes`) with source lines; no timing |
 
 Memory analysis reports these fields per access site:
 
@@ -77,7 +77,7 @@ Memory analysis reports these fields per access site:
 | `access_type` | Read or write |
 | `execution_count` | Number of times the access executed |
 
-**Basic-block analysis tells you which blocks run and how often; its cycle fields are not per-block cost.** Use `wave_count`. Do not read its cycle fields (`min_cycles`, `max_cycles`, `p25`…`p99`) as per-block cost: Omniprobe's basic-block "cycles" are currently intervals between instrumentation submits, dominated by instrumentation overhead (millions of cycles at thousands of waves, thousands at a few waves, for the same kernel), and block ids and source lines are not yet reliably attributed. Omniprobe is reworking this (2026-11-08). For time hotspots use Metrix kernel timing or Linex per-line cycles.
+**Basic-block analysis counts; it does not time.** Each block reports `wave_visits` (wave entries) and `active_lanes` (lanes summed over those entries; `active_lanes / wave_visits` is the mean occupancy, so a low value means divergence), with its source line. The counts are exact (checked against hand-computed values in `test_basic_blocks.py`). For where time goes use Metrix kernel timing or Linex per-line cycles.
 
 ## Reading the results
 
@@ -107,6 +107,14 @@ wasted lines per wave execution: 0 is perfectly coalesced and 62 is the worst ca
 its own line). The raw total ranks sites by how much bandwidth they waste overall, so use it to
 choose what to fix first.
 
+### Excess lines versus DRAM traffic
+
+Excess cache lines are fetched into L2; they become DRAM (HBM) traffic only when L2 cannot keep
+them until they are reused. In an HBM-bound kernel whose wasted lines stay in L2, making the access
+contiguous may change little. Judge a fix by HBM bytes and kernel time before and after (Metrix
+`memory.bytes_transferred_hbm`, `memory.hbm_read_bandwidth`, kernel duration), and look for index
+arrays a restructuring can remove altogether: the index loads are traffic of their own.
+
 ### Kernels that ran without instrumentation
 
 If some dispatched kernels have no instrumented clone (their file was built without the plugin, or
@@ -124,13 +132,11 @@ are never instrumented and are not listed.
   struct argument, or stored in `__constant__` variables are seen.
 - **Code built at `-O0`.** Pointers are kept on the stack and every access becomes generic (flat),
   so instrumented kernels report no accesses at all. This is CMake's default (no build type) and its
-  `Debug` type. Build with `-O1` or higher (CMake: `-DCMAKE_BUILD_TYPE=RelWithDebInfo`);
-  `summarize_memory` warns when an instrumented kernel reports no global or LDS access.
+  `Debug` type. Build with `-O1` or higher (CMake: `-DCMAKE_BUILD_TYPE=RelWithDebInfo`).
+  Omniprobe counts these accesses per kernel (`unanalyzed_flat_accesses`), and `summarize_memory`
+  warns with the counts.
 - **Kernels without parameters.** They are cloned at compile time but not matched at run time
   ("No instrumented alternative found"), so they report nothing.
-- **Kernels with internal linkage** (`static` or in an anonymous namespace) are often not matched
-  at run time either, for the same symptom. Check Omniprobe's stderr for
-  `No instrumented alternative found for <kernel>`.
 - **Architectures without a cache-line size in Omniprobe's table** (gfx906/908: 64 bytes;
   gfx90a/940/941/942: 128 bytes). On any other architecture, global cache-line analysis is
   skipped and only LDS analysis remains.
@@ -160,14 +166,14 @@ From a shell, `omniprobe-ik flags memory` or `omniprobe-ik flags basic-blocks` p
 
 ### Relocatable device code (`-fgpu-rdc`)
 
-Instrumentation does **not** need `-fgpu-rdc`, although Omniprobe's own documentation says so.
+Instrumentation does **not** need `-fgpu-rdc`.
 Add the flags to the application's existing device-compile flags and keep its build mode. Measured
-on gfx90a with Omniprobe `9b8a3c4`:
+on gfx90a with Omniprobe `75ef62b`:
 
 | Build mode | Result |
 |------------|--------|
 | Without `-fgpu-rdc` (one-step or separate compile and link) | Every kernel is matched, including `static` and anonymous-namespace kernels and kernels in other translation units |
-| With `-fgpu-rdc`, one translation unit | Works; internal-linkage kernels are renamed `<name>.intern.<hash>` and may fail to match at run time (Omniprobe defect `bf_intern-clone-name`) |
+| With `-fgpu-rdc`, one translation unit | Works; internal-linkage kernels are named `<name> [clone .intern] [clone .<hash>]` and are instrumented and attributed (Omniprobe 75ef62b) |
 | With `-fgpu-rdc`, two or more translation units | Linking fails: `lld: error: duplicate symbol: __hip_cuid_...` |
 
 If an application must build with RDC, use `instrumentation_flags(..., rdc=True)` or
@@ -189,17 +195,16 @@ Compile with `-g` unless you only need aggregate counts. The numbers are right e
 `run_analyzer(analyzer, command, ...)` (CLI `omniprobe-ik run`, MCP `run_analyzer`) runs any Omniprobe
 analyzer — `Heatmap`, `AddressLogger`, `BasicBlockLogger`, `MemoryAnalysis`, `BasicBlockAnalysis` —
 or a message-handler plugin you built, and returns everything it produced (`output` for JSON
-formats; `log` for what was printed — the `omniprobe` launcher forwards the application's and the
-handlers' output on its stderr). `analyze_heatmap`, `log_addresses` and `log_basic_blocks` parse
+formats; `log` for what was printed — stdout and stderr together). `analyze_heatmap`, `log_addresses` and `log_basic_blocks` parse
 the first three into typed results.
 
 A **bespoke handler** is a C++ class derived from `dh_comms::message_handler_base` with
 `handle(message)` (return `true` if it consumed the message) and `report()` (called once per
 dispatch), exported through `extern "C" getMessageHandlers(kernel, dispatch_id, handlers)`. Address
 messages (`user_type == address`) carry one 64-bit address per active lane; `user_data` packs the
-access kind (bits 0–1), address space (bits 2–5) and size in bytes (bits 6 and up). Omniprobe does
-not install its headers, so build against its source tree: `handler_build_flags()` /
-`omniprobe-ik handler-flags` give the `hipcc` command. `omniprobe/examples/04_custom_handler/` is a
+access kind (bits 0–1), address space (bits 2–5) and size in bytes (bits 6 and up). Build it with
+`hipcc` against Omniprobe's `include/dh_comms` headers: `handler_build_flags()` /
+`omniprobe-ik handler-flags` give the command. `omniprobe/examples/04_custom_handler/` is a
 complete handler with a test against hand-computed counts; test any handler that way before using
 it on a real application. `omniprobe/examples/05_cmake_app/` shows instrumenting a CMake project.
 
@@ -260,17 +265,13 @@ access.execution_count      # How many times it executed
 
 ### `BasicBlock`
 
-Data for a single basic block. Rely on `wave_count`; the cycle fields are not per-block cost (see [What you get](#what-you-get)).
+Exact execution counts for a single basic block.
 
 ```python
-bb.bb_id                    # Basic block identifier
-bb.source_file              # Source file path (empty without -g)
-bb.line                     # Line number (0 without -g)
-bb.min_cycles               # Not per-block cost today (see above)
-bb.max_cycles               # Not per-block cost today
-bb.p25, bb.p50, bb.p75      # Not per-block cost today
-bb.p95, bb.p99
-bb.wave_count               # Waves that executed this block
+bb.bb_id                    # Block number (stable for a given binary)
+bb.source_file, bb.line, bb.column
+bb.wave_visits              # Times a wave entered the block
+bb.active_lanes             # Active lanes summed over those entries
 ```
 
 `BasicBlockResult.kernels` is a list of `KernelBBResult`, each with `kernel_name`, `dispatch_id`, and `basic_blocks`.
@@ -290,6 +291,10 @@ omniprobe-ik basic-blocks ./my_gpu_app
 
 # Filter to specific kernels (ECMAScript regex)
 omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app
+
+# Application arguments follow the target (or come after --)
+omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app input.dat
+omniprobe-ik memory -- ./my_gpu_app --size 1024
 
 # Capture a single dispatch instead of all of them
 omniprobe-ik memory --dispatches 1 ./my_gpu_app
@@ -314,11 +319,11 @@ The server exposes four tools:
 |------|---------|
 | `get_instrumentation_flags` | Returns the `hipcc` flags that instrument kernels for an analysis |
 | `analyze_memory` | Runs memory analysis; returns a ranked `summary` (worst sites first, per-wave-execution values, `how_to_read`) and the raw per-kernel findings |
-| `analyze_basic_blocks` | Runs basic-block analysis; returns which blocks ran and their wave counts |
+| `analyze_basic_blocks` | Runs basic-block analysis; returns exact per-block execution counts |
 | `list_analyzers` | Reports the available analysis types, which tool and plugin each needs, and Omniprobe's known blind spots |
 
-Omniprobe's Python API lives only in its **source** tree (the install tree does not include it), so
-the server needs that tree on `PYTHONPATH`. MCP clients usually start servers with a minimal
+The server needs Omniprobe's Python API on `PYTHONPATH`: its install prefix (Omniprobe 5cbb8e2 and
+later install `omniprobe/api` there) or its source tree. MCP clients usually start servers with a minimal
 environment, so set it, and the GPU selection, in the server's configuration:
 
 ```json
@@ -326,14 +331,14 @@ environment, so set it, and the GPU selection, in the server's configuration:
   "command": "omniprobe-mcp",
   "env": {
     "PATH": "/opt/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
-    "PYTHONPATH": "/path/to/omniprobe-source",
+    "PYTHONPATH": "/opt/omniprobe-install",
     "ROCR_VISIBLE_DEVICES": "0"
   }
 }
 ```
 
-If `PYTHONPATH` is missing, the wrapper also tries the source tree that the `omniprobe` executable
-resolves to, which works when `omniprobe` on `PATH` is a build tree's symlink.
+If `PYTHONPATH` is missing, the wrapper also looks for the API next to the `omniprobe` executable on
+`PATH` (install prefix, or the source tree a build tree's symlink points to).
 
 `summarize_memory(result, top=10)` produces the same ranked summary from the Python API.
 
@@ -359,13 +364,14 @@ conflicts = [
     if a.bank_conflicts > 0
 ]
 
-# Basic blocks that executed, most-reached first (wave_count, not cost)
+# Most-executed basic blocks, and how divergent each is (counts, not time)
 bb_result = probe.analyze_basic_blocks("./my_gpu_app_bb")
-reached = sorted(
-    (bb for kernel in bb_result.kernels for bb in kernel.basic_blocks if bb.wave_count > 0),
-    key=lambda bb: bb.wave_count,
+for bb in sorted(
+    (bb for kernel in bb_result.kernels for bb in kernel.basic_blocks),
+    key=lambda bb: bb.wave_visits,
     reverse=True,
-)
+)[:10]:
+    print(bb.source_file, bb.line, bb.wave_visits, bb.active_lanes / max(bb.wave_visits, 1))
 ```
 
 Runnable versions of both analyses live in [`omniprobe/examples/`](https://github.com/AMDResearch/intellikit/tree/main/omniprobe/examples). Each writes a HIP kernel to a temporary directory, compiles it, and analyses it, so they run without a prepared workload.

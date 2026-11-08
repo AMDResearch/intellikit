@@ -183,10 +183,11 @@ def instrumentation_flags(
 
 
 def _add_upstream_source_to_path(omniprobe_path: Optional[str] = None) -> bool:
-    """Find Omniprobe's source tree from its executable and put it on ``sys.path``.
+    """Find Omniprobe's Python API from its executable and put it on ``sys.path``.
 
-    In an Omniprobe build tree ``bin/omniprobe`` is a symlink to
-    ``<source>/omniprobe/omniprobe``, and ``<source>`` is what must be importable.
+    The API is ``<root>/omniprobe/api``: in an install tree ``<root>`` is the
+    install prefix (``<prefix>/omniprobe/bin/omniprobe``); in a build tree
+    ``bin/omniprobe`` is a symlink to ``<source>/omniprobe/omniprobe``.
     Returns True if ``omniprobe.api`` is importable afterwards.
     """
     import importlib
@@ -195,8 +196,15 @@ def _add_upstream_source_to_path(omniprobe_path: Optional[str] = None) -> bool:
     exe = omniprobe_path or shutil.which("omniprobe")
     if exe is None:
         return False
-    source_root = Path(exe).resolve().parent.parent
-    if not (source_root / "omniprobe" / "api" / "__init__.py").is_file():
+    source_root = None
+    for start in (Path(exe), Path(exe).resolve()):
+        for parent in start.parents:
+            if (parent / "omniprobe" / "api" / "__init__.py").is_file():
+                source_root = parent
+                break
+        if source_root is not None:
+            break
+    if source_root is None:
         return False
     sys.path.insert(0, str(source_root))
     sys.modules.pop("omniprobe", None)
@@ -248,6 +256,14 @@ class _CapturingSubprocess:
         completed = self._real.run(*args, **kwargs)
         self.log = f"{completed.stdout or ''}\n{completed.stderr or ''}"
         return completed
+
+
+def _uninstrumented(upstream_result, log: Optional[str]) -> Optional[list[str]]:
+    """Uninstrumented kernel names: upstream's own list if it reports one, else from the log."""
+    reported = getattr(upstream_result, "uninstrumented_kernels", None)
+    if isinstance(reported, dict):
+        return [k for k in reported if not k.startswith("__amd_rocclr_")]
+    return None if log is None else parse_uninstrumented_kernels(log)
 
 
 def _call_capturing_log(func, **kwargs):
@@ -330,6 +346,11 @@ class MemoryAccess:
     memory_space: str = ""
     access_type: str = ""
     execution_count: int = 0
+    cache_lines_needed: int = 0
+    cache_lines_used: int = 0
+    isa_instruction: str = ""
+    ir_bytes: int = 0
+    isa_bytes: int = 0
 
 
 @dataclass
@@ -339,6 +360,9 @@ class KernelMemoryResult:
     kernel_name: str
     dispatch_id: int
     accesses: list[MemoryAccess] = field(default_factory=list)
+    # Accesses in the generic (flat) address space, which memory analysis cannot
+    # classify: pointers loaded from device memory, or code built at -O0.
+    unanalyzed_flat_accesses: int = 0
 
 
 @dataclass
@@ -356,19 +380,19 @@ class MemoryAnalysisResult:
 
 @dataclass
 class BasicBlock:
-    """Timing data for a single basic block."""
+    """Exact execution counts and source location for one basic block.
+
+    ``wave_visits`` is how many times a wave entered the block; ``active_lanes``
+    sums the active lanes over those entries, so ``active_lanes / wave_visits``
+    is the mean lane occupancy (divergence). There is no timing.
+    """
 
     bb_id: int
     source_file: str
     line: int
-    min_cycles: float
-    max_cycles: float
-    p25: float = 0.0
-    p50: float = 0.0
-    p75: float = 0.0
-    p95: float = 0.0
-    p99: float = 0.0
-    wave_count: int = 0
+    column: int = 0
+    wave_visits: int = 0
+    active_lanes: int = 0
 
 
 @dataclass
@@ -417,8 +441,8 @@ class Omniprobe:
         except ImportError:
             if not _add_upstream_source_to_path(omniprobe_path):
                 msg = (
-                    "Could not import omniprobe.api. Put the Omniprobe source tree on "
-                    "PYTHONPATH (Omniprobe's install tree does not include its Python API). "
+                    "Could not import omniprobe.api. Put Omniprobe's install prefix (or its "
+                    "source tree) on PYTHONPATH. "
                     "MCP clients often start servers with a minimal environment, so set "
                     "PYTHONPATH in the server's 'env' configuration."
                 )
@@ -461,7 +485,7 @@ class Omniprobe:
             dispatches=dispatches,
         )
         result = self._convert_memory_result(upstream_result)
-        result.uninstrumented_kernels = None if log is None else parse_uninstrumented_kernels(log)
+        result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
         if not result.kernels:
             raise NoInstrumentedKernelsError(
                 _no_data_message("memory", command, kernel_filter, result.uninstrumented_kernels)
@@ -500,7 +524,7 @@ class Omniprobe:
             dispatches=dispatches,
         )
         result = self._convert_bb_result(upstream_result)
-        result.uninstrumented_kernels = None if log is None else parse_uninstrumented_kernels(log)
+        result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
         if not result.kernels:
             raise NoInstrumentedKernelsError(
                 _no_data_message(
@@ -526,6 +550,11 @@ class Omniprobe:
                     memory_space=a.memory_space,
                     access_type=a.access_type,
                     execution_count=a.execution_count,
+                    cache_lines_needed=getattr(a, "cache_lines_needed", 0),
+                    cache_lines_used=getattr(a, "cache_lines_used", 0),
+                    isa_instruction=getattr(a, "isa_instruction", ""),
+                    ir_bytes=getattr(a, "ir_bytes", 0),
+                    isa_bytes=getattr(a, "isa_bytes", 0),
                 )
                 for a in k.accesses
             ]
@@ -534,6 +563,7 @@ class Omniprobe:
                     kernel_name=k.kernel_name,
                     dispatch_id=k.dispatch_id,
                     accesses=accesses,
+                    unanalyzed_flat_accesses=getattr(k, "unanalyzed_flat_accesses", 0) or 0,
                 )
             )
         return MemoryAnalysisResult(kernels=kernels)
@@ -547,14 +577,9 @@ class Omniprobe:
                     bb_id=b.bb_id,
                     source_file=b.source_file,
                     line=b.line,
-                    min_cycles=b.min_cycles,
-                    max_cycles=b.max_cycles,
-                    p25=b.p25,
-                    p50=b.p50,
-                    p75=b.p75,
-                    p95=b.p95,
-                    p99=b.p99,
-                    wave_count=b.wave_count,
+                    column=getattr(b, "column", 0),
+                    wave_visits=getattr(b, "wave_visits", 0),
+                    active_lanes=getattr(b, "active_lanes", 0),
                 )
                 for b in k.basic_blocks
             ]
@@ -591,6 +616,19 @@ KNOWN_BLIND_SPOTS = [
     "pointers go through the stack and become generic (flat) accesses. Build with -O1 or "
     "higher plus -g (CMake: -DCMAKE_BUILD_TYPE=RelWithDebInfo).",
 ]
+
+
+def flat_accesses_warning(per_kernel: dict) -> Optional[str]:
+    """The warning for accesses Omniprobe saw but could not analyze (flat address space)."""
+    if not per_kernel:
+        return None
+    detail = "; ".join(f"{name}: {n}" for name, n in per_kernel.items())
+    return (
+        "Some memory accesses were in the generic (flat) address space and were NOT analyzed, "
+        f"so they are missing from these results ({detail} wave executions). Typical causes: "
+        "the code was built at -O0 (rebuild with -O1 or higher), or the pointers were loaded "
+        "from device memory (pass them as kernel arguments to measure them)."
+    )
 
 
 def silent_kernels_warning(kernel_names: list[str]) -> Optional[str]:
@@ -679,11 +717,17 @@ def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
 
     global_sites.sort(key=lambda s: s["excess_cache_lines"], reverse=True)
     lds_sites.sort(key=lambda s: s["bank_conflicts"], reverse=True)
-    silent = [k.kernel_name for k in result.kernels if not k.accesses]
+    flat = {
+        k.kernel_name: k.unanalyzed_flat_accesses
+        for k in result.kernels
+        if getattr(k, "unanalyzed_flat_accesses", 0)
+    }
+    silent = [k.kernel_name for k in result.kernels if not k.accesses and k.kernel_name not in flat]
     warnings = [
         w
         for w in (
             uninstrumented_warning(getattr(result, "uninstrumented_kernels", None)),
+            flat_accesses_warning(flat),
             silent_kernels_warning(silent),
         )
         if w

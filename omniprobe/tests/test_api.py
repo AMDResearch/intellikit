@@ -53,14 +53,9 @@ def _make_upstream_bb_result():
     bb.bb_id = 1
     bb.source_file = "test.hip"
     bb.line = 10
-    bb.min_cycles = 100.0
-    bb.max_cycles = 500.0
-    bb.p25 = 150.0
-    bb.p50 = 200.0
-    bb.p75 = 300.0
-    bb.p95 = 450.0
-    bb.p99 = 490.0
-    bb.wave_count = 64
+    bb.column = 3
+    bb.wave_visits = 64
+    bb.active_lanes = 4000
 
     kernel = MagicMock()
     kernel.kernel_name = "matmul_kernel"
@@ -138,10 +133,9 @@ class TestAnalyzeBasicBlocks:
         bb = kernel.basic_blocks[0]
         assert isinstance(bb, BasicBlock)
         assert bb.bb_id == 1
-        assert bb.min_cycles == 100.0
-        assert bb.max_cycles == 500.0
-        assert bb.p50 == 200.0
-        assert bb.wave_count == 64
+        assert bb.column == 3
+        assert bb.wave_visits == 64
+        assert bb.active_lanes == 4000
 
 
 class TestDataclassDefaults:
@@ -156,13 +150,10 @@ class TestDataclassDefaults:
         assert access.execution_count == 0
 
     def test_basic_block_defaults(self):
-        bb = BasicBlock(bb_id=0, source_file="a.hip", line=1, min_cycles=0, max_cycles=0)
-        assert bb.p25 == 0.0
-        assert bb.p50 == 0.0
-        assert bb.p75 == 0.0
-        assert bb.p95 == 0.0
-        assert bb.p99 == 0.0
-        assert bb.wave_count == 0
+        bb = BasicBlock(bb_id=0, source_file="a.hip", line=1)
+        assert bb.column == 0
+        assert bb.wave_visits == 0
+        assert bb.active_lanes == 0
 
     def test_empty_results(self):
         mem = MemoryAnalysisResult()

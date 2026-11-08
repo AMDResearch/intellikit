@@ -102,3 +102,11 @@ def test_kernel_without_any_access_is_flagged():
     warnings = summarize_memory(result)["warnings"]
     assert len(warnings) == 1
     assert "built_at_O0" in warnings[0] and "-O0" in warnings[0]
+
+
+def test_unanalyzed_flat_accesses_are_flagged_with_counts():
+    result = _result()
+    result.kernels[0].unanalyzed_flat_accesses = 128
+    warnings = summarize_memory(result)["warnings"]
+    assert len(warnings) == 1
+    assert "strided: 128" in warnings[0] and "flat" in warnings[0] and "-O0" in warnings[0]

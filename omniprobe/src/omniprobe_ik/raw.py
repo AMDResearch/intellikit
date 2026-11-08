@@ -6,9 +6,9 @@
 Upstream's Python API wraps two analyzers. ``run_analyzer`` drives the
 ``omniprobe`` CLI directly so that every other analyzer -- and a message-handler
 plugin written for the occasion -- is reachable today. ``analyze_heatmap``,
-``log_addresses`` and ``log_basic_blocks`` return typed results parsed from ``run_analyzer``
-output; their field names follow the API requested from Omniprobe, so they can
-switch to upstream's methods once those exist.
+``log_addresses`` and ``log_basic_blocks`` return typed results: from Omniprobe's own Python API when
+it provides them (Omniprobe 75ef62b and later), otherwise parsed from
+``run_analyzer`` output. The field names are the same either way.
 """
 
 from __future__ import annotations
@@ -138,24 +138,31 @@ def run_analyzer(
 def handler_build_flags(omniprobe_path: Optional[str] = None) -> dict:
     """Compiler and linker flags for building a bespoke message-handler plugin.
 
-    Omniprobe does not install its headers, so a handler is compiled against the
-    Omniprobe **source** tree (the one whose ``omniprobe/api`` is importable) and
-    linked against ``libdh_comms`` from the build or install tree. Compile with
-    ``hipcc`` (the headers need HIP's ``__device__``) as a shared library::
+    Uses the headers Omniprobe installs (``<prefix>/omniprobe/include/dh_comms``,
+    Omniprobe 5cbb8e2 and later) or, failing that, its source tree, and links
+    against ``libdh_comms``. Compile with ``hipcc`` (the headers need HIP's
+    ``__device__``) as a shared library::
 
         hipcc -std=c++20 -fPIC -shared -O2 <cflags> handler.cc -o libhandler.so <ldflags>
-    """
-    import omniprobe.api
 
-    source = Path(omniprobe.api.__file__).resolve().parent.parent.parent
+    A handler includes ``dh_comms.h`` and ``message_handlers.h``.
+    """
     lib = find_plugin_dir(omniprobe_path).parent
     if not (lib / "libdh_comms.so").is_file():
         raise FileNotFoundError(f"libdh_comms.so not found in {lib}")
-    cflags = [
-        f"-I{source / 'plugins'}",
-        f"-I{source / 'external' / 'dh_comms' / 'include'}",
-        f"-I{source / 'inc'}",
-    ]
+    installed = lib.parent / "include" / "dh_comms"
+    if (installed / "dh_comms.h").is_file():
+        include = installed
+    else:
+        import omniprobe.api
+
+        source = Path(omniprobe.api.__file__).resolve().parent.parent.parent
+        include = source / "external" / "dh_comms" / "include"
+        if not (include / "dh_comms.h").is_file():
+            raise FileNotFoundError(
+                "Omniprobe's dh_comms headers not found (install or source tree)"
+            )
+    cflags = [f"-I{include}"]
     ldflags = [f"-L{lib}", "-ldh_comms", f"-Wl,-rpath,{lib}"]
     return {
         "cflags": cflags,
@@ -197,8 +204,8 @@ class HeatmapResult:
 class AddressRecord:
     """One wave execution of an instrumented memory instruction.
 
-    ``memory_space``, ``access_size`` and ``source_file`` are empty/0 until
-    Omniprobe's AddressLogger emits them (requested 2026-11-08).
+    ``memory_space``, ``access_size`` and ``source_file`` are empty/0 with
+    Omniprobe older than 40a46b3, whose AddressLogger did not emit them.
     """
 
     kernel_name: str
@@ -229,8 +236,8 @@ class AddressTrace:
 
 @dataclass
 class BBRecord:
-    """One wave entering a basic block. ``basic_block_id`` is provisional
-    (taken from the message's ``user_data``; confirmation requested)."""
+    """One wave entering a basic block. ``basic_block_id`` is the id basic-block
+    analysis reports (the message's ``user_data``)."""
 
     kernel_name: str
     dispatch_id: int
@@ -273,10 +280,45 @@ def _common(r: dict) -> dict:
     }
 
 
+def _upstream_call(method: str, **kwargs):
+    """Call upstream Omniprobe's typed method if its API has it; None otherwise."""
+    from .api import Omniprobe
+
+    probe = Omniprobe()
+    func = getattr(probe._upstream, method, None)
+    return None if func is None else func(**kwargs)
+
+
+def _names(uninstrumented) -> list[str]:
+    if isinstance(uninstrumented, dict):
+        return [k for k in uninstrumented if not k.startswith("__amd_rocclr_")]
+    return list(uninstrumented or [])
+
+
+def _copy(cls, obj, **override):
+    """Build an IntelliKit dataclass from an upstream object with the same field names."""
+    import dataclasses
+
+    values = {f.name: getattr(obj, f.name) for f in dataclasses.fields(cls) if hasattr(obj, f.name)}
+    values.update(override)
+    return cls(**values)
+
+
 def analyze_heatmap(
     command: str, kernel_filter: Optional[str] = None, dispatches: str = "all"
 ) -> HeatmapResult:
     """Accesses per memory page (1 MiB pages) per kernel. Build with the memory plugin."""
+    up = _upstream_call(
+        "analyze_heatmap", command=command, kernel_filter=kernel_filter, dispatches=dispatches
+    )
+    if up is not None:
+        return HeatmapResult(
+            kernels=[
+                _copy(KernelHeatmap, k, pages=[_copy(HeatmapPage, p) for p in k.pages])
+                for k in up.kernels
+            ],
+            uninstrumented_kernels=_names(up.uninstrumented_kernels),
+        )
     run = run_analyzer("Heatmap", command, kernel_filter, dispatches)
     result = HeatmapResult(uninstrumented_kernels=run.uninstrumented_kernels)
     for r in run.json_records():
@@ -298,6 +340,19 @@ def log_addresses(
     max_records: Optional[int] = None,
 ) -> AddressTrace:
     """Raw per-wave address trace (AddressLogger). Build with the memory plugin."""
+    up = _upstream_call(
+        "log_addresses",
+        command=command,
+        kernel_filter=kernel_filter,
+        dispatches=dispatches,
+        max_records=max_records,
+    )
+    if up is not None:
+        return AddressTrace(
+            records=[_copy(AddressRecord, r) for r in up.records],
+            truncated=up.truncated,
+            uninstrumented_kernels=_names(up.uninstrumented_kernels),
+        )
     run = run_analyzer("AddressLogger", command, kernel_filter, dispatches)
     trace = AddressTrace(uninstrumented_kernels=run.uninstrumented_kernels)
     for r in run.json_records():
@@ -323,6 +378,19 @@ def log_basic_blocks(
     max_records: Optional[int] = None,
 ) -> BasicBlockTrace:
     """Raw per-wave basic-block entry trace (BasicBlockLogger). Build with the BBStart plugin."""
+    up = _upstream_call(
+        "log_basic_blocks",
+        command=command,
+        kernel_filter=kernel_filter,
+        dispatches=dispatches,
+        max_records=max_records,
+    )
+    if up is not None:
+        return BasicBlockTrace(
+            records=[_copy(BBRecord, r) for r in up.records],
+            truncated=up.truncated,
+            uninstrumented_kernels=_names(up.uninstrumented_kernels),
+        )
     run = run_analyzer("BasicBlockLogger", command, kernel_filter, dispatches)
     trace = BasicBlockTrace(uninstrumented_kernels=run.uninstrumented_kernels)
     for r in run.json_records():

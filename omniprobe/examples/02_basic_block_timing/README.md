@@ -1,7 +1,6 @@
 # Example 02: Basic-Block Execution
 
-Demonstrates using Omniprobe to see which basic blocks of a kernel execute and how
-many waves reach each.
+Demonstrates Omniprobe's exact per-block execution counts and what they say about divergence.
 
 ## What it does
 
@@ -10,16 +9,14 @@ The Python script:
 1. Writes a HIP kernel with a data-dependent branch to a temporary directory
 2. Compiles it with `hipcc -O2 -g` plus `instrumentation_flags("basic_blocks")`
    (`-fpass-plugin=...BBStart...`, `--offload-arch=...`)
-3. Runs `analyze_basic_blocks` and prints each block's `wave_count`, most-reached first
+3. Runs `analyze_basic_blocks` and prints each block's `wave_visits` and `active_lanes`, most-executed first
 
 ## Reading the output
 
-`wave_count` is how many waves reached a block, which shows which paths run.
-Omniprobe's per-block cycle fields (`min_cycles` … `p99`) are **not** per-block cost
-today: they are intervals between instrumentation submits, dominated by
-instrumentation overhead, and block ids and lines are not yet reliably attributed.
-Omniprobe is reworking this. For where time goes, use Metrix kernel timing or Linex
-per-line cycles.
+`wave_visits` is how many times a wave entered a block; `active_lanes` sums the active lanes over
+those entries. Both sides of the branch are entered by every wave with 32 of its 64 lanes: divergence.
+The counts are exact. Basic-block analysis does not time blocks; for where time goes use Metrix kernel
+timing or Linex per-line cycles.
 
 ## Run it
 

@@ -1,6 +1,6 @@
 ---
 name: omniprobe-analysis
-description: Pinpoint which source lines (file:line:column) of a HIP kernel make uncoalesced global memory accesses or cause LDS bank conflicts, measured by recompiling with Omniprobe instrumentation. Use when you must name the inefficient access, after a kernel-level profiler (metrix) shows poor coalescing or LDS bank conflicts, or to verify a memory-access fix. Basic-block analysis shows which blocks run and how often, not their cost. Not for kernel duration or bandwidth (metrix) or per-line stall cycles (linex).
+description: Pinpoint which source lines (file:line:column) of a HIP kernel make uncoalesced global memory accesses or cause LDS bank conflicts, measured by recompiling with Omniprobe instrumentation. Use when you must name the inefficient access, after a kernel-level profiler (metrix) shows poor coalescing or LDS bank conflicts, or to verify a memory-access fix. Basic-block analysis gives exact per-block execution counts, not timing. Not for kernel duration or bandwidth (metrix) or per-line stall cycles (linex).
 ---
 
 # Omniprobe: which line wastes memory bandwidth
@@ -18,7 +18,7 @@ these to an individual access; it costs a rebuild with a compiler plugin.
 | Which source lines stall the most cycles | **linex** |
 | **Which access (file:line) is uncoalesced, or causes LDS bank conflicts, and how badly** | **Omniprobe memory analysis** |
 | Checking that a coalescing/padding fix worked, per access | **Omniprobe** (before/after) |
-| Which basic blocks run, and how many waves reach each | Omniprobe basic-block analysis (see caveat below) |
+| Exactly how often each basic block runs, and with how many active lanes (divergence) | Omniprobe basic-block analysis |
 | Where kernel **time** goes | **metrix** / rocprof kernel timing, **linex** per-line cycles — not Omniprobe |
 
 When not to use: questions about duration, throughput or occupancy; kernels you cannot rebuild
@@ -42,12 +42,14 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
    - **Optimise: `-O1` or higher.** At `-O0` (CMake's default build type, or `Debug`) pointers go
      through the stack and Omniprobe sees **no** accesses at all. With CMake use
      `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
-   - **Do not add `-fgpu-rdc`.** Instrumentation does not need it, and with the plugin an RDC build
-     of two or more files fails to link (`duplicate symbol: __hip_cuid_...`). Only if the project
-     already builds with RDC, keep it and use `omniprobe-ik flags memory --rdc`.
-2. **Run the analysis.** `omniprobe-ik memory ./app [args]` (MCP `analyze_memory`, Python
-   `Omniprobe().analyze_memory("./app")`). The command is split on whitespace (no shell quoting);
-   wrap complex command lines in a script. Limit cost with `--kernel '<regex>'` (matched against the
+   - **Do not add `-fgpu-rdc`** unless the project already uses it: instrumentation does not need
+     it. If it does, keep it (`omniprobe-ik flags memory --rdc`); static kernels are then named
+     `<name> [clone .intern] [clone .<hash>]`. Measured with Omniprobe 75ef62b: an RDC build of two or
+     more files with the plugin still fails to link (`duplicate symbol: __hip_cuid_...`).
+2. **Run the analysis.** `omniprobe-ik memory [options] ./app [app args]` (or
+   `omniprobe-ik memory [options] -- ./app --app-option`; MCP `analyze_memory`, Python
+   `Omniprobe().analyze_memory("./app arg")`). The command is split on whitespace (no shell
+   quoting); wrap command lines with quoted arguments in a script. Limit cost with `--kernel '<regex>'` (matched against the
    **demangled** name, e.g. `'advance'`, `'gstride<16>'`) and `--dispatches 1`.
 3. **Read the ranked summary** ("Top sites", or `summary` from MCP / `summarize_memory()`): worst
    sites first, with file:line:column, read/write, and a per-wave-execution value (below).
@@ -69,6 +71,13 @@ instruction) to get the per-wave-execution value the summary prints.
   halves of 32 lanes; 2 × (ways − 1). Column reads of a 32-wide float tile → **62**; padding the row
   to 33 → 0. Lanes reading the same word (broadcast) cost nothing.
 - Rank by **total** to decide what to fix first; use **per execution** to say how bad the pattern is.
+- **Excess cache lines are L2 traffic, not necessarily DRAM (HBM) traffic.** If the wasted lines
+  stay in L2 (the data is reused soon), making the access contiguous may not speed up an HBM-bound
+  kernel. Judge a fix by HBM bytes and kernel time before and after (metrix
+  `memory.bytes_transferred_hbm`, `memory.hbm_read_bandwidth`, kernel duration), not by excess lines
+  alone. Index arrays are traffic too: a restructuring that **eliminates an index array** (e.g.
+  storing data in the order it is consumed, built once and reused every iteration) often gains
+  more than making the gather contiguous.
 - A load and a store on the same line are separate sites.
 
 ## Blind spots — when Omniprobe reports nothing for an access you suspect
@@ -79,8 +88,8 @@ instruction) to get the per-wave-execution value the summary prints.
   or stored in `__constant__` variables are seen. To measure such an access, temporarily pass the
   pointer as a kernel argument (or a by-value struct), rebuild, rerun — and say in your answer that
   you did so and why.
-- **Code built at `-O0`**: every kernel appears with no accesses (the summary warns). Rebuild
-  with `-O1` or higher.
+- **Code built at `-O0`**: accesses are flat; the summary warns with per-kernel counts of
+  `unanalyzed_flat_accesses`. Rebuild with `-O1` or higher.
 - **Kernels without parameters** are not matched at run time ("No instrumented alternative found").
   Temporarily add an unused pointer parameter to measure them.
 - **Architecture**: cache-line analysis exists for gfx906/908 (64-B lines) and gfx90a/940-942
@@ -93,7 +102,7 @@ instruction) to get the per-wave-execution value the summary prints.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `NoInstrumentedKernelsError` / "no instrumented kernels" | Binary built without the plugin, or wrong plugin | Rebuild with `$(omniprobe-ik flags memory)`; `make clean` first |
-| `ImportError: omniprobe.api` | Omniprobe source tree not on `PYTHONPATH` (MCP servers start with a minimal env) | Set `PYTHONPATH` (and `ROCR_VISIBLE_DEVICES`) in the shell or MCP `env` |
+| `ImportError: omniprobe.api` | Omniprobe's install prefix (or source tree) not on `PYTHONPATH` (MCP servers start with a minimal env) | Set `PYTHONPATH` (and `ROCR_VISIBLE_DEVICES`) in the shell or MCP `env` |
 | Link error `duplicate symbol: __hip_cuid_...` | `-fgpu-rdc` with ≥ 2 files | Drop `-fgpu-rdc` unless the project needs it |
 | `WARNING: … ran WITHOUT instrumentation` / `uninstrumented_kernels` non-empty | That kernel's file was built without the plugin, or a known non-match (no parameters; internal linkage under `-fgpu-rdc`) | Rebuild that file with the flags; see Blind spots |
 | A kernel or line is missing | Blind spot above, or `--kernel` regex too narrow | See Blind spots; filter on demangled names |
@@ -111,7 +120,8 @@ When no analyzer counts what you need (e.g. executions by partially active waves
 histogram, accesses to one buffer), **write a message handler** — about 60 lines of C++:
 
 ```cpp
-#include "plugin.h"   // from the Omniprobe source tree; pulls in dh_comms
+#include "dh_comms.h"           // Omniprobe installs these in <prefix>/omniprobe/include/dh_comms
+#include "message_handlers.h"
 class my_counter_t : public dh_comms::message_handler_base {
  public:
   my_counter_t(std::string kernel, uint64_t dispatch) : kernel_(std::move(kernel)) {}
@@ -129,17 +139,16 @@ class my_counter_t : public dh_comms::message_handler_base {
  private:
   std::string kernel_;
 };
-extern "C" PUBLIC_API void getMessageHandlers(const std::string &kernel, uint64_t dispatch,
+extern "C" __attribute__((visibility("default"))) void getMessageHandlers(const std::string &kernel, uint64_t dispatch,
     std::vector<dh_comms::message_handler_base *> &out) { out.push_back(new my_counter_t(kernel, dispatch)); }
 ```
 
 - Build it as a shared library with the command `omniprobe-ik handler-flags` prints (hipcc,
-  `-fPIC -shared`, the Omniprobe **source** tree's include dirs, `-ldh_comms`; Python
-  `handler_build_flags()`). Omniprobe does not install its headers.
+  `-fPIC -shared`, Omniprobe's `include/dh_comms`, `-ldh_comms`; Python `handler_build_flags()`).
 - Build the application with `$(omniprobe-ik flags memory)` (address messages) or
   `basic-blocks` (block messages, `user_type == basic_block_start`), then run
-  `omniprobe-ik run /absolute/path/libmy_counter.so ./app`. What `report()` prints arrives on
-  omniprobe's **stderr** (Python: `run.log`).
+  `omniprobe-ik run /absolute/path/libmy_counter.so ./app`. Read what `report()` prints from
+  the run's output (Python: `run.log`, which holds stdout and stderr).
 - **Test it first** on a small kernel whose answer you can compute by hand (e.g. 1000 threads in
   blocks of 256 → 16 waves, the last with 40 active lanes), then run it on the real application.
 - Every wave also loads its kernel arguments (`constant` space) — filter on `space` as needed.
@@ -153,10 +162,11 @@ extern "C" PUBLIC_API void getMessageHandlers(const std::string &kernel, uint64_
 
 `list_analyzers` (MCP) reports these and the blind spots.
 
-**Basic-block analysis: which blocks run and how often — its cycles are not per-block cost.** Use `wave_count` (how
-many waves reached a block) to see which paths execute. Do **not** use its cycle fields
-(`min_cycles`…`p99`) as per-block cost: Omniprobe's basic-block "cycles" are currently intervals between instrumentation submits, dominated by instrumentation overhead (millions of cycles at thousands of waves, thousands at a few waves, for the same kernel), and block ids and source lines are not yet reliably attributed. Omniprobe is reworking this (2026-11-08). For time hotspots use metrix or rocprof kernel
-timing, and linex for per-line cycles. Never run the basic-block analysis on a binary built for
+**Basic-block analysis = exact per-block execution counts with correct source lines; not timing.**
+Each block reports `wave_visits` (how many times a wave entered it) and `active_lanes` (lanes
+summed over those entries; `active_lanes / wave_visits` = mean occupancy, low means divergence).
+There are no cycle counts: for where time goes use metrix or rocprof kernel timing, and linex for
+per-line cycles. Build with `omniprobe-ik flags basic-blocks`; never run it on a binary built for
 memory analysis.
 
 Further detail: `docs/tools/omniprobe.md` in the IntelliKit repository

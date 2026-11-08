@@ -1,6 +1,6 @@
 # Omniprobe (IntelliKit)
 
-GPU memory coalescing and LDS bank-conflict analysis at source level, plus basic-block execution counts, for IntelliKit.
+GPU memory coalescing and LDS bank-conflict analysis at source level, plus exact basic-block execution counts, for IntelliKit.
 
 This package wraps [Omniprobe](https://github.com/AMDResearch/omniprobe)'s Python API to provide memory access pattern analysis and basic-block execution counts through IntelliKit's standard Python API, MCP server, CLI, and agent skill interfaces.
 
@@ -9,7 +9,7 @@ This package wraps [Omniprobe](https://github.com/AMDResearch/omniprobe)'s Pytho
 Omniprobe must be **pre-installed** on the system. This package does not bundle or build Omniprobe — it drives the existing installation via its Python API.
 
 1. **Omniprobe executable** — `omniprobe` must be on `PATH`
-2. **Omniprobe Python API** — the Omniprobe repository must be on `PYTHONPATH` or installed so that `from omniprobe.api import Omniprobe` works
+2. **Omniprobe Python API** — Omniprobe's install prefix (or source tree) on `PYTHONPATH`, so that `from omniprobe.api import Omniprobe` works
 3. **ROCm 7.0+** and a supported AMD GPU
 4. **Python 3.10+**
 5. **An instrumented build of the application.** Omniprobe only analyzes kernels compiled with its LLVM pass plugin (`-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so --offload-arch=<arch>`), and memory and basic-block analysis use different plugins. `instrumentation_flags()` and `omniprobe-ik flags` return the exact flags; a binary built without them raises `NoInstrumentedKernelsError`.
@@ -44,11 +44,11 @@ for kernel in result.kernels:
         print(f"{access.source_file}:{access.line} "
               f"bank_conflicts={access.bank_conflicts}")
 
-# Basic blocks: which ran and how many waves reached each (not their cost)
+# Basic blocks: exact execution counts per block (not timing)
 result = probe.analyze_basic_blocks("./my_gpu_app_bb")
 for kernel in result.kernels:
     for bb in kernel.basic_blocks:
-        print(f"BB {bb.bb_id}: reached by {bb.wave_count} waves")
+        print(f"BB {bb.bb_id}: {bb.wave_visits} wave entries, {bb.active_lanes} active lanes")
 ```
 
 ### CLI
@@ -83,7 +83,7 @@ The MCP server exposes four tools: `get_instrumentation_flags`, `analyze_memory`
 | Analysis | Detects | Key Fields |
 |----------|---------|------------|
 | **Memory** | Uncoalesced global accesses, LDS bank conflicts, excess cache lines | `bank_conflicts`, `excess_cache_lines`, `memory_space` |
-| **Basic Blocks** | Which blocks execute and how often (cycle fields are not per-block cost yet; use metrix for time) | `wave_count` |
+| **Basic Blocks** | Exact per-block execution counts and divergence (no timing; use metrix for time) | `wave_visits`, `active_lanes` |
 
 ## License
 
