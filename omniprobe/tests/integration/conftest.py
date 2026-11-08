@@ -99,7 +99,6 @@ int main() {
 
 # A single kernel with a data-dependent branch, for basic-block timing. Kept in
 # sync with omniprobe/examples/02_basic_block_timing/analyze_basic_blocks.py.
-# Single-kernel on purpose: see BB_MULTI_KERNEL_XFAIL in test_basic_blocks.py.
 BRANCHING_KERNEL = """
 #include <hip/hip_runtime.h>
 
@@ -139,11 +138,6 @@ int main() {
     return 0;
 }
 """
-
-# Points at the Omniprobe fix for its JSON output defects. Tests marked with it
-# are strict xfails: when the fix lands they XPASS, the run fails, and the
-# marker has to be removed.
-OMNIPROBE_JSON_FIX = "Omniprobe bf_json-output-integrity"
 
 
 def _has_omniprobe_binary() -> bool:

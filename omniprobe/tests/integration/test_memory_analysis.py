@@ -12,7 +12,6 @@ tool: they compile a kernel, analyze it, and assert on what comes back.
 import pytest
 
 from .conftest import (
-    OMNIPROBE_JSON_FIX,
     skip_no_gpu,
     skip_no_hipcc,
     skip_no_omniprobe,
@@ -82,15 +81,6 @@ def test_strided_kernel_wastes_more_bandwidth(probe, strided_binary):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=ValueError,
-    reason=(
-        "Omniprobe defect: when -k filters out the first-dispatched kernel, the "
-        "MemoryAnalysis JSON starts with ',' and does not parse. Fixed by "
-        f"{OMNIPROBE_JSON_FIX}; remove this marker when that lands."
-    ),
-)
 def test_kernel_filter_narrows_results(probe, strided_binary):
     """The kernel_filter regex actually restricts which kernels are analyzed."""
     result = probe.analyze_memory(command=str(strided_binary), kernel_filter="strided.*")

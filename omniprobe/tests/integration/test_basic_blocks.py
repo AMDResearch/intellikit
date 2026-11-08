@@ -4,15 +4,11 @@
 """End-to-end basic-block timing against a real Omniprobe installation.
 
 Companion to ``test_memory_analysis.py``, covering the second of the two
-analyses the package exposes. The main tests use a single-kernel program:
-Omniprobe's basic-block JSON for more than one kernel does not parse yet, which
-``test_multi_kernel_program`` tracks separately.
+analyses the package exposes. The main tests use a single-kernel program, and
+``test_multi_kernel_program`` covers a program with two.
 """
 
-import pytest
-
 from .conftest import (
-    OMNIPROBE_JSON_FIX,
     skip_no_gpu,
     skip_no_hipcc,
     skip_no_omniprobe,
@@ -72,15 +68,6 @@ def test_wave_counts_are_positive(probe, branching_bb_binary):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=ValueError,
-    reason=(
-        "Omniprobe defect: BasicBlockAnalysis JSON for more than one kernel is two "
-        f"concatenated objects, not valid JSON. Fixed by {OMNIPROBE_JSON_FIX}; "
-        "remove this marker when that lands."
-    ),
-)
 def test_multi_kernel_program(probe, strided_bb_binary):
     """Both kernels of a two-kernel program are reported."""
     result = probe.analyze_basic_blocks(command=str(strided_bb_binary))
