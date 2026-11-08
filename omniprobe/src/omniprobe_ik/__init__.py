@@ -13,6 +13,7 @@ from importlib.metadata import PackageNotFoundError, version as _get_version
 
 from .api import (
     ANALYSIS_PLUGINS,
+    INSTALL_DOC,
     BasicBlock,
     BasicBlockResult,
     KernelBBResult,
@@ -21,6 +22,7 @@ from .api import (
     MemoryAnalysisResult,
     NoInstrumentedKernelsError,
     Omniprobe,
+    check_installation,
     detect_offload_arch,
     instrumentation_flags,
     parse_uninstrumented_kernels,
@@ -73,6 +75,8 @@ __all__ = [
     "parse_uninstrumented_kernels",
     "uninstrumented_warning",
     "detect_offload_arch",
+    "check_installation",
+    "INSTALL_DOC",
     "MemoryAnalysisResult",
     "KernelMemoryResult",
     "MemoryAccess",

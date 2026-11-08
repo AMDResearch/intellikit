@@ -6,10 +6,10 @@ This package wraps [Omniprobe](https://github.com/AMDResearch/omniprobe)'s Pytho
 
 ## Prerequisites
 
-Omniprobe must be **pre-installed** on the system. This package does not bundle or build Omniprobe — it drives the existing installation via its Python API.
+Omniprobe must be **installed separately**. This package does not bundle or build Omniprobe — it drives an existing installation. To build and install Omniprobe, see [Install Omniprobe](../docs/getting-started/installing-omniprobe.md); `omniprobe-ik check` reports whether it is usable from your environment.
 
-1. **Omniprobe executable** — `omniprobe` must be on `PATH`
-2. **Omniprobe Python API** — Omniprobe's install prefix (or source tree) on `PYTHONPATH`, so that `from omniprobe.api import Omniprobe` works
+1. **Omniprobe on `PATH`** — `<prefix>/omniprobe/bin` of the install. The instrumentation plugins and Omniprobe's Python API are found from the `omniprobe` executable there; `PYTHONPATH` is not needed.
+2. **`rocminfo` on `PATH`** (or `$ROCM_PATH/bin`), to detect the GPU architecture
 3. **ROCm 7.0+** and a supported AMD GPU
 4. **Python 3.10+**
 5. **An instrumented build of the application.** Omniprobe only analyzes kernels compiled with its LLVM pass plugin (`-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so --offload-arch=<arch>`), and memory and basic-block analysis use different plugins. `instrumentation_flags()` and `omniprobe-ik flags` return the exact flags; a binary built without them raises `NoInstrumentedKernelsError`.

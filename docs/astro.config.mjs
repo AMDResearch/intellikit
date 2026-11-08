@@ -19,6 +19,7 @@ export default defineConfig({
           label: "Getting Started",
           items: [
             { label: "Installation", slug: "getting-started/installation" },
+            { label: "Install Omniprobe", slug: "getting-started/installing-omniprobe" },
             { label: "Quick Start", slug: "getting-started/quickstart" },
           ],
         },

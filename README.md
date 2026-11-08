@@ -62,7 +62,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
 | GPU | **MI300+** for the full GPU experience; some pieces vary by tool — see each package’s README |
 | cmake, libdwarf-dev, libzstd-dev | Required by **accordo** and **nexus** only (C++ build via KernelDB) |
 | uProf | **AMD uProf** on **x86** for `uprof_mcp` only — see that README |
-| Omniprobe | The **`omniprobe`** tool installed separately and on `PATH`, for the `omniprobe` package only — it drives an existing install rather than bundling one. See that [README](omniprobe/README.md) |
+| Omniprobe | The **`omniprobe`** tool installed separately, `<prefix>/omniprobe/bin` on `PATH`, for the `omniprobe` package only — it drives an existing install rather than bundling one. See [Install Omniprobe](docs/getting-started/installing-omniprobe.md) |
 
 > **System packages for accordo / nexus:** These tools compile C++ code (via [KernelDB](https://github.com/AMDResearch/KernelDB)) during `pip install`. Install `cmake`, `libdwarf-dev`, and `libzstd-dev` (`libdwarf-devel`/`libzstd-devel` on Fedora/RHEL) first, or the build will fail. The [IntelliKit Docker image](docker/Dockerfile) includes these packages; `install.sh` checks for them and exits with an error if missing. See [docs](https://amdresearch.github.io/intellikit/getting-started/installation/) for details.
 

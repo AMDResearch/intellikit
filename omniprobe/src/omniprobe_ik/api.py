@@ -7,8 +7,10 @@
 Wraps Omniprobe's Python API (``omniprobe.api``) to provide memory coalescing
 analysis and basic-block execution counts through IntelliKit's standard interface.
 
-Omniprobe must be pre-installed on the system and its Python API importable
-(i.e. the Omniprobe repo must be on ``PYTHONPATH`` or installed).
+Omniprobe must be installed separately: put ``<prefix>/omniprobe/bin`` of an
+Omniprobe install on ``PATH``. The executable, its instrumentation plugins and its
+Python API are all found from there (see :data:`INSTALL_DOC` and
+:func:`check_installation`).
 
 Omniprobe only analyzes kernels that were compiled with one of its LLVM
 instrumentation plugins. Build the application with the flags returned by
@@ -56,6 +58,14 @@ ANALYSIS_PLUGINS = {
 }
 
 
+# How to build and install Omniprobe; every "not found" message points here.
+INSTALL_DOC = "https://github.com/AMDResearch/intellikit/blob/main/docs/getting-started/installing-omniprobe.md"
+_NOT_INSTALLED = (
+    "Put <prefix>/omniprobe/bin of an Omniprobe install on PATH (in an MCP setup, in the "
+    "server's 'env' configuration); to install Omniprobe see " + INSTALL_DOC
+)
+
+
 class NoInstrumentedKernelsError(RuntimeError):
     """Omniprobe ran but reported no instrumented kernel.
 
@@ -93,7 +103,7 @@ def find_plugin_dir(omniprobe_path: Optional[str] = None) -> Path:
     if exe is None:
         raise FileNotFoundError(
             "omniprobe executable not found on PATH, so its instrumentation plugins "
-            "cannot be located; put omniprobe on PATH or set OMNIPROBE_PLUGIN_DIR"
+            f"cannot be located. {_NOT_INSTALLED}"
         )
 
     candidates = [Path(exe).parent.parent / "lib" / "plugins"]
@@ -183,6 +193,18 @@ def instrumentation_flags(
     return flags
 
 
+def _upstream_source_root(omniprobe_path: Optional[str] = None) -> Optional[Path]:
+    """The directory holding ``omniprobe/api`` for the given or ``PATH`` executable, or None."""
+    exe = omniprobe_path or shutil.which("omniprobe")
+    if exe is None:
+        return None
+    for start in (Path(exe), Path(exe).resolve()):
+        for parent in start.parents:
+            if (parent / "omniprobe" / "api" / "__init__.py").is_file():
+                return parent
+    return None
+
+
 def _add_upstream_source_to_path(omniprobe_path: Optional[str] = None) -> bool:
     """Find Omniprobe's Python API from its executable and put it on ``sys.path``.
 
@@ -194,17 +216,7 @@ def _add_upstream_source_to_path(omniprobe_path: Optional[str] = None) -> bool:
     import importlib
     import sys
 
-    exe = omniprobe_path or shutil.which("omniprobe")
-    if exe is None:
-        return False
-    source_root = None
-    for start in (Path(exe), Path(exe).resolve()):
-        for parent in start.parents:
-            if (parent / "omniprobe" / "api" / "__init__.py").is_file():
-                source_root = parent
-                break
-        if source_root is not None:
-            break
+    source_root = _upstream_source_root(omniprobe_path)
     if source_root is None:
         return False
     sys.path.insert(0, str(source_root))
@@ -216,6 +228,147 @@ def _add_upstream_source_to_path(omniprobe_path: Optional[str] = None) -> bool:
         return False
     logger.info("Using Omniprobe's Python API from %s", source_root)
     return True
+
+
+def omniprobe_rocm(omniprobe_path: Optional[str] = None) -> Optional[Path]:
+    """The ROCm installation an Omniprobe install runs against, or *None* if unknown.
+
+    That is the ROCm its core library resolves ``libhsa-runtime64.so`` from -- the
+    one its instrumentation plugins were built for, and the same rule Omniprobe's
+    launcher uses to pick a ROCm.
+    """
+    exe = omniprobe_path or shutil.which("omniprobe")
+    if exe is None:
+        return None
+    for root in (Path(exe).parent.parent, Path(exe).resolve().parent.parent):
+        core = root / "lib" / "liblogDuration64.so"
+        if not core.is_file():
+            continue
+        try:
+            out = subprocess.run(["ldd", str(core)], capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        for line in out.stdout.splitlines():
+            if "libhsa-runtime64.so" in line and "=>" in line:
+                lib = Path(line.split("=>")[1].split()[0]).resolve()
+                return lib.parent.parent
+    return None
+
+
+def compiler_rocm() -> Optional[Path]:
+    """The ROCm installation the ``hipcc`` on ``PATH`` belongs to, or *None*."""
+    hipcc = shutil.which("hipcc")
+    return Path(hipcc).resolve().parent.parent if hipcc else None
+
+
+def check_installation(omniprobe_path: Optional[str] = None) -> dict:
+    """Report whether Omniprobe is usable from here, and what is missing if not.
+
+    Checks the ``omniprobe`` executable, the instrumentation plugins, Omniprobe's
+    Python API, the GPU architecture (``rocminfo``), and whether Omniprobe, the
+    ``hipcc`` on ``PATH`` and ``ROCM_PATH`` (if set) refer to the same ROCm. A
+    mismatch is a warning, not a problem: the plugins are built with one ROCm's
+    LLVM and LLVM does not promise that another version can load them, but on
+    gfx90a with Omniprobe 22c4d95 a trivial kernel compiled by ROCm 7.1.0's and
+    6.4.1's hipcc with 7.2.0-built plugins gave the same report as 7.2.0's.
+
+    Returns:
+        A dict with ``ok`` (bool: no problems), ``problems`` and ``warnings``
+        (lists of str; a ROCm mismatch is a warning), and the fields
+        ``executable``, ``executable_runs``, ``plugin_dir``, ``plugins``, ``python_api``,
+        ``gpu_arch``, ``omniprobe_rocm``, ``compiler_rocm``, ``rocm_path``.
+    """
+    import importlib.util
+
+    problems: list[str] = []
+    report: dict = {"install_doc": INSTALL_DOC}
+
+    exe = omniprobe_path or shutil.which("omniprobe")
+    report["executable"] = exe
+    if exe is None:
+        problems.append(f"omniprobe executable not found on PATH. {_NOT_INSTALLED}")
+
+    report["executable_runs"] = None
+    if exe is not None:
+        try:
+            run = subprocess.run([exe, "--help"], capture_output=True, text=True, timeout=60)
+            report["executable_runs"] = run.returncode == 0
+            if run.returncode != 0:
+                last = (run.stderr.strip().splitlines() or ["no output"])[-1]
+                problems.append(
+                    f"{exe} --help failed ({last}); its Python requirements may be missing: "
+                    "python3 -m pip install -r <omniprobe source>/omniprobe/requirements.txt"
+                )
+        except (OSError, subprocess.SubprocessError) as e:
+            report["executable_runs"] = False
+            problems.append(f"{exe} could not be run: {e}")
+
+    report["plugin_dir"] = None
+    report["plugins"] = {}
+    if exe is not None:
+        try:
+            plugin_dir = find_plugin_dir(exe)
+            report["plugin_dir"] = str(plugin_dir)
+            report["plugins"] = {
+                analysis: (plugin_dir / name).is_file()
+                for analysis, name in ANALYSIS_PLUGINS.items()
+            }
+            missing = [a for a, present in report["plugins"].items() if not present]
+            if missing:
+                problems.append(f"instrumentation plugins missing in {plugin_dir}: {missing}")
+        except FileNotFoundError as e:
+            problems.append(str(e))
+
+    # Located, not imported: asking the question must not run Omniprobe's code.
+    api = None
+    try:
+        spec = importlib.util.find_spec("omniprobe.api")
+    except (ImportError, ValueError):
+        spec = None
+    if spec is not None and spec.origin:
+        api = str(Path(spec.origin).parent)
+    elif exe is not None:
+        root = _upstream_source_root(exe)
+        if root is not None:
+            api = str(root / "omniprobe" / "api")
+    report["python_api"] = api
+    if api is None and exe is not None:
+        problems.append(
+            f"Omniprobe's Python API was not found next to {exe} (expected "
+            "<prefix>/omniprobe/api); the install looks incomplete"
+        )
+
+    arch = detect_offload_arch()
+    report["gpu_arch"] = arch
+    if arch is None:
+        problems.append("no GPU architecture from rocminfo: put ROCm's bin directory on PATH")
+
+    op_rocm = omniprobe_rocm(exe) if exe else None
+    cc_rocm = compiler_rocm()
+    env_rocm = os.environ.get("ROCM_PATH")
+    report["omniprobe_rocm"] = str(op_rocm) if op_rocm else None
+    report["compiler_rocm"] = str(cc_rocm) if cc_rocm else None
+    report["rocm_path"] = env_rocm
+    warnings: list[str] = []
+    if cc_rocm is None:
+        problems.append("hipcc not found on PATH: instrumented builds need ROCm's hipcc")
+    elif op_rocm is not None and op_rocm != cc_rocm:
+        warnings.append(
+            f"ROCm mismatch: Omniprobe was built for {op_rocm} but the hipcc on PATH is from "
+            f"{cc_rocm}. Its instrumentation plugins are LLVM pass plugins built with "
+            f"{op_rocm}'s LLVM; LLVM gives plugins no stable interface across versions, so "
+            "a mismatched compiler may reject or crash in them"
+        )
+    if env_rocm and op_rocm is not None and Path(env_rocm).resolve() != op_rocm:
+        warnings.append(
+            f"ROCM_PATH={env_rocm} is not the ROCm Omniprobe was built for ({op_rocm}); "
+            "Omniprobe uses ROCM_PATH's llvm-objdump when it has one"
+        )
+
+    report["problems"] = problems
+    report["warnings"] = warnings
+    report["ok"] = not problems
+    return report
 
 
 _NO_ALTERNATIVE = re.compile(r"No instrumented alternative found for (.+?)\s*$", re.MULTILINE)
@@ -498,12 +651,12 @@ class Omniprobe:
             from omniprobe.api import Omniprobe as _UpstreamOmniprobe
         except ImportError:
             if not _add_upstream_source_to_path(omniprobe_path):
-                msg = (
-                    "Could not import omniprobe.api. Put Omniprobe's install prefix (or its "
-                    "source tree) on PYTHONPATH. "
-                    "MCP clients often start servers with a minimal environment, so set "
-                    "PYTHONPATH in the server's 'env' configuration."
+                where = (
+                    "no omniprobe executable on PATH"
+                    if (omniprobe_path or shutil.which("omniprobe")) is None
+                    else "the omniprobe executable found has no omniprobe/api next to it"
                 )
+                msg = f"Could not import omniprobe.api, Omniprobe's Python API ({where}). {_NOT_INSTALLED}"
                 raise ImportError(msg) from None
             from omniprobe.api import Omniprobe as _UpstreamOmniprobe
 

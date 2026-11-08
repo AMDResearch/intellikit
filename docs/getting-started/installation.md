@@ -37,15 +37,17 @@ same name rather than bundling one. Installing the IntelliKit package does not i
 [Omniprobe](https://github.com/AMDResearch/omniprobe), and nothing fails at install time if it is
 absent — the package only reports the problem when you ask it to analyze something.
 
-Before using the `omniprobe` package, make sure that:
+To build and install Omniprobe, see [Install Omniprobe](installing-omniprobe.md). To use it, put
+`<prefix>/omniprobe/bin` of the install on your `PATH`, with ROCm's `bin` (for `rocminfo` and
+`hipcc`); the package finds the instrumentation plugins and Omniprobe's Python API from the
+`omniprobe` executable there. Then run:
 
-- the `omniprobe` executable is on your `PATH`, and
-- Omniprobe's Python API is importable, so that `from omniprobe.api import Omniprobe` succeeds —
-  the Omniprobe repository must be on `PYTHONPATH` or installed.
+```bash
+omniprobe-ik check
+```
 
-Constructing the analyzer raises `ImportError` with a message naming `PYTHONPATH` when the Python
-API is missing, so that condition is easy to recognize. Locating the executable is delegated to
-Omniprobe's own API, which reports a missing binary itself.
+It reports the executable, plugins, Python API, GPU architecture and ROCm match, and exits 1 if
+anything is missing. Every "not found" error from the package names `PATH` and the install page.
 
 ## Quick install
 

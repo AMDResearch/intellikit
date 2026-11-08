@@ -101,7 +101,7 @@ instruction) to get the per-wave-execution value the summary prints.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `NoInstrumentedKernelsError` / "no instrumented kernels" | Binary built without the plugin, or wrong plugin | Rebuild with `$(omniprobe-ik flags memory)`; `make clean` first |
-| `ImportError: omniprobe.api` | Omniprobe's install prefix (or source tree) not on `PYTHONPATH` (MCP servers start with a minimal env) | Set `PYTHONPATH` (and `ROCM_PATH`, `ROCR_VISIBLE_DEVICES`) in the shell or MCP `env` |
+| "omniprobe executable not found on PATH" / `ImportError: omniprobe.api` | `<prefix>/omniprobe/bin` of an Omniprobe install is not on `PATH` (MCP servers start with a minimal env), or Omniprobe is not installed | `omniprobe-ik check` reports what is missing; the error message names the install page |
 | Link error `duplicate symbol: __hip_cuid_...` | `-fgpu-rdc` with ≥ 2 files on Omniprobe older than 3003058 | Update Omniprobe, or drop `-fgpu-rdc` unless the project needs it |
 | `WARNING: … ran WITHOUT instrumentation` / `uninstrumented_kernels` non-empty | That kernel's file was built without the plugin | Rebuild that file with the flags (every file that defines a kernel) |
 | A kernel or line is missing | Blind spot above, or `--kernel` regex too narrow | See Blind spots; filter on demangled names |

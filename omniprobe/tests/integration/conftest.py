@@ -151,10 +151,15 @@ def _has_upstream_api() -> bool:
     ``find_spec`` is used rather than a real import so that merely asking the
     question cannot execute upstream module code during collection.
     """
+    from omniprobe_ik.api import _upstream_source_root
+
     try:
-        return importlib.util.find_spec("omniprobe.api") is not None
+        if importlib.util.find_spec("omniprobe.api") is not None:
+            return True
     except (ImportError, ValueError):
-        return False
+        pass
+    # The wrapper also finds the API next to the omniprobe executable on PATH.
+    return _upstream_source_root() is not None
 
 
 _HIP_COUNT_PROBE = """
@@ -217,7 +222,7 @@ skip_no_omniprobe = pytest.mark.skipif(
 )
 skip_no_upstream_api = pytest.mark.skipif(
     not _has_upstream_api(),
-    reason="omniprobe.api not importable (Omniprobe repo not on PYTHONPATH)",
+    reason="Omniprobe's Python API not found (no omniprobe/api next to the omniprobe on PATH)",
 )
 skip_no_gpu = pytest.mark.skipif(
     _HIP_DEVICES <= 0,

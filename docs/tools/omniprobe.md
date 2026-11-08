@@ -17,8 +17,10 @@ Omniprobe is a **separate tool** that this package drives — it is not a pip de
 
 - Python >= 3.10
 - ROCm 7.0+ and a supported AMD GPU
-- The `omniprobe` executable on `PATH`
-- Omniprobe's Python API importable, so that `from omniprobe.api import Omniprobe` works — put Omniprobe's install prefix (it contains `omniprobe/api`) or the [Omniprobe repository](https://github.com/AMDResearch/omniprobe) on `PYTHONPATH`; failing that, the package looks next to the `omniprobe` executable
+- `<prefix>/omniprobe/bin` of an Omniprobe install on `PATH`. The package finds the instrumentation plugins and Omniprobe's Python API from the `omniprobe` executable there; `PYTHONPATH` is not needed. To build and install Omniprobe, see [Install Omniprobe](../getting-started/installing-omniprobe.md).
+- `rocminfo` on `PATH` (or `$ROCM_PATH/bin`), to detect the GPU architecture
+
+`omniprobe-ik check` reports whether all of this is in place, and whether Omniprobe and the `hipcc` on `PATH` use the same ROCm.
 
 The package wraps the existing installation through a subprocess. It does not bundle or build Omniprobe's C++ components.
 
@@ -337,7 +339,7 @@ omniprobe-mcp --transport stdio
 omniprobe-mcp --transport http --port 8000
 ```
 
-The server exposes four tools:
+The server exposes five tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -347,29 +349,27 @@ The server exposes four tools:
 | `run_analyzer` | Runs any analyzer, a C++ handler plugin (`.so`) or a Python handler (`.py`); returns `output`, `stdout`, `stderr` |
 | `list_analyzers` | Reports the available analysis types, which tool and plugin each needs, and Omniprobe's known blind spots |
 
-The server needs Omniprobe's Python API on `PYTHONPATH`: its install prefix (Omniprobe 5cbb8e2 and
-later install `omniprobe/api` there) or its source tree. MCP clients usually start servers with a minimal
-environment, so set it, and the GPU selection, in the server's configuration:
+The server needs `<prefix>/omniprobe/bin` of an Omniprobe install, and ROCm's `bin` (for `rocminfo`
+and `hipcc`), on `PATH`. MCP clients usually start servers with a minimal environment, so set `PATH`,
+and the GPU selection, in the server's configuration:
 
 ```json
 "omniprobe": {
   "command": "omniprobe-mcp",
   "env": {
     "PATH": "/opt/omniprobe-install/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
-    "PYTHONPATH": "/opt/omniprobe-install",
-    "ROCM_PATH": "/opt/rocm",
     "ROCR_VISIBLE_DEVICES": "0"
   }
 }
 ```
 
-Set `ROCM_PATH` to the ROCm installation Omniprobe was built against: without it Omniprobe runs
-ROCm tools (e.g. `llvm-objdump`) from `/opt/rocm`, and where they are missing it reports no results
-even for an instrumented binary. `analyze_memory` then raises an error that names `ROCM_PATH`
-rather than asking for a rebuild.
-
-If `PYTHONPATH` is missing, the wrapper also looks for the API next to the `omniprobe` executable on
-`PATH` (install prefix, or the source tree a build tree's symlink points to).
+The Python API is found next to the `omniprobe` executable (install prefix, or the source tree a
+build tree's symlink points to); a `PYTHONPATH` holding Omniprobe's install prefix is also honored.
+Omniprobe 22c4d95 picks its ROCm by itself. Omniprobe builds older than 149cf2c need `ROCM_PATH`
+set to the ROCm they were built against: without it they run `llvm-objdump` from `/opt/rocm`, and
+where it is missing they report no results even for an instrumented binary; `analyze_memory` then
+raises an error that names `ROCM_PATH` rather than asking for a rebuild. The `python3` found through
+this `PATH` runs Omniprobe's launcher and needs `pyfiglet` (see [Install Omniprobe](../getting-started/installing-omniprobe.md)).
 
 `summarize_memory(result, top=10)` produces the same ranked summary from the Python API.
 

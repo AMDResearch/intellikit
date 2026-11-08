@@ -100,6 +100,18 @@ Examples:
         "--format", choices=["json", "csv"], default="json", help="Omniprobe log format"
     )
 
+    # -- check subcommand ---------------------------------------------------
+    check_parser = subparsers.add_parser(
+        "check",
+        help="Check that Omniprobe is installed and usable from here",
+        description=(
+            "Report the omniprobe executable, its instrumentation plugins, its Python API, "
+            "the GPU architecture, and whether Omniprobe, hipcc and ROCM_PATH use the same "
+            "ROCm. Exits 1 if anything is missing or mismatched."
+        ),
+    )
+    check_parser.add_argument("--json", action="store_true", help="Print the report as JSON")
+
     # -- handler-flags subcommand -------------------------------------------
     subparsers.add_parser(
         "handler-flags",
@@ -297,6 +309,45 @@ def _format_bb_result(result) -> str:
     return "\n".join(lines)
 
 
+def check_command(args) -> int:
+    """Report whether Omniprobe is usable; exit 1 if not."""
+    from ..api import check_installation
+
+    report = check_installation()
+    if args.json:
+        import json
+
+        print(json.dumps(report, indent=2))
+        return 0 if report["ok"] else 1
+
+    plugins = report["plugins"]
+    rows = [
+        ("omniprobe executable", report["executable"]),
+        ("executable runs", {True: "yes", False: "NO"}.get(report["executable_runs"])),
+        ("plugin directory", report["plugin_dir"]),
+        ("plugins", ", ".join(f"{a}: {'yes' if p else 'MISSING'}" for a, p in plugins.items())),
+        ("Python API", report["python_api"]),
+        ("GPU architecture", report["gpu_arch"]),
+        ("Omniprobe's ROCm", report["omniprobe_rocm"]),
+        ("hipcc's ROCm", report["compiler_rocm"]),
+        ("ROCM_PATH", report["rocm_path"] or "(not set)"),
+    ]
+    for label, value in rows:
+        print(f"{label + ':':22} {value if value else 'NOT FOUND'}")
+    if report["warnings"]:
+        print("\nWarnings:")
+        for warning in report["warnings"]:
+            print(f"  - {warning}")
+    if report["ok"]:
+        print("\nOK: Omniprobe is usable from this environment.")
+        return 0
+    print("\nProblems:")
+    for problem in report["problems"]:
+        print(f"  - {problem}")
+    print(f"\nInstalling Omniprobe: {report['install_doc']}")
+    return 1
+
+
 def _write_output(content: str, output_path: str | None) -> None:
     """Write output to file or stdout."""
     if output_path:
@@ -327,6 +378,8 @@ def main() -> int:
             return flags_command(args)
         elif args.command == "run":
             return run_command(args)
+        elif args.command == "check":
+            return check_command(args)
         elif args.command == "handler-flags":
             return handler_flags_command(args)
         else:
@@ -336,14 +389,6 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
         return 130
-
-    except ImportError as e:
-        print(f"\nError: {e}", file=sys.stderr)
-        print(
-            "Ensure Omniprobe is installed and its Python API is on PYTHONPATH.",
-            file=sys.stderr,
-        )
-        return 1
 
     except Exception as e:
         print(f"\nError: {e}", file=sys.stderr)

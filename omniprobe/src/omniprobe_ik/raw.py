@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Optional
 
-from .api import find_plugin_dir, parse_uninstrumented_kernels
+from .api import _NOT_INSTALLED, find_plugin_dir, parse_uninstrumented_kernels
 
 # Analyzer names Omniprobe accepts with -a, and the plugin each needs at compile time.
 ANALYZER_PLUGINS = {
@@ -72,7 +72,7 @@ class AnalyzerRun:
 def _omniprobe_exe(omniprobe_path: Optional[str]) -> str:
     exe = omniprobe_path or shutil.which("omniprobe")
     if exe is None:
-        raise FileNotFoundError("omniprobe executable not found on PATH")
+        raise FileNotFoundError(f"omniprobe executable not found on PATH. {_NOT_INSTALLED}")
     return exe
 
 

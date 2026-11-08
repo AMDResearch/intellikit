@@ -161,7 +161,9 @@ def main():
 
         except ImportError as e:
             print(f"  Could not import the Omniprobe API: {e}")
-            print("  Ensure Omniprobe is installed and on PYTHONPATH.")
+            print(
+                "  Put <prefix>/omniprobe/bin of an Omniprobe install on PATH; omniprobe-ik check diagnoses."
+            )
             print("  Running kernel directly to verify compilation...")
             result = subprocess.run([str(binary_file)], capture_output=True, text=True)
             print(result.stdout)

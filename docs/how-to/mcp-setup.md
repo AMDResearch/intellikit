@@ -55,8 +55,6 @@ To configure MCP servers using `uv` and a cloned IntelliKit repository, set up y
       "args": ["run", "--directory", "/path/to/intellikit/omniprobe", "omniprobe-mcp"],
       "env": {
         "PATH": "/path/to/omniprobe-install/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
-        "PYTHONPATH": "/path/to/omniprobe-install",
-        "ROCM_PATH": "/opt/rocm",
         "ROCR_VISIBLE_DEVICES": "0"
       }
     }
@@ -64,7 +62,7 @@ To configure MCP servers using `uv` and a cloned IntelliKit repository, set up y
 }
 ```
 
-Replace `/path/to/intellikit` with the actual path to your cloned IntelliKit repository. For `omniprobe-mcp`, also set `PATH` to include the `omniprobe` executable, `PYTHONPATH` to Omniprobe's install prefix (it contains `omniprobe/api`; a source checkout also works), `ROCM_PATH` to the ROCm installation Omniprobe was built against, and pick the GPU with `ROCR_VISIBLE_DEVICES`: MCP clients usually start servers with a minimal environment, so none of these is inherited from your shell. Without `ROCM_PATH` Omniprobe looks for its ROCm tools under `/opt/rocm`; if they are not there it reports nothing, and `analyze_memory` says so.
+Replace `/path/to/intellikit` with the actual path to your cloned IntelliKit repository. For `omniprobe-mcp`, set `PATH` to include `<prefix>/omniprobe/bin` of your Omniprobe install (the plugins and Omniprobe's Python API are found from there) and ROCm's `bin` (for `rocminfo` and `hipcc`), and pick the GPU with `ROCR_VISIBLE_DEVICES`: MCP clients usually start servers with a minimal environment, so none of these is inherited from your shell. Omniprobe builds older than 149cf2c also need `ROCM_PATH` set to the ROCm they were built against. To install Omniprobe, see [Install Omniprobe](../getting-started/installing-omniprobe.md); `omniprobe-ik check`, run with the same `PATH`, reports whether it is usable.
 
 ## Using pip-installed packages
 
