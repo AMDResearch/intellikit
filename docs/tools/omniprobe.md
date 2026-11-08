@@ -128,19 +128,23 @@ are never instrumented and are not listed.
 
 ### What Omniprobe cannot see
 
-- **Accesses through a pointer that was itself loaded from device memory** (for example
-  `float* p = table[k]; p[i]`). These are generic (flat) address-space accesses, and
-  MemoryAnalysis ignores them silently. Pointers passed as kernel arguments, held in a by-value
-  struct argument, or stored in `__constant__` variables are seen.
-- **Code built at `-O0`.** Pointers are kept on the stack and every access becomes generic (flat),
-  so instrumented kernels report no accesses at all. This is CMake's default (no build type) and its
-  `Debug` type. Build with `-O1` or higher (CMake: `-DCMAKE_BUILD_TYPE=RelWithDebInfo`).
-  Omniprobe counts these accesses per kernel (`unanalyzed_flat_accesses`), and `summarize_memory`
-  warns with the counts.
+- **Scratch (private) and constant accesses.** Memory analysis covers global and LDS accesses.
+- **Generic (flat) accesses whose wave spans address spaces.** Every access at `-O0`, and every
+  access through a pointer loaded from memory (for example `float* p = table[k]; p[i]`), is a
+  generic (flat) access. Omniprobe e807927 and later classify these per wave at run time and analyze
+  them as global or LDS; measured on gfx90a with 22c4d95, a `-O0` build reports the same strided
+  access (30 excess lines per wave execution) as `-O2`, and a load through a table pointer is
+  analyzed as global. A wave whose lanes point into different address spaces is counted per kernel
+  in `unanalyzed_flat_accesses` and not analyzed; `summarize_memory` warns with the counts. A binary
+  instrumented by an older Omniprobe counts all its flat accesses there.
 - **Code built without `-g`.** Memory analysis matches each access to its instruction through
   the source line; without debug information no access can be matched and all are dropped.
   Omniprobe counts them per kernel (`unattributed_accesses`, Omniprobe 821ba07 and later), and
-  `summarize_memory` warns with the counts. Build with `-g`.
+  `summarize_memory` warns with the counts. Build with `-g`. A kernel built with `-g` can still
+  have a few (measured with 22c4d95: one per wave in a kernel loading two pointers from a table);
+  the warning then says that `-g` is not missing.
+- **Kernels excluded by the kernel filter** run uninstrumented. A filter that matches none of the
+  dispatched kernels raises `KernelFilterMatchedNothingError`, listing the kernels that ran.
 - **Architectures without a cache-line size in Omniprobe's table** (gfx906/908: 64 bytes;
   gfx90a/940/941/942: 128 bytes). On any other architecture, global cache-line analysis is
   skipped and only LDS analysis remains.
@@ -214,25 +218,32 @@ access kind (bits 0–1), address space (bits 2–5) and size in bytes (bits 6 a
 complete handler with a test against hand-computed counts; test any handler that way before using
 it on a real application. `omniprobe/examples/05_cmake_app/` shows instrumenting a CMake project.
 
-A **Python handler** (Omniprobe 13ca707 and later) is the quicker path for analyses of addresses
-alone. Pass the module's path as the analyzer (`omniprobe-ik run ./h.py ./app`,
-`run_analyzer("h.py", "./app")`, or `python_handler=`); it runs through Omniprobe's
-`PythonHandler` on a memory build. The module defines `handleAddressMessage(msg)` (once per active
-lane of each instrumented memory instruction), `handleTimeMessage(msg)` and optionally
-`handleReport(msg)` (once per dispatch; print the results there). One interpreter serves the whole
-process, so module state persists across dispatches; calls never overlap.
+A **Python handler** (Omniprobe 13ca707 and later; per-wave calls b9492cd and later) is the quicker
+path. Pass the module's path as the analyzer (`omniprobe-ik run ./h.py ./app`,
+`run_analyzer("h.py", "./app")`, or `python_handler=`); it runs through Omniprobe's `PythonHandler`
+on a memory build. One interpreter serves the whole process, so module state persists across
+dispatches; calls never overlap. The module defines at least one of the message functions:
+
+| Function | Called | `msg` keys (all also have `kernel`, `dispatch_id`) |
+|---|---|---|
+| `handleAddressWave(msg)` | once per wave-level memory instruction | `addresses` (one int per active lane), `lanes`, `exec`, `access_type` (`"read"`, `"write"`, `"readwrite"`), `memory_space` (`"global"`, `"shared"`, `"constant"`, `"scratch"`, `"flat"`, `"gds"`), `access_size` (bytes), `source_file`, `line`, `column`, `block_idx`, `wave_num`, `cu_id`, `se_id`, `xcc_id`, `timestamp` (`s_memtime` ticks) |
+| `handleAddressMessage(msg)` | once per active lane | `address` |
+| `handleTimeMessage(msg)` | per time-interval message | the wave keys, `start`, `stop`, `elapsed_time`, `block_id` |
+| `handleReport(msg)` | once per dispatch, optional | — |
 
 | | Python handler | C++ handler |
 |---|---|---|
-| Per-message data | `address`, `kernel`, `dispatch_id` only | wave header (exec mask, source line and column, read/write, address space, access size, timestamp) and every lane's address |
-| Kernel-argument loads | Mixed in, distinguishable only by address | Filter on address space |
-| Cost | ~10 µs per lane: narrow with `-k`/`-d` | Native |
-| Good for | which buffers or pages are touched, distinct addresses or lines, address histograms | per-line, per-wave, divergence, read/write or space-aware counts; full applications |
+| Per-message data | the fields above | the same, from the wave header and the lane addresses |
+| Kernel-argument loads | `memory_space == "constant"` | filter on address space |
+| Cost | ~10 µs per call (per wave with `handleAddressWave`, per lane with `handleAddressMessage`): narrow with `-k`/`-d` | native |
 
-If the module cannot be imported or lacks a required function, Omniprobe falls back to its default
-handler and exits 0; `run_analyzer` raises instead. Untested: a Python handler inside an
-application that is itself a Python process (e.g. Triton), where the GIL may deadlock.
-`omniprobe/examples/06_python_handler/` is a handler with a test against hand-computed counts.
+Print with `flush=True`; unflushed output is lost when the run ends. A module that cannot be
+imported, or defines none of the message functions, stops the run with `omniprobe: ERROR: ...` and
+exit status 1 (Omniprobe 5b34ae3 and later; 13ca707 fell back to its default handler, which
+`run_analyzer` also reports as an error). Untested: a Python handler inside an application that is
+itself a Python process (e.g. Triton), where the GIL may deadlock.
+`omniprobe/examples/06_python_handler/` is a per-line, per-wave handler with a test against
+hand-computed counts.
 
 ## API
 
@@ -255,7 +266,7 @@ probe = Omniprobe(
 **Arguments shared by both methods:**
 
 - `command`: application command line to instrument
-- `kernel_filter`: optional ECMAScript regex limiting which kernels are analysed, searched within the **demangled** kernel name (for example `'gstride<16>'`; a mangled name such as `_Z7gstride...` matches nothing)
+- `kernel_filter`: optional ECMAScript regex limiting which kernels are analysed, searched anywhere in the **demangled** kernel name (for example `'gstride<16>'`; a mangled name such as `_Z7gstride...` matches nothing). A template kernel's demangled name starts with its return type (`void gstride<16>(float const*, float*)`), so `'^gstride'` does not match it. If the filter matches none of the dispatched kernels, both methods raise `KernelFilterMatchedNothingError` (a `NoInstrumentedKernelsError`) listing the kernels that ran (Omniprobe b71927b and later print that list).
 - `dispatches`: which dispatches to capture — `"all"`, `"random"`, or `"1"`
 
 Constructing `Omniprobe` raises `ImportError` if Omniprobe's Python API is not importable, and `FileNotFoundError` if the executable cannot be found. Both methods raise `NoInstrumentedKernelsError` (a `RuntimeError`) when Omniprobe reports no kernel — almost always a binary built without the plugin; the message names the flags to rebuild with.

@@ -948,7 +948,7 @@ def unattributed_accesses_warning(
             "Global memory accesses could not be matched to a source line and were NOT analyzed, "
             f"so they are missing from these results ({detail} wave executions). None of these "
             "kernels' accesses has a source line: the binary was most likely built without debug "
-            "info. Rebuild with -g (keep -O1 or higher)."
+            "info. Rebuild with -g."
         )
     if partial:
         detail = "; ".join(f"{name}: {n}" for name, n in partial.items())

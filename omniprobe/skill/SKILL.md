@@ -40,9 +40,9 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
    - CMake: configure a **fresh** build directory with
      `-DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_HIP_FLAGS="$(omniprobe-ik flags memory)"` (or
      `CMAKE_CXX_FLAGS` when hipcc is the C++ compiler).
-   - **Optimise: `-O1` or higher.** At `-O0` (CMake's default build type, or `Debug`) pointers go
-     through the stack and Omniprobe sees **no** accesses at all. With CMake use
-     `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
+   - **Optimisation level:** `-O0` builds (CMake's default build type, or `Debug`) are analyzed too
+     (Omniprobe e807927 and later), but they measure `-O0` code, whose accesses differ from the
+     optimized build's.
    - **Do not add `-fgpu-rdc`** unless the project already uses it: instrumentation does not need
      it. If it does, keep it (`omniprobe-ik flags memory --rdc`); static kernels are then named
      `<name> [clone .intern] [clone .<hash>]`. Multi-file RDC builds link and every kernel is
@@ -50,8 +50,11 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
 2. **Run the analysis.** `omniprobe-ik memory [options] ./app [app args]` (or
    `omniprobe-ik memory [options] -- ./app --app-option`; MCP `analyze_memory`, Python
    `Omniprobe().analyze_memory("./app arg")`). The command is split on whitespace (no shell
-   quoting); wrap command lines with quoted arguments in a script. Limit cost with `--kernel '<regex>'` (matched against the
-   **demangled** name, e.g. `'advance'`, `'gstride<16>'`) and `--dispatches 1`.
+   quoting); wrap command lines with quoted arguments in a script. Limit cost with `--kernel '<regex>'` and `--dispatches 1`.
+   The regex is searched anywhere in the **demangled** name (`'advance'`, `'gstride<16>'`). A
+   template kernel's name starts with its return type (`void gstride<16>(float const*, float*)`), so
+   `'^gstride'` matches nothing; a filter that matches no dispatched kernel is an error listing the
+   kernels that were dispatched.
 3. **Read the ranked summary** ("Top sites", or `summary` from MCP / `summarize_memory()`): worst
    sites first, with file:line:column, read/write, and a per-wave-execution value (below).
    **Check `warnings` / `uninstrumented_kernels` first**: a kernel listed there ran without
@@ -81,16 +84,18 @@ instruction) to get the per-wave-execution value the summary prints.
 
 ## Blind spots — when Omniprobe reports nothing for an access you suspect
 
-- **Pointers loaded from device memory** (e.g. `float* a = table->field[k]; a[i]`) are generic
-  (flat) accesses that Omniprobe **silently ignores**: the line will be missing from the results or
-  show only the table read. Pointers passed as kernel arguments, held in a by-value struct argument,
-  or stored in `__constant__` variables are seen. To measure such an access, temporarily pass the
-  pointer as a kernel argument (or a by-value struct), rebuild, rerun — and say in your answer that
-  you did so and why.
-- **Code built at `-O0`**: accesses are flat; the summary warns with per-kernel counts of
-  `unanalyzed_flat_accesses`. Rebuild with `-O1` or higher.
+- **Only global and LDS accesses are analyzed.** Scratch (private) and constant accesses are not
+  reported.
+- **Generic (flat) pointers** — every access at `-O0`, and accesses through a pointer loaded from
+  memory (`float* a = table->field[k]; a[i]`) — are classified per wave at run time and analyzed as
+  global or LDS (Omniprobe e807927 and later). A wave whose lanes point into different address
+  spaces is counted in `unanalyzed_flat_accesses` and not analyzed (warned). A binary instrumented by
+  an older Omniprobe counts all its flat accesses there.
 - **Code built without `-g`**: global accesses cannot be matched to a source line and are dropped;
-  the summary warns with per-kernel `unattributed_accesses`. Rebuild with `-g`.
+  the summary warns with per-kernel `unattributed_accesses`. Rebuild with `-g`. A few accesses can
+  stay unattributed in a kernel that has `-g` (the warning then says `-g` is not missing).
+- **Kernels that ran uninstrumented** (built without the plugin, or excluded by `--kernel`) are
+  absent; `warnings` / `uninstrumented_kernels` name the first kind.
 - **Architecture**: cache-line analysis exists for gfx906/908 (64-B lines) and gfx90a/940-942
   (128-B). Elsewhere only LDS analysis is reported.
 - If a kernel is absent from the results entirely, check Omniprobe's stderr for
@@ -105,8 +110,10 @@ instruction) to get the per-wave-execution value the summary prints.
 | Link error `duplicate symbol: __hip_cuid_...` | `-fgpu-rdc` with ≥ 2 files on Omniprobe older than 3003058 | Update Omniprobe, or drop `-fgpu-rdc` unless the project needs it |
 | `WARNING: … ran WITHOUT instrumentation` / `uninstrumented_kernels` non-empty | That kernel's file was built without the plugin | Rebuild that file with the flags (every file that defines a kernel) |
 | A kernel or line is missing | Blind spot above, or `--kernel` regex too narrow | See Blind spots; filter on demangled names |
+| `KernelFilterMatchedNothingError` / "matched none of the instrumented kernels" | The `--kernel` regex matches no dispatched kernel (e.g. `^name` on a template kernel `void name<…>`) | The error lists the dispatched kernels; the binary is instrumented, do not rebuild |
 | `RuntimeError: omniprobe exited with code N` | The application itself failed | Run the binary alone first; fix arguments/inputs |
-| "no instrumented kernels" / "no results" naming `ROCM_PATH` or `llvm-objdump`, though the binary was built with the flags | Omniprobe cannot find its ROCm tools: `ROCM_PATH` unset (MCP servers start with a minimal env) and `/opt/rocm` is not that ROCm | Set `ROCM_PATH=/opt/rocm-<version>` in the shell or MCP `env`; do not rebuild |
+| "no instrumented kernels" / "no results" naming `ROCM_PATH` or `llvm-objdump`, though the binary was built with the flags | Omniprobe found no ROCm with `llvm/bin/llvm-objdump` (Omniprobe 149cf2c+ searches `ROCM_PATH`, the ROCm it links against, `hipcc`/`rocminfo` on PATH, `/opt/rocm*`; older builds use only `ROCM_PATH` or `/opt/rocm`) | Set `ROCM_PATH=/opt/rocm-<version>` in the shell or MCP `env`; do not rebuild |
+| `omniprobe exited with code 1: omniprobe: ERROR: ...` | Omniprobe rejected its configuration before the application ran (unknown analyzer, missing handler `.so`, unusable Python handler) | The ERROR line names the problem |
 | No GPU / runs on the wrong GPU | `HIP_VISIBLE_DEVICES` set to the same id as `ROCR_VISIBLE_DEVICES` selects nothing | Set only `ROCR_VISIBLE_DEVICES` |
 
 ## Other analyzers, and writing your own
@@ -118,7 +125,7 @@ for the first two, basic-block build for the last.
 
 When no analyzer counts what you need (e.g. executions by partially active waves, a stride
 histogram, accesses to one buffer), **write a message handler**: about 60 lines of C++ (below), or
-a few lines of Python for questions about addresses alone (after it).
+a few lines of Python (after it), which sees the same per-wave fields.
 
 ```cpp
 #include "dh_comms.h"           // Omniprobe installs these in <prefix>/omniprobe/include/dh_comms
@@ -154,34 +161,38 @@ extern "C" __attribute__((visibility("default"))) void getMessageHandlers(const 
   blocks of 256 → 16 waves, the last with 40 active lanes), then run it on the real application.
 - Every wave also loads its kernel arguments (`constant` space) — filter on `space` as needed.
 
-**Python handlers — the quicker path, for address-level analyses only.** A module with
-`handleAddressMessage(msg)`, `handleTimeMessage(msg)` and optionally `handleReport(msg)` (once per
-dispatch) runs through Omniprobe's `PythonHandler` (Omniprobe 13ca707 or later):
+**Python handlers — the quicker path.** A Python module runs through Omniprobe's `PythonHandler`:
 `omniprobe-ik run ./my_handler.py ./app` (Python `run_analyzer("my_handler.py", "./app")`, MCP
-`run_analyzer` with the `.py` path), on a **memory** build. Its prints are on stdout.
+`run_analyzer` with the `.py` path), on a **memory** build with `-g`. It defines at least one of
+these (Omniprobe b9492cd and later for `handleAddressWave`), and its prints are on stdout:
+
+| Function | Called | `msg` keys |
+|---|---|---|
+| `handleAddressWave(msg)` | once per wave-level memory instruction | `addresses` (one int per active lane), `lanes`, `exec`, `access_type` (`"read"`/`"write"`/`"readwrite"`), `memory_space` (`"global"`, `"shared"`, `"constant"`, `"scratch"`, `"flat"`), `access_size` (bytes), `source_file`, `line`, `column`, `block_idx`, `wave_num`, `cu_id`, `se_id`, `xcc_id`, `timestamp` (`s_memtime` ticks), `kernel`, `dispatch_id` |
+| `handleAddressMessage(msg)` | once per active lane | `address`, `kernel`, `dispatch_id` |
+| `handleReport(msg)` | once per dispatch (optional) | `kernel`, `dispatch_id` |
 
 ```python
 from collections import Counter
-pages = Counter()                       # module state persists across dispatches
-def handleAddressMessage(msg):          # once per ACTIVE LANE: msg = {address, kernel, dispatch_id}
-    pages[msg["address"] >> 12] += 1
-def handleTimeMessage(msg): pass
+sizes = Counter()                       # module state persists across dispatches
+def handleAddressWave(msg):             # once per wave-level access
+    if msg["memory_space"] == "global":
+        sizes[(msg["line"], msg["access_type"], msg["access_size"])] += 1
 def handleReport(msg):                  # end of each dispatch
-    print("MY_PAGES", msg["kernel"], msg["dispatch_id"], len(pages), flush=True); pages.clear()
+    print("MY_SIZES", msg["kernel"], msg["dispatch_id"], dict(sizes), flush=True); sizes.clear()
 ```
 
-- Each call sees **only** `address`, `kernel` and `dispatch_id`: no source line, read/write,
-  address space, access size, exec mask or wave id. Kernel-argument loads (all 64 lanes of every
-  wave) are mixed in. Use it for which buffers/pages are touched, distinct addresses or lines,
-  address histograms. For per-line, per-wave, read/write or address-space questions, or high
-  message rates, write the C++ handler above.
-- ~10 µs per call: narrow with `--kernel` and `--dispatches 1`. If the module cannot be imported
-  or lacks a function, Omniprobe falls back to its default handler and still exits 0;
-  `run_analyzer` turns that into an error naming the cause.
+- Unflushed prints are lost: print with `flush=True`.
+- Kernel-argument loads arrive as `memory_space == "constant"` (all lanes of every wave).
+- ~10 µs per call, so a per-wave call is up to 64× cheaper than per-lane calls; narrow with
+  `--kernel` and `--dispatches 1` on large applications. Write the C++ handler above for high
+  message rates.
+- A module that cannot be imported or defines none of the message functions stops the run (exit 1,
+  `omniprobe: ERROR: ... PythonHandler: ...`).
 - Untested: a Python handler inside an application that is itself Python (e.g. Triton) may
   deadlock on the GIL.
-- Test it like the C++ handler: `omniprobe/examples/06_python_handler/` checks a counter on a
-  kernel with a hand-computed answer (16 waves → 2000 lane accesses + 1024 kernel-argument loads).
+- Test it like the C++ handler: `omniprobe/examples/06_python_handler/` checks a per-line counter on
+  a kernel with hand-computed counts (16 waves, the last with 40 active lanes).
 
 ## Analyses and their plugins
 

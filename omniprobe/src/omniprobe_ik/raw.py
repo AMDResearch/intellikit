@@ -111,11 +111,16 @@ def run_analyzer(
         check: Raise ``RuntimeError`` if omniprobe exits non-zero, and
             ``KernelFilterMatchedNothingError`` if *kernel_filter* matched no
             dispatched instrumented kernel.
-        python_handler: Path of a Python module defining ``handleAddressMessage(msg)``,
-            ``handleTimeMessage(msg)`` and optionally ``handleReport(msg)``; runs
-            it through Omniprobe's ``PythonHandler`` (``analyzer`` is then ignored;
-            build with the memory plugin). Each address message carries only
-            ``address``, ``kernel`` and ``dispatch_id``. Omniprobe 13ca707 or later.
+        python_handler: Path of a Python module run through Omniprobe's
+            ``PythonHandler`` (``analyzer`` is then ignored; build with the memory
+            plugin). It defines at least one of ``handleAddressWave(msg)`` (once per
+            wave-level memory instruction: ``addresses``, ``lanes``, ``exec``,
+            ``access_type``, ``memory_space``, ``access_size``, ``source_file``,
+            ``line``, ``column``, ``block_idx``, ``wave_num``, ``cu_id``, ``se_id``,
+            ``xcc_id``, ``timestamp``; Omniprobe b9492cd+), ``handleAddressMessage(msg)``
+            (once per active lane: ``address``) and ``handleTimeMessage(msg)``, and
+            optionally ``handleReport(msg)`` once per dispatch. Every message has
+            ``kernel`` and ``dispatch_id``. Omniprobe 13ca707 or later.
 
     The application must be built with the plugin the analyzer needs (see
     ``ANALYZER_PLUGINS`` and ``instrumentation_flags``).
@@ -155,7 +160,8 @@ def run_analyzer(
         ),
     )
     if python_handler is not None:
-        # Omniprobe falls back to its default handler (exit 0) when the module is unusable.
+        # Omniprobe 13ca707 fell back to its default handler (exit 0) when the module was
+        # unusable; 5b34ae3 and later exit 1, which the check below reports.
         failed = [
             line for line in completed.stderr.splitlines() if "no Python handler installed" in line
         ]

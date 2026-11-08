@@ -77,7 +77,7 @@ def test_bespoke_handler_counts_match_hand_computed_values(built):
 
 
 def test_python_handler_counts_match_hand_computed_values(built):
-    """A .py handler runs through PythonHandler; its report is on stdout, not stderr."""
+    """A .py handler runs through PythonHandler; its per-wave report is on stdout, not stderr."""
     from omniprobe_ik import run_analyzer
 
     _, _, app, _ = built
@@ -86,15 +86,53 @@ def test_python_handler_counts_match_hand_computed_values(built):
     example = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(example)
 
-    run = run_analyzer(str(EXAMPLES / "06_python_handler" / "address_counter.py"), str(app))
+    run = run_analyzer(str(EXAMPLES / "06_python_handler" / "line_counter.py"), str(app))
     rows = example.counts_from(run.stdout)
-    assert len(rows) == 1, run.stdout[-2000:] + run.stderr[-2000:]
-    row = rows[0]
-    assert row["kernel"].startswith("copy_n")
-    # 2000 global lane accesses + 16 waves x 64 lanes loading a kernel argument
-    assert row["lane_accesses"] == 2000 + 16 * 64
-    assert row["distinct_addresses"] >= 2000
-    assert "ADDRESS_COUNTER" not in run.stderr
+    assert "LINE_COUNTER" not in run.stderr
+    by_site = {
+        (r["location"].split(":")[1], r["access_type"], r["memory_space"]): tuple(
+            r[f] for f in example.FIELDS
+        )
+        for r in rows
+        if r["kernel"].startswith("copy_n")
+    }
+    line = "5"  # out[i] = in[i]
+    assert by_site[(line, "read", "global")] == (16, 1000, 1, 32), by_site
+    assert by_site[(line, "write", "global")] == (16, 1000, 1, 32), by_site
+    constant = [v for (_, _, space), v in by_site.items() if space == "constant"]
+    assert [v[:2] for v in constant] == [(16, 16 * 64)], by_site  # kernel-argument loads
+
+
+def test_python_per_lane_handler_still_works(built, tmp_path):
+    """handleAddressMessage alone (the pre-b9492cd API) is still called once per active lane."""
+    from omniprobe_ik import run_analyzer
+
+    _, _, app, _ = built
+    module = tmp_path / "lanes.py"
+    module.write_text(
+        "n = 0\n"
+        "def handleAddressMessage(msg):\n"
+        "    global n\n"
+        "    n += 1\n"
+        "def handleReport(msg):\n"
+        "    print('LANES', n, flush=True)\n"
+    )
+    run = run_analyzer(str(module), str(app))
+    assert "LANES 3024" in run.stdout  # 2000 global + 16 waves x 64 kernel-argument lanes
+
+
+def test_unusable_python_handler_is_an_error(built, tmp_path):
+    """Omniprobe 5b34ae3+: a module defining no message function stops the run (exit 1)."""
+    from omniprobe_ik import run_analyzer
+
+    _, _, app, _ = built
+    module = tmp_path / "empty.py"
+    module.write_text("x = 1\n")
+    with pytest.raises(RuntimeError) as err:
+        run_analyzer(str(module), str(app))
+    assert "defines none of handleAddressWave, handleAddressMessage, handleTimeMessage" in str(
+        err.value
+    )
 
 
 def test_handler_build_flags_point_at_existing_paths():

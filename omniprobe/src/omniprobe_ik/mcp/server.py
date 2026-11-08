@@ -22,7 +22,7 @@ mcp = FastMCP(
         "low memory.global_load_efficiency (or store efficiency) or LDS bank conflicts in metrix, "
         "or when a kernel indexes memory indirectly, before concluding where the memory "
         "inefficiency is or rewriting code. Workflow: get_instrumentation_flags, rebuild with "
-        "those flags plus -g at -O1 or higher, then analyze_memory on the rebuilt binary."
+        "those flags plus -g, then analyze_memory on the rebuilt binary."
     ),
 )
 
@@ -42,12 +42,15 @@ def analyze_memory(
     achieved bandwidth does not rule this out: wasted bytes count as bandwidth.
 
     First build the application with the flags from
-    get_instrumentation_flags('memory') plus -g, at -O1 or higher; a normal
-    build raises "no instrumented kernels", and -O0 builds report nothing.
+    get_instrumentation_flags('memory') plus -g; a normal build raises "no
+    instrumented kernels". -O0 and pointers loaded from memory are analyzed
+    (Omniprobe e807927 and later).
 
     Args:
         command: Shell command to analyze (e.g., './my_gpu_app' or 'python train.py').
-        kernel_filter: Optional ECMAScript regex to limit which kernels are analysed.
+        kernel_filter: Optional ECMAScript regex, searched anywhere in the demangled
+            kernel name ('void name<4>(...)' for a template kernel, so '^name' misses
+            it). If it matches no dispatched kernel, the error says so and lists them.
         dispatches: Which dispatches to capture — 'all', 'random', or '1' (default: 'all').
 
     Returns:
@@ -113,7 +116,8 @@ def analyze_basic_blocks(
 
     Args:
         command: Shell command to analyze (e.g., './my_gpu_app').
-        kernel_filter: Optional ECMAScript regex to limit which kernels are analysed.
+        kernel_filter: Optional ECMAScript regex, searched anywhere in the demangled
+            kernel name ('^name' misses a template kernel 'void name<4>(...)').
         dispatches: Which dispatches to capture — 'all', 'random', or '1' (default: 'all').
 
     Returns:
@@ -205,12 +209,15 @@ def run_analyzer(
     (accesses per memory page), 'AddressLogger' (per-wave address trace),
     'BasicBlockLogger' (per-wave block entries), or the absolute path of a
     bespoke handler that counts something no stock analyzer does: a C++ plugin
-    (.so) or a Python module (.py) defining handleAddressMessage(msg),
-    handleTimeMessage(msg) and optionally handleReport(msg). A Python handler sees
-    only address, kernel and dispatch_id per active lane (no source line, no
-    read/write, no address space; kernel-argument loads are included). Build the
-    application with the plugin the analyzer needs first (memory plugin for
-    Heatmap/AddressLogger/Python handlers, basic-block plugin for BasicBlockLogger).
+    (.so) or a Python module (.py). A Python module defines handleAddressWave(msg)
+    -- once per wave-level memory instruction, with addresses (one per active
+    lane), lanes, exec, access_type, memory_space, access_size, source_file/line/
+    column, block_idx, wave_num, cu_id, se_id, xcc_id, timestamp, kernel,
+    dispatch_id -- and/or handleAddressMessage(msg) (once per active lane: address,
+    kernel, dispatch_id), and optionally handleReport(msg) once per dispatch;
+    kernel-argument loads arrive as memory_space 'constant'. Build the application
+    with the plugin the analyzer needs first (memory plugin for Heatmap/
+    AddressLogger/Python handlers, basic-block plugin for BasicBlockLogger).
 
     Returns:
         returncode, output (the analyzer's JSON, truncated to max_output_chars),
@@ -276,6 +283,11 @@ def list_analyzers() -> dict:
             {
                 "name": "<path to your handler .so>",
                 "plugin": "the one your handler expects",
+                "tool": "run_analyzer",
+            },
+            {
+                "name": "<path to your Python handler .py>",
+                "plugin": "memory",
                 "tool": "run_analyzer",
             },
         ],
