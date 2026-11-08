@@ -14,6 +14,7 @@ Map GPU performance metrics to your source code lines. Get cycle-level timing, s
 - Analyzing stall patterns and execution bottlenecks at the source level
 - Understanding cycle-level timing for each line of code
 - Instruction-level analysis mapped to source lines
+- To find which access is uncoalesced or causes LDS bank conflicts (not just which line stalls), use the Omniprobe skill (`omniprobe-analysis`)
 
 ## Instructions
 

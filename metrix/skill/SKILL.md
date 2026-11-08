@@ -13,6 +13,7 @@ Profile AMD GPU kernels and get human-readable metrics (bandwidth, cache, coales
 - Performance analysis, optimization, or bottleneck investigation
 - Need HBM/L2/L1 bandwidth, hit rates, or compute metrics
 - Need timing-only runs (fast, no hardware counters)
+- If coalescing efficiency is low or LDS bank conflicts are high, use the Omniprobe skill (`omniprobe-analysis`) to find which source line causes it
 
 ## Instructions
 
