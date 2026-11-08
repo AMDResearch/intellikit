@@ -281,9 +281,29 @@ The server exposes four tools:
 | Tool | Purpose |
 |------|---------|
 | `get_instrumentation_flags` | Returns the `hipcc` flags that instrument kernels for an analysis |
-| `analyze_memory` | Runs memory analysis, returns per-kernel access findings |
+| `analyze_memory` | Runs memory analysis; returns a ranked `summary` (worst sites first, per-wave-execution values, `how_to_read`) and the raw per-kernel findings |
 | `analyze_basic_blocks` | Runs basic-block analysis, returns per-kernel timing data |
-| `list_analyzers` | Reports the available analysis types and which tool calls each |
+| `list_analyzers` | Reports the available analysis types, which tool and plugin each needs, and Omniprobe's known blind spots |
+
+Omniprobe's Python API lives only in its **source** tree (the install tree does not include it), so
+the server needs that tree on `PYTHONPATH`. MCP clients usually start servers with a minimal
+environment, so set it, and the GPU selection, in the server's configuration:
+
+```json
+"omniprobe": {
+  "command": "omniprobe-mcp",
+  "env": {
+    "PATH": "/opt/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
+    "PYTHONPATH": "/path/to/omniprobe-source",
+    "ROCR_VISIBLE_DEVICES": "0"
+  }
+}
+```
+
+If `PYTHONPATH` is missing, the wrapper also tries the source tree that the `omniprobe` executable
+resolves to, which works when `omniprobe` on `PATH` is a build tree's symlink.
+
+`summarize_memory(result, top=10)` produces the same ranked summary from the Python API.
 
 ## Examples
 

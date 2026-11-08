@@ -23,6 +23,7 @@ from .api import (
     Omniprobe,
     detect_offload_arch,
     instrumentation_flags,
+    summarize_memory,
 )
 
 try:
@@ -35,6 +36,7 @@ __all__ = [
     "Omniprobe",
     "NoInstrumentedKernelsError",
     "instrumentation_flags",
+    "summarize_memory",
     "detect_offload_arch",
     "MemoryAnalysisResult",
     "KernelMemoryResult",

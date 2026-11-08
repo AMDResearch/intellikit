@@ -52,13 +52,17 @@ To configure MCP servers using `uv` and a cloned IntelliKit repository, set up y
     },
     "omniprobe-mcp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/intellikit/omniprobe", "omniprobe-mcp"]
+      "args": ["run", "--directory", "/path/to/intellikit/omniprobe", "omniprobe-mcp"],
+      "env": {
+        "PYTHONPATH": "/path/to/omniprobe-source",
+        "ROCR_VISIBLE_DEVICES": "0"
+      }
     }
   }
 }
 ```
 
-Replace `/path/to/intellikit` with the actual path to your cloned IntelliKit repository.
+Replace `/path/to/intellikit` with the actual path to your cloned IntelliKit repository. For `omniprobe-mcp`, also set `PYTHONPATH` to an Omniprobe **source** checkout (its install tree does not include the Python API) and pick the GPU with `ROCR_VISIBLE_DEVICES`: MCP clients usually start servers with a minimal environment, so neither is inherited from your shell.
 
 ## Using pip-installed packages
 

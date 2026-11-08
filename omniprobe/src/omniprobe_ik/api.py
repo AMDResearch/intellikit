@@ -182,6 +182,33 @@ def instrumentation_flags(
     return flags
 
 
+def _add_upstream_source_to_path(omniprobe_path: Optional[str] = None) -> bool:
+    """Find Omniprobe's source tree from its executable and put it on ``sys.path``.
+
+    In an Omniprobe build tree ``bin/omniprobe`` is a symlink to
+    ``<source>/omniprobe/omniprobe``, and ``<source>`` is what must be importable.
+    Returns True if ``omniprobe.api`` is importable afterwards.
+    """
+    import importlib
+    import sys
+
+    exe = omniprobe_path or shutil.which("omniprobe")
+    if exe is None:
+        return False
+    source_root = Path(exe).resolve().parent.parent
+    if not (source_root / "omniprobe" / "api" / "__init__.py").is_file():
+        return False
+    sys.path.insert(0, str(source_root))
+    sys.modules.pop("omniprobe", None)
+    try:
+        importlib.import_module("omniprobe.api")
+    except ImportError:
+        sys.path.remove(str(source_root))
+        return False
+    logger.info("Using Omniprobe's Python API from %s", source_root)
+    return True
+
+
 def _no_data_message(analysis: str, command: str, kernel_filter: Optional[str]) -> str:
     plugin = ANALYSIS_PLUGINS[analysis]
     try:
@@ -292,12 +319,16 @@ class Omniprobe:
     def __init__(self, omniprobe_path: Optional[str] = None) -> None:
         try:
             from omniprobe.api import Omniprobe as _UpstreamOmniprobe
-        except ImportError as exc:
-            msg = (
-                "Could not import omniprobe.api. "
-                "Ensure the Omniprobe repository is on PYTHONPATH or installed."
-            )
-            raise ImportError(msg) from exc
+        except ImportError:
+            if not _add_upstream_source_to_path(omniprobe_path):
+                msg = (
+                    "Could not import omniprobe.api. Put the Omniprobe source tree on "
+                    "PYTHONPATH (Omniprobe's install tree does not include its Python API). "
+                    "MCP clients often start servers with a minimal environment, so set "
+                    "PYTHONPATH in the server's 'env' configuration."
+                )
+                raise ImportError(msg) from None
+            from omniprobe.api import Omniprobe as _UpstreamOmniprobe
 
         self._upstream = _UpstreamOmniprobe(omniprobe_path=omniprobe_path)
         logger.info("Omniprobe initialized (exe: %s)", self._upstream._exe)
@@ -430,3 +461,111 @@ class Omniprobe:
                 )
             )
         return BasicBlockResult(kernels=kernels)
+
+
+# ---------------------------------------------------------------------------
+# Ranked summary
+# ---------------------------------------------------------------------------
+
+HOW_TO_READ_MEMORY = (
+    "excess_per_execution: cache lines fetched beyond the minimum, per wave execution of the "
+    "instruction. 0 = fully coalesced; for 4-byte accesses by 64 lanes on 128-byte lines the "
+    "worst case is 62 (every lane on its own line); a lane stride of S floats gives "
+    "min(64, 2S) - 2. conflicts_per_execution: extra LDS cycles from bank conflicts per wave "
+    "execution; 0 = conflict-free, 62 = worst case for 4-byte accesses (32 banks, the wave "
+    "checked as two halves of 32 lanes). Rank by the totals to decide what to fix first; "
+    "use the per-execution values to judge how bad each access pattern is."
+)
+
+KNOWN_BLIND_SPOTS = [
+    "Accesses through a pointer that was itself loaded from device memory (flat address "
+    "space) are not recorded; pointer arguments, by-value struct members and __constant__ "
+    "pointers are.",
+    "Kernels without parameters are not matched at run time and report nothing.",
+]
+
+
+def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
+    """Rank the access sites of a memory analysis, worst first.
+
+    Entries that share kernel, location, memory space and access type are
+    merged first (Omniprobe sometimes splits one location into several).
+    Sites with nothing to report are left out.
+
+    Returns:
+        A dict with ``global_sites`` (ranked by total ``excess_cache_lines``),
+        ``lds_sites`` (ranked by total ``bank_conflicts``), per-kernel
+        ``kernels`` totals and a ``how_to_read`` explanation.
+    """
+    merged: dict = {}
+    for kernel in result.kernels:
+        for a in kernel.accesses:
+            key = (
+                kernel.kernel_name,
+                a.source_file,
+                a.line,
+                a.column,
+                a.memory_space,
+                a.access_type,
+            )
+            site = merged.setdefault(
+                key,
+                {
+                    "kernel": kernel.kernel_name,
+                    "source_file": a.source_file,
+                    "line": a.line,
+                    "column": a.column,
+                    "memory_space": a.memory_space,
+                    "access_type": a.access_type,
+                    "execution_count": 0,
+                    "excess_cache_lines": 0,
+                    "bank_conflicts": 0,
+                },
+            )
+            site["execution_count"] += a.execution_count
+            site["excess_cache_lines"] += a.excess_cache_lines
+            site["bank_conflicts"] += a.bank_conflicts
+
+    def per_execution(total: int, executions: int) -> float:
+        return round(total / executions, 2) if executions else 0.0
+
+    global_sites = []
+    lds_sites = []
+    kernels: dict = {}
+    for site in merged.values():
+        totals = kernels.setdefault(
+            site["kernel"], {"kernel": site["kernel"], "excess_cache_lines": 0, "bank_conflicts": 0}
+        )
+        totals["excess_cache_lines"] += site["excess_cache_lines"]
+        totals["bank_conflicts"] += site["bank_conflicts"]
+        if site["excess_cache_lines"] > 0:
+            global_sites.append(
+                {
+                    **{k: v for k, v in site.items() if k != "bank_conflicts"},
+                    "excess_per_execution": per_execution(
+                        site["excess_cache_lines"], site["execution_count"]
+                    ),
+                }
+            )
+        if site["bank_conflicts"] > 0:
+            lds_sites.append(
+                {
+                    **{k: v for k, v in site.items() if k != "excess_cache_lines"},
+                    "conflicts_per_execution": per_execution(
+                        site["bank_conflicts"], site["execution_count"]
+                    ),
+                }
+            )
+
+    global_sites.sort(key=lambda s: s["excess_cache_lines"], reverse=True)
+    lds_sites.sort(key=lambda s: s["bank_conflicts"], reverse=True)
+    return {
+        "global_sites": global_sites[:top],
+        "lds_sites": lds_sites[:top],
+        "kernels": sorted(
+            kernels.values(),
+            key=lambda k: (k["excess_cache_lines"], k["bank_conflicts"]),
+            reverse=True,
+        ),
+        "how_to_read": HOW_TO_READ_MEMORY,
+    }

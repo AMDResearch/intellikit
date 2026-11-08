@@ -81,7 +81,10 @@ class TestOmniprobeInit:
     """Test Omniprobe initialization."""
 
     def test_import_error_when_upstream_missing(self):
-        with patch.dict("sys.modules", {"omniprobe": None, "omniprobe.api": None}):
+        with (
+            patch.dict("sys.modules", {"omniprobe": None, "omniprobe.api": None}),
+            patch("omniprobe_ik.api._add_upstream_source_to_path", return_value=False),
+        ):
             with pytest.raises(ImportError, match="omniprobe.api"):
                 Omniprobe()
 

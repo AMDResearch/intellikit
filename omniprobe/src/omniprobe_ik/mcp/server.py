@@ -8,7 +8,8 @@ import argparse
 
 from fastmcp import FastMCP
 
-from omniprobe_ik import ANALYSIS_PLUGINS, Omniprobe, instrumentation_flags
+from omniprobe_ik import ANALYSIS_PLUGINS, Omniprobe, instrumentation_flags, summarize_memory
+from omniprobe_ik.api import KNOWN_BLIND_SPOTS
 
 mcp = FastMCP("IntelliKit Omniprobe")
 
@@ -19,15 +20,13 @@ def analyze_memory(
     kernel_filter: str = None,
     dispatches: str = "all",
 ) -> dict:
-    """Analyze GPU memory access patterns for coalescing issues and bank conflicts.
+    """Find the source lines whose memory accesses waste bandwidth: uncoalesced global accesses and LDS bank conflicts.
 
-    Instruments the given command with Omniprobe's memory analysis and returns
-    per-kernel results showing uncoalesced global accesses, LDS bank conflicts,
-    and excess cache lines for each memory access site.
-
-    The application must have been compiled with the flags from
-    get_instrumentation_flags('memory'); otherwise this raises an error saying
-    no instrumented kernels were found.
+    First build the application with the flags from
+    get_instrumentation_flags('memory') (plus -g); a normal build raises "no
+    instrumented kernels". Use it after a kernel-level profiler (e.g. metrix
+    coalescing efficiency or LDS bank conflicts) shows a problem, to find which
+    access causes it.
 
     Args:
         command: Shell command to analyze (e.g., './my_gpu_app' or 'python train.py').
@@ -35,11 +34,14 @@ def analyze_memory(
         dispatches: Which dispatches to capture — 'all', 'random', or '1' (default: 'all').
 
     Returns:
-        Dictionary with 'kernels' list. Each kernel contains:
-        - kernel_name: GPU kernel function name
-        - dispatch_id: Dispatch identifier
-        - accesses: List of memory access observations with source location,
-          bank_conflicts, excess_cache_lines, memory_space, and access_type
+        Dictionary with:
+        - summary: read this first. 'global_sites' ranked by wasted cache lines
+          and 'lds_sites' ranked by bank conflicts (worst first, zero sites
+          omitted), each with file/line/column, totals and a per-wave-execution
+          value; per-kernel totals; and 'how_to_read' explaining the units.
+        - kernels: the raw per-kernel access list (source location,
+          excess_cache_lines, bank_conflicts, memory_space, access_type,
+          execution_count).
     """
     probe = Omniprobe()
     result = probe.analyze_memory(
@@ -49,6 +51,7 @@ def analyze_memory(
     )
 
     return {
+        "summary": summarize_memory(result),
         "kernels": [
             {
                 "kernel_name": k.kernel_name,
@@ -78,15 +81,12 @@ def analyze_basic_blocks(
     kernel_filter: str = None,
     dispatches: str = "all",
 ) -> dict:
-    """Analyze GPU kernel basic-block timing at ISA level.
+    """Time each basic block of a GPU kernel at ISA level (cycle distributions per block).
 
-    Instruments the given command with Omniprobe's basic-block analysis and
-    returns per-kernel timing data including cycle counts and percentile
-    distributions for each basic block.
-
-    The application must have been compiled with the flags from
-    get_instrumentation_flags('basic_blocks') -- a different plugin from the
-    memory analysis, so a separate build.
+    First build the application with the flags from
+    get_instrumentation_flags('basic_blocks') (plus -g) -- a different plugin
+    from the memory analysis, so a separate build; a binary built for memory
+    analysis must not be used here.
 
     Args:
         command: Shell command to analyze (e.g., './my_gpu_app').
@@ -205,6 +205,7 @@ def list_analyzers() -> dict:
             "application must first be compiled with the analysis's plugin; "
             "get_instrumentation_flags returns the exact hipcc flags."
         ),
+        "known_blind_spots": KNOWN_BLIND_SPOTS,
     }
 
 

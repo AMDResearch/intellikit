@@ -116,7 +116,7 @@ def memory_command(args) -> int:
         dispatches=args.dispatches,
     )
 
-    output = _format_memory_result(result)
+    output = _format_memory_summary(result) + _format_memory_result(result)
     _write_output(output, args.output)
     return 0
 
@@ -145,6 +145,30 @@ def flags_command(args) -> int:
         " ".join(instrumentation_flags(args.analysis, offload_arch=args.offload_arch, rdc=args.rdc))
     )
     return 0
+
+
+def _format_memory_summary(result) -> str:
+    """Ranked worst sites, printed before the per-kernel detail."""
+    from omniprobe_ik import summarize_memory
+
+    summary = summarize_memory(result)
+    lines = ["Top sites (worst first)"]
+    for site in summary["global_sites"]:
+        lines.append(
+            f"  {site['source_file']}:{site['line']}:{site['column']}  {site['access_type']}  "
+            f"{site['excess_per_execution']} excess cache lines per wave execution "
+            f"({site['excess_cache_lines']} total, {site['kernel']})"
+        )
+    for site in summary["lds_sites"]:
+        lines.append(
+            f"  {site['source_file']}:{site['line']}:{site['column']}  LDS {site['access_type']}  "
+            f"{site['conflicts_per_execution']} bank-conflict cycles per wave execution "
+            f"({site['bank_conflicts']} total, {site['kernel']})"
+        )
+    if len(lines) == 1:
+        lines.append("  none: no excess cache lines and no LDS bank conflicts")
+    lines.append("")
+    return "\n".join(lines) + "\n"
 
 
 def _format_memory_result(result) -> str:

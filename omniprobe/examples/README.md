@@ -6,6 +6,7 @@ Runnable examples for the two analyses this package exposes.
 |---------|----------|--------------|
 | [`01_memory_coalescing/`](01_memory_coalescing/) | `analyze_memory` | Detecting uncoalesced global accesses and LDS bank conflicts |
 | [`02_basic_block_timing/`](02_basic_block_timing/) | `analyze_basic_blocks` | Per-block cycle counts and latency percentiles |
+| [`03_lds_bank_conflicts/`](03_lds_bank_conflicts/) | `analyze_memory` + `summarize_memory` | Locating LDS bank conflicts to a source line, and the padding fix |
 
 Each example is self-contained: it writes a HIP kernel to a temporary directory,
 compiles it with `hipcc` and the Omniprobe instrumentation plugin for its analysis
