@@ -20,6 +20,8 @@ def profile_application(command: str, kernel_filter: str | None = None, top_n: i
 
     Returns cycle counts, stalls, and execution counts mapped to source lines.
     Use this to find performance hotspots and understand where GPU cycles are spent.
+    Stall cycles show where time goes, not whether a line's memory accesses are
+    uncoalesced or scattered; for that, use Omniprobe (omniprobe-mcp analyze_memory).
 
     Args:
         command: Command to profile (e.g., './my_app' or 'python script.py')
@@ -69,6 +71,8 @@ def analyze_instruction_hotspots(
 
     Shows ISA instructions with their cycle counts, stalls, and execution frequency.
     Use this to drill down into why specific lines are taking time.
+    A memory-wait stall (e.g. s_waitcnt vmcnt) does not say whether the access is
+    scattered; Omniprobe (omniprobe-mcp analyze_memory) measures that per line.
 
     Args:
         command: Command to profile
