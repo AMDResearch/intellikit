@@ -9,6 +9,7 @@
 /linex/                 @mawad-amd
 /metrix/                @mawad-amd @mehdi-saeedi
 /nexus/                 @mawad-amd
+/omniprobe/             @rwvo @mawad-amd
 /rocm_mcp/              @ypapadop-amd @mawad-amd
 /uprof_mcp/             @ypapadop-amd @mawad-amd
 
