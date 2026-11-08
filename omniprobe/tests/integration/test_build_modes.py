@@ -105,3 +105,31 @@ def test_non_rdc_multi_file_build_matches_every_kernel(probe, tmp_path_factory):
 def test_rdc_multi_file_build_links(tmp_path_factory):
     _, build = _build_two_tus(tmp_path_factory, "two_tu_rdc", rdc=True)
     assert build.returncode == 0, build.stderr[-500:]
+
+
+def test_partially_instrumented_build_names_the_missing_kernel(probe, tmp_path_factory):
+    """Only main.hip gets the plugin: other_tu_kernel runs uninstrumented and must be named."""
+    from omniprobe_ik import instrumentation_flags, summarize_memory
+
+    tmp = tmp_path_factory.mktemp("partial")
+    main, other = tmp / "main.hip", tmp / "other.hip"
+    main.write_text(MAIN_TU)
+    other.write_text(OTHER_TU)
+    flags = instrumentation_flags("memory")
+    arch = [f for f in flags if f.startswith("--offload-arch=")]
+    steps = [
+        ["hipcc", "-O2", "-g", *flags, "-c", str(main), "-o", str(tmp / "main.o")],
+        ["hipcc", "-O2", "-g", *arch, "-c", str(other), "-o", str(tmp / "other.o")],
+        ["hipcc", *arch, str(tmp / "main.o"), str(tmp / "other.o"), "-o", str(tmp / "app")],
+    ]
+    for step in steps:
+        build = subprocess.run(step, capture_output=True, text=True)
+        assert build.returncode == 0, build.stderr[-2000:]
+
+    result = probe.analyze_memory(command=str(tmp / "app"))
+
+    assert result.uninstrumented_kernels is not None, "omniprobe's log was not captured"
+    assert [k for k in result.uninstrumented_kernels if "other_tu_kernel" in k]
+    assert not [k for k in result.uninstrumented_kernels if "static_kernel" in k]
+    warnings = summarize_memory(result)["warnings"]
+    assert warnings and "other_tu_kernel" in warnings[0]

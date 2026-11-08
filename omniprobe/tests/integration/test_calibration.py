@@ -131,11 +131,17 @@ def calibration(tmp_path_factory):
 
     binary = _compile(tmp_path_factory, CALIBRATION_SOURCE, "calibration", "memory")
     result = probe.analyze_memory(command=str(binary))
-    return {kernel.kernel_name: kernel for kernel in result.kernels}
+    kernels = {kernel.kernel_name: kernel for kernel in result.kernels}
+    kernels["__uninstrumented__"] = result.uninstrumented_kernels
+    return kernels
 
 
 def _kernel(calibration, prefix):
-    matches = [k for name, k in calibration.items() if name.startswith(prefix)]
+    matches = [
+        k
+        for name, k in calibration.items()
+        if name.startswith(prefix) and name != "__uninstrumented__"
+    ]
     assert len(matches) == 1, f"{prefix!r}: {sorted(calibration)}"
     return matches[0]
 
@@ -223,3 +229,10 @@ def test_kernel_without_arguments_is_seen(calibration):
     kernel = calibration[names[0]]
     _, _, executions = _totals(kernel, _line_of("CAL_NOARGS"), "global", "read")
     assert executions == WAVES
+
+
+def test_kernel_without_arguments_is_reported_as_uninstrumented(calibration):
+    """The zero-parameter blind spot is at least loud: the kernel is named as missing."""
+    missing = calibration["__uninstrumented__"]
+    assert missing is not None
+    assert [k for k in missing if k.startswith("no_args")], missing

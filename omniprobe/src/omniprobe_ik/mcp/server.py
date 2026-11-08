@@ -9,7 +9,7 @@ import argparse
 from fastmcp import FastMCP
 
 from omniprobe_ik import ANALYSIS_PLUGINS, Omniprobe, instrumentation_flags, summarize_memory
-from omniprobe_ik.api import KNOWN_BLIND_SPOTS
+from omniprobe_ik.api import KNOWN_BLIND_SPOTS, uninstrumented_warning
 
 mcp = FastMCP("IntelliKit Omniprobe")
 
@@ -35,7 +35,8 @@ def analyze_memory(
 
     Returns:
         Dictionary with:
-        - summary: read this first. 'global_sites' ranked by wasted cache lines
+        - summary: read this first. 'warnings' lists problems with coverage,
+          e.g. kernels that ran without instrumentation and are missing. 'global_sites' ranked by wasted cache lines
           and 'lds_sites' ranked by bank conflicts (worst first, zero sites
           omitted), each with file/line/column, totals and a per-wave-execution
           value; per-kernel totals; and 'how_to_read' explaining the units.
@@ -52,6 +53,7 @@ def analyze_memory(
 
     return {
         "summary": summarize_memory(result),
+        "uninstrumented_kernels": result.uninstrumented_kernels,
         "kernels": [
             {
                 "kernel_name": k.kernel_name,
@@ -81,7 +83,7 @@ def analyze_basic_blocks(
     kernel_filter: str = None,
     dispatches: str = "all",
 ) -> dict:
-    """Time each basic block of a GPU kernel at ISA level (cycle distributions per block).
+    """Report which basic blocks of a GPU kernel execute and how many waves reach each.
 
     First build the application with the flags from
     get_instrumentation_flags('basic_blocks') (plus -g) -- a different plugin
@@ -97,8 +99,10 @@ def analyze_basic_blocks(
         Dictionary with 'kernels' list. Each kernel contains:
         - kernel_name: GPU kernel function name
         - dispatch_id: Dispatch identifier
-        - basic_blocks: List of basic blocks with bb_id, source location,
-          min/max cycles, and percentile distributions (p25-p99)
+        - basic_blocks: List of basic blocks with bb_id, source location and
+          wave_count (waves that reached the block). The cycle fields
+          (min/max, p25-p99) are intervals dominated by instrumentation
+          overhead, NOT per-block cost; use metrix/rocprof for time.
     """
     probe = Omniprobe()
     result = probe.analyze_basic_blocks(
@@ -107,7 +111,10 @@ def analyze_basic_blocks(
         dispatches=dispatches,
     )
 
+    warning = uninstrumented_warning(result.uninstrumented_kernels)
     return {
+        "warnings": [warning] if warning else [],
+        "uninstrumented_kernels": result.uninstrumented_kernels,
         "kernels": [
             {
                 "kernel_name": k.kernel_name,
@@ -193,8 +200,9 @@ def list_analyzers() -> dict:
             {
                 "name": "basic_blocks",
                 "description": (
-                    "Basic-block timing analysis — measures cycle counts and "
-                    "percentile distributions for each ISA basic block."
+                    "Basic-block execution — which blocks run and how many waves "
+                    "reach each (wave_count). Its cycle fields are not per-block "
+                    "cost; use metrix/rocprof kernel timing for time hotspots."
                 ),
                 "tool": "analyze_basic_blocks",
                 "plugin": ANALYSIS_PLUGINS["basic_blocks"],

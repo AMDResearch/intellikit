@@ -97,7 +97,7 @@ int main() {
 """
 
 
-# A single kernel with a data-dependent branch, for basic-block timing. Kept in
+# A single kernel with a data-dependent branch, for basic-block analysis. Kept in
 # sync with omniprobe/examples/02_basic_block_timing/analyze_basic_blocks.py.
 BRANCHING_KERNEL = """
 #include <hip/hip_runtime.h>

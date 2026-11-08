@@ -25,7 +25,7 @@ Examples:
   hipcc -g $(omniprobe-ik flags memory) my_gpu_app.hip -o my_gpu_app
   omniprobe-ik memory ./my_gpu_app
 
-  # Basic-block timing needs a different plugin, so a separate build
+  # Basic-block execution counts need a different plugin, so a separate build
   hipcc -g $(omniprobe-ik flags basic-blocks) my_gpu_app.hip -o my_gpu_app_bb
   omniprobe-ik basic-blocks ./my_gpu_app_bb
 
@@ -52,8 +52,11 @@ Examples:
     # -- basic-blocks subcommand --------------------------------------------
     bb_parser = subparsers.add_parser(
         "basic-blocks",
-        help="Analyze basic-block ISA timing",
-        description="Measure cycle counts and percentile distributions for each basic block",
+        help="Report which basic blocks execute and how many waves reach each",
+        description=(
+            "Report which basic blocks execute and how many waves reach each. Omniprobe's "
+            "per-block cycle fields are not per-block cost today; use metrix for time."
+        ),
     )
     _add_common_args(bb_parser)
 
@@ -132,7 +135,10 @@ def bb_command(args) -> int:
         dispatches=args.dispatches,
     )
 
-    output = _format_bb_result(result)
+    from omniprobe_ik.api import uninstrumented_warning
+
+    warning = uninstrumented_warning(result.uninstrumented_kernels)
+    output = (f"WARNING: {warning}\n\n" if warning else "") + _format_bb_result(result)
     _write_output(output, args.output)
     return 0
 
@@ -152,7 +158,7 @@ def _format_memory_summary(result) -> str:
     from omniprobe_ik import summarize_memory
 
     summary = summarize_memory(result)
-    lines = ["Top sites (worst first)"]
+    lines = [f"WARNING: {w}" for w in summary["warnings"]] + ["Top sites (worst first)"]
     for site in summary["global_sites"]:
         lines.append(
             f"  {site['source_file']}:{site['line']}:{site['column']}  {site['access_type']}  "
@@ -207,16 +213,9 @@ def _format_bb_result(result) -> str:
         lines.append(f"Kernel: {kernel.kernel_name} (dispatch {kernel.dispatch_id})")
         lines.append(f"  Basic blocks: {len(kernel.basic_blocks)}")
 
-        for bb in kernel.basic_blocks:
+        for bb in sorted(kernel.basic_blocks, key=lambda b: b.wave_count, reverse=True):
             loc = f"{bb.source_file}:{bb.line}"
-            lines.append(f"  BB {bb.bb_id} ({loc})")
-            lines.append(f"    Cycles: min={bb.min_cycles:.1f}  max={bb.max_cycles:.1f}")
-            lines.append(
-                f"    Percentiles: p25={bb.p25:.1f}  p50={bb.p50:.1f}  "
-                f"p75={bb.p75:.1f}  p95={bb.p95:.1f}  p99={bb.p99:.1f}"
-            )
-            if bb.wave_count:
-                lines.append(f"    Wave count: {bb.wave_count}")
+            lines.append(f"  BB {bb.bb_id} ({loc}): reached by {bb.wave_count} waves")
         lines.append("")
 
     return "\n".join(lines)

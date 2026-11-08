@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
-"""End-to-end basic-block timing against a real Omniprobe installation.
+"""End-to-end basic-block analysis against a real Omniprobe installation.
 
 Companion to ``test_memory_analysis.py``, covering the second of the two
 analyses the package exposes. The main tests use a single-kernel program, and

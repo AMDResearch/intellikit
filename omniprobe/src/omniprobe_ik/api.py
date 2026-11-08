@@ -5,7 +5,7 @@
 """Python API for Omniprobe GPU memory and basic-block analysis.
 
 Wraps Omniprobe's Python API (``omniprobe.api``) to provide memory coalescing
-analysis and basic-block ISA timing through IntelliKit's standard interface.
+analysis and basic-block execution counts through IntelliKit's standard interface.
 
 Omniprobe must be pre-installed on the system and its Python API importable
 (i.e. the Omniprobe repo must be on ``PYTHONPATH`` or installed).
@@ -209,7 +209,90 @@ def _add_upstream_source_to_path(omniprobe_path: Optional[str] = None) -> bool:
     return True
 
 
-def _no_data_message(analysis: str, command: str, kernel_filter: Optional[str]) -> str:
+_NO_ALTERNATIVE = re.compile(r"No instrumented alternative found for (.+?)\s*$", re.MULTILINE)
+
+
+def parse_uninstrumented_kernels(log: str) -> list[str]:
+    """Kernels Omniprobe reported as dispatched without an instrumented clone.
+
+    The HIP runtime's own helper kernels (``__amd_rocclr_*``, e.g. buffer
+    copies) are never instrumented and are left out. Order is first appearance;
+    duplicates are dropped.
+    """
+    seen: list[str] = []
+    for name in _NO_ALTERNATIVE.findall(log):
+        name = name.strip()
+        if name.startswith("__amd_rocclr_") or name in seen:
+            continue
+        seen.append(name)
+    return seen
+
+
+class _CapturingSubprocess:
+    """Stands in for the ``subprocess`` module inside upstream's API module.
+
+    Upstream's ``Omniprobe._run`` captures omniprobe's output and discards it,
+    so the "No instrumented alternative found" lines never reach the caller.
+    This proxy records what ``run`` returned. Interim, until upstream exposes
+    the information itself.
+    """
+
+    def __init__(self, real):
+        self._real = real
+        self.log = None
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def run(self, *args, **kwargs):
+        completed = self._real.run(*args, **kwargs)
+        self.log = f"{completed.stdout or ''}\n{completed.stderr or ''}"
+        return completed
+
+
+def _call_capturing_log(func, **kwargs):
+    """Call an upstream analysis method; return (result, omniprobe log or None)."""
+    try:
+        import omniprobe.api.omniprobe as upstream_module
+    except ImportError:
+        return func(**kwargs), None
+    real = getattr(upstream_module, "subprocess", None)
+    if real is None:
+        return func(**kwargs), None
+    proxy = _CapturingSubprocess(real)
+    upstream_module.subprocess = proxy
+    try:
+        result = func(**kwargs)
+    finally:
+        upstream_module.subprocess = real
+    return result, proxy.log
+
+
+def uninstrumented_warning(kernels: Optional[list[str]]) -> Optional[str]:
+    """The warning text for kernels that ran uninstrumented, or None."""
+    if not kernels:
+        return None
+    names = "; ".join(kernels)
+    return (
+        f"{len(kernels)} dispatched kernel(s) ran WITHOUT instrumentation and are missing from "
+        f"these results: {names}. Rebuild the files that define them with the instrumentation "
+        "flags; kernels without parameters, and internal-linkage kernels in -fgpu-rdc builds, "
+        "are known not to match."
+    )
+
+
+def _warn_uninstrumented(kernels: Optional[list[str]]) -> None:
+    message = uninstrumented_warning(kernels)
+    if message:
+        logger.warning(message)
+
+
+def _no_data_message(
+    analysis: str,
+    command: str,
+    kernel_filter: Optional[str],
+    uninstrumented: Optional[list[str]] = None,
+) -> str:
     plugin = ANALYSIS_PLUGINS[analysis]
     try:
         flags = " ".join(instrumentation_flags(analysis))
@@ -222,6 +305,8 @@ def _no_data_message(analysis: str, command: str, kernel_filter: Optional[str]) 
         f"Rebuild the application with: hipcc -g {flags} ...",
         "(instrumentation_flags() / 'omniprobe-ik flags' print these flags.)",
     ]
+    if uninstrumented:
+        lines.append("Kernels dispatched without instrumentation: " + "; ".join(uninstrumented))
     if kernel_filter is not None:
         lines.append(f"Also check that kernel_filter {kernel_filter!r} matches a launched kernel.")
     lines.append("Otherwise the application launched no GPU kernel.")
@@ -258,9 +343,15 @@ class KernelMemoryResult:
 
 @dataclass
 class MemoryAnalysisResult:
-    """Top-level result from ``analyze_memory``."""
+    """Top-level result from ``analyze_memory``.
+
+    ``uninstrumented_kernels`` names kernels that were dispatched but ran
+    without instrumentation, so they are missing from ``kernels``. ``None``
+    means Omniprobe's log could not be inspected, not that nothing was missed.
+    """
 
     kernels: list[KernelMemoryResult] = field(default_factory=list)
+    uninstrumented_kernels: Optional[list[str]] = field(default_factory=list)
 
 
 @dataclass
@@ -291,9 +382,13 @@ class KernelBBResult:
 
 @dataclass
 class BasicBlockResult:
-    """Top-level result from ``analyze_basic_blocks``."""
+    """Top-level result from ``analyze_basic_blocks``.
+
+    ``uninstrumented_kernels`` is as for :class:`MemoryAnalysisResult`.
+    """
 
     kernels: list[KernelBBResult] = field(default_factory=list)
+    uninstrumented_kernels: Optional[list[str]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -359,14 +454,19 @@ class Omniprobe:
                 because the application was not compiled with
                 ``instrumentation_flags("memory")``.
         """
-        upstream_result = self._upstream.analyze_memory(
+        upstream_result, log = _call_capturing_log(
+            self._upstream.analyze_memory,
             command=command,
             kernel_filter=kernel_filter,
             dispatches=dispatches,
         )
         result = self._convert_memory_result(upstream_result)
+        result.uninstrumented_kernels = None if log is None else parse_uninstrumented_kernels(log)
         if not result.kernels:
-            raise NoInstrumentedKernelsError(_no_data_message("memory", command, kernel_filter))
+            raise NoInstrumentedKernelsError(
+                _no_data_message("memory", command, kernel_filter, result.uninstrumented_kernels)
+            )
+        _warn_uninstrumented(result.uninstrumented_kernels)
         return result
 
     def analyze_basic_blocks(
@@ -393,16 +493,21 @@ class Omniprobe:
                 because the application was not compiled with
                 ``instrumentation_flags("basic_blocks")``.
         """
-        upstream_result = self._upstream.analyze_basic_blocks(
+        upstream_result, log = _call_capturing_log(
+            self._upstream.analyze_basic_blocks,
             command=command,
             kernel_filter=kernel_filter,
             dispatches=dispatches,
         )
         result = self._convert_bb_result(upstream_result)
+        result.uninstrumented_kernels = None if log is None else parse_uninstrumented_kernels(log)
         if not result.kernels:
             raise NoInstrumentedKernelsError(
-                _no_data_message("basic_blocks", command, kernel_filter)
+                _no_data_message(
+                    "basic_blocks", command, kernel_filter, result.uninstrumented_kernels
+                )
             )
+        _warn_uninstrumented(result.uninstrumented_kernels)
         return result
 
     # -- conversion helpers -------------------------------------------------
@@ -559,7 +664,10 @@ def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
 
     global_sites.sort(key=lambda s: s["excess_cache_lines"], reverse=True)
     lds_sites.sort(key=lambda s: s["bank_conflicts"], reverse=True)
+    warning = uninstrumented_warning(getattr(result, "uninstrumented_kernels", None))
     return {
+        "warnings": [warning] if warning else [],
+        "uninstrumented_kernels": getattr(result, "uninstrumented_kernels", None),
         "global_sites": global_sites[:top],
         "lds_sites": lds_sites[:top],
         "kernels": sorted(

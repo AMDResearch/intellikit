@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
 
 """
-omniprobe_ik: GPU Memory Coalescing and Basic-Block Timing Analysis
+omniprobe_ik: source-level GPU memory coalescing and LDS bank-conflict analysis
 
 Wraps Omniprobe's Python API to provide memory coalescing analysis
 (uncoalesced global accesses, LDS bank conflicts) and basic-block
@@ -23,6 +23,7 @@ from .api import (
     Omniprobe,
     detect_offload_arch,
     instrumentation_flags,
+    parse_uninstrumented_kernels,
     summarize_memory,
 )
 
@@ -37,6 +38,7 @@ __all__ = [
     "NoInstrumentedKernelsError",
     "instrumentation_flags",
     "summarize_memory",
+    "parse_uninstrumented_kernels",
     "detect_offload_arch",
     "MemoryAnalysisResult",
     "KernelMemoryResult",

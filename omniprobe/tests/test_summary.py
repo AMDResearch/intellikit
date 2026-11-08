@@ -79,3 +79,18 @@ def test_empty_result_and_how_to_read():
     summary = summarize_memory(MemoryAnalysisResult())
     assert summary["global_sites"] == [] and summary["lds_sites"] == []
     assert "per wave execution" in summary["how_to_read"]
+
+
+def test_uninstrumented_kernels_become_a_warning():
+    result = _result()
+    result.uninstrumented_kernels = ["other_kernel(float*) [clone .kd]"]
+    summary = summarize_memory(result)
+    assert summary["uninstrumented_kernels"] == ["other_kernel(float*) [clone .kd]"]
+    assert len(summary["warnings"]) == 1
+    assert "WITHOUT instrumentation" in summary["warnings"][0]
+    assert "other_kernel" in summary["warnings"][0]
+
+
+def test_no_warning_when_everything_was_instrumented():
+    summary = summarize_memory(_result())
+    assert summary["warnings"] == []
