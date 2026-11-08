@@ -101,3 +101,40 @@ def test_uninstrumented_binary_raises(probe, uninstrumented_binary):
 
     with pytest.raises(NoInstrumentedKernelsError, match="-fpass-plugin"):
         probe.analyze_memory(command=str(uninstrumented_binary))
+
+
+def test_kernel_filter_matching_nothing_is_its_own_error(probe, tmp_path_factory):
+    """'^gstride' misses template kernels ('void gstride<1>(...)'): Omniprobe b71927b+ says the
+    filter matched nothing; the error must say so, list the kernels, and not ask for a rebuild."""
+    import asyncio
+
+    from fastmcp import Client
+
+    from omniprobe_ik import KernelFilterMatchedNothingError
+    from omniprobe_ik.mcp.server import mcp
+
+    from .conftest import _compile
+    from .test_calibration import CALIBRATION_SOURCE
+
+    binary = _compile(tmp_path_factory, CALIBRATION_SOURCE, "filter", "memory")
+    with pytest.raises(KernelFilterMatchedNothingError) as err:
+        probe.analyze_memory(command=str(binary), kernel_filter="^gstride")
+    text = str(err.value)
+    assert "'^gstride'" in text and "do not rebuild" in text and "searched" in text
+    assert any(n.startswith("void gstride<16>(") for n in err.value.dispatched)
+    assert "via_table" in text
+
+    # The template kernel is matched by a search without the anchor.
+    assert probe.analyze_memory(command=str(binary), kernel_filter="gstride<16>").kernels
+
+    async def call():
+        async with Client(mcp) as client:
+            return await client.call_tool(
+                "analyze_memory",
+                {"command": str(binary), "kernel_filter": "^gstride"},
+                raise_on_error=False,
+            )
+
+    result = asyncio.run(call())
+    assert result.is_error
+    assert "matched none of the instrumented kernels" in result.content[0].text

@@ -74,6 +74,18 @@ class NoInstrumentedKernelsError(RuntimeError):
     """
 
 
+class KernelFilterMatchedNothingError(NoInstrumentedKernelsError):
+    """The kernel filter matched none of the dispatched instrumented kernels.
+
+    The application is instrumented; the filter is wrong. ``dispatched`` holds
+    the names Omniprobe listed as candidates.
+    """
+
+    def __init__(self, message: str, dispatched: list[str]):
+        super().__init__(message)
+        self.dispatched = dispatched
+
+
 def _normalize_analysis(analysis: str) -> str:
     key = analysis.replace("-", "_")
     if key not in ANALYSIS_PLUGINS:
@@ -474,7 +486,9 @@ _MISSING_TOOL = re.compile(
 def environment_problem(log: Optional[str]) -> Optional[str]:
     """Why Omniprobe's own environment, not the build, kept it from reporting, or None.
 
-    Signals in Omniprobe's output (measured with Omniprobe 13ca707): without ROCM_PATH it
+    Omniprobe 149cf2c and later pick a ROCm with llvm-objdump themselves and print
+    ``omniprobe: ERROR: no ROCm installation ...`` or ``kernelDB could not read ...``
+    when that fails. Older builds (measured with Omniprobe 13ca707): without ROCM_PATH it
     runs ``/opt/rocm/llvm/bin/llvm-objdump`` and, where that does not exist, prints
     ``sh: ...: No such file or directory`` and ``[hsaInterceptor] Command failed``, then
     reports nothing although it found the instrumented clones. If the interceptor never
@@ -484,6 +498,16 @@ def environment_problem(log: Optional[str]) -> Optional[str]:
         return None
     rocm = os.environ.get("ROCM_PATH")
     where = f"ROCM_PATH is {rocm!r}" if rocm else "ROCM_PATH is not set, so /opt/rocm is assumed"
+    if "no ROCm installation with llvm/bin/llvm-objdump found" in log or (
+        "kernelDB could not read" in log
+    ):
+        # Omniprobe 149cf2c+ finds its ROCm itself and says so when it cannot.
+        return (
+            f"Omniprobe could not find a ROCm installation with llvm-objdump ({where}), so it "
+            "has no source attribution. Set ROCM_PATH to the ROCm installation Omniprobe was "
+            "built against (e.g. /opt/rocm-<version>) in the shell, or in the MCP server's "
+            "'env' configuration, and rerun."
+        )
     missing = _MISSING_TOOL.search(log)
     if missing or "[hsaInterceptor] Command failed" in log:
         what = f"could not run {missing.group(1)}" if missing else "had a helper command fail"
@@ -499,6 +523,59 @@ def environment_problem(log: Optional[str]) -> Optional[str]:
             "the server's 'env' configuration)."
         )
     return None
+
+
+_FILTER_MISSED = re.compile(
+    r"no dispatched kernel matched the kernel filter -k '(?P<filter>.*?)', so none ran "
+    r"instrumented\..*?dispatched were:\n(?P<names>(?:  .*\n?)*)",
+    re.S,
+)
+_CANDIDATE = re.compile(r"^  (.+?)(?: \(\d+ dispatch(?:es)?\))?$")
+
+
+def kernel_filter_missed(log: Optional[str]) -> Optional[tuple[str, list[str]]]:
+    """(filter, dispatched kernel names) if Omniprobe said the filter matched nothing, else None.
+
+    Omniprobe b71927b and later print this at exit when instrumented kernels ran but
+    the ``-k`` filter excluded every one of them.
+    """
+    if not log:
+        return None
+    match = _FILTER_MISSED.search(log)
+    if not match:
+        return None
+    names = []
+    for line in match.group("names").splitlines():
+        candidate = _CANDIDATE.match(line)
+        if candidate and not candidate.group(1).startswith("... and "):
+            names.append(candidate.group(1))
+    return match.group("filter"), names
+
+
+def kernel_filter_message(command: str, kernel_filter: str, dispatched: list[str]) -> str:
+    """The error text for a kernel filter that matched no dispatched kernel."""
+    return "\n".join(
+        [
+            f"The kernel filter {kernel_filter!r} matched none of the instrumented kernels "
+            f"{command!r} dispatched, so Omniprobe analyzed nothing. The application is "
+            "instrumented; do not rebuild it.",
+            "The filter is an ECMAScript regex searched anywhere in the demangled kernel name, "
+            "e.g. 'void name<4>(double*)' for a template kernel, so '^name' does not match it.",
+            "Kernels dispatched: " + ("; ".join(dispatched) if dispatched else "(none listed)"),
+        ]
+    )
+
+
+def _raise_no_data(analysis, command, kernel_filter, uninstrumented, log) -> None:
+    missed = kernel_filter_missed(log)
+    if missed is not None:
+        used_filter, dispatched = missed
+        raise KernelFilterMatchedNothingError(
+            kernel_filter_message(command, kernel_filter or used_filter, dispatched), dispatched
+        )
+    raise NoInstrumentedKernelsError(
+        _no_data_message(analysis, command, kernel_filter, uninstrumented, log)
+    )
 
 
 def _no_data_message(
@@ -568,8 +645,9 @@ class KernelMemoryResult:
     kernel_name: str
     dispatch_id: int
     accesses: list[MemoryAccess] = field(default_factory=list)
-    # Accesses in the generic (flat) address space, which memory analysis cannot
-    # classify: pointers loaded from device memory, or code built at -O0.
+    # Generic (flat) accesses left unanalyzed: waves whose lanes pointed into different
+    # address spaces (Omniprobe e807927+), or every flat access of a binary instrumented
+    # by an older Omniprobe.
     unanalyzed_flat_accesses: int = 0
     # Global accesses dropped because no ISA instruction was found for their source
     # line: all of them when the binary has no debug info (-g). Omniprobe 821ba07+.
@@ -675,8 +753,9 @@ class Omniprobe:
 
         Args:
             command: Application command line to instrument.
-            kernel_filter: Optional ECMAScript regex to limit which kernels
-                are analysed.
+            kernel_filter: Optional ECMAScript regex, searched anywhere in the
+                demangled kernel name (a template kernel's name starts with its
+                return type, e.g. ``void name<4>(...)``, so ``^name`` misses it).
             dispatches: Which dispatches to capture — ``"all"``, ``"random"``,
                 or ``"1"``.
 
@@ -685,6 +764,8 @@ class Omniprobe:
             access observations.
 
         Raises:
+            KernelFilterMatchedNothingError: *kernel_filter* matched none of the
+                instrumented kernels the application dispatched.
             NoInstrumentedKernelsError: No kernel was reported, typically
                 because the application was not compiled with
                 ``instrumentation_flags("memory")``.
@@ -698,11 +779,7 @@ class Omniprobe:
         result = self._convert_memory_result(upstream_result)
         result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
         if not result.kernels:
-            raise NoInstrumentedKernelsError(
-                _no_data_message(
-                    "memory", command, kernel_filter, result.uninstrumented_kernels, log
-                )
-            )
+            _raise_no_data("memory", command, kernel_filter, result.uninstrumented_kernels, log)
         _warn_uninstrumented(result.uninstrumented_kernels)
         return result
 
@@ -716,8 +793,9 @@ class Omniprobe:
 
         Args:
             command: Application command line to instrument.
-            kernel_filter: Optional ECMAScript regex to limit which kernels
-                are analysed.
+            kernel_filter: Optional ECMAScript regex, searched anywhere in the
+                demangled kernel name (a template kernel's name starts with its
+                return type, e.g. ``void name<4>(...)``, so ``^name`` misses it).
             dispatches: Which dispatches to capture — ``"all"``, ``"random"``,
                 or ``"1"``.
 
@@ -726,6 +804,8 @@ class Omniprobe:
             timing data.
 
         Raises:
+            KernelFilterMatchedNothingError: *kernel_filter* matched none of the
+                instrumented kernels the application dispatched.
             NoInstrumentedKernelsError: No kernel was reported, typically
                 because the application was not compiled with
                 ``instrumentation_flags("basic_blocks")``.
@@ -739,10 +819,8 @@ class Omniprobe:
         result = self._convert_bb_result(upstream_result)
         result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
         if not result.kernels:
-            raise NoInstrumentedKernelsError(
-                _no_data_message(
-                    "basic_blocks", command, kernel_filter, result.uninstrumented_kernels, log
-                )
+            _raise_no_data(
+                "basic_blocks", command, kernel_filter, result.uninstrumented_kernels, log
             )
         _warn_uninstrumented(result.uninstrumented_kernels)
         return result
@@ -822,40 +900,65 @@ HOW_TO_READ_MEMORY = (
 )
 
 KNOWN_BLIND_SPOTS = [
-    "Accesses through a pointer that was itself loaded from device memory (flat address "
-    "space) are not recorded; pointer arguments, by-value struct members and __constant__ "
-    "pointers are.",
+    "Only global and LDS (shared) accesses are analyzed; scratch (private) and constant "
+    "accesses are not reported.",
     "Code built without -g: global accesses cannot be matched to source lines and are "
     "dropped (counted in unattributed_accesses). Build with -g.",
-    "Code built at -O0 (e.g. CMake's default or Debug build type) reports no accesses: "
-    "pointers go through the stack and become generic (flat) accesses. Build with -O1 or "
-    "higher plus -g (CMake: -DCMAKE_BUILD_TYPE=RelWithDebInfo).",
+    "Generic (flat) pointer accesses -- every access at -O0, and accesses through a pointer "
+    "loaded from memory -- are classified per wave at run time (Omniprobe e807927 and later) "
+    "and analyzed as global or LDS. A wave whose lanes point into different address spaces "
+    "is counted in unanalyzed_flat_accesses and not analyzed. Binaries instrumented by an "
+    "older Omniprobe count all their flat accesses there.",
+    "Kernels built without the instrumentation plugin, and kernels excluded by the kernel "
+    "filter, run uninstrumented and are missing from the results.",
 ]
 
 
 def flat_accesses_warning(per_kernel: dict) -> Optional[str]:
-    """The warning for accesses Omniprobe saw but could not analyze (flat address space)."""
+    """The warning for flat accesses Omniprobe counted but could not analyze, or None."""
     if not per_kernel:
         return None
     detail = "; ".join(f"{name}: {n}" for name, n in per_kernel.items())
     return (
-        "Some memory accesses were in the generic (flat) address space and were NOT analyzed, "
-        f"so they are missing from these results ({detail} wave executions). Typical causes: "
-        "the code was built at -O0 (rebuild with -O1 or higher), or the pointers were loaded "
-        "from device memory (pass them as kernel arguments to measure them)."
+        "Some generic (flat) pointer accesses were NOT analyzed, so they are missing from these "
+        f"results ({detail} wave executions). Omniprobe e807927 and later classify flat accesses "
+        "per wave at run time and leave out only waves whose lanes point into different address "
+        "spaces; binaries instrumented by an older Omniprobe count every flat access here "
+        "(all accesses at -O0, and accesses through pointers loaded from memory)."
     )
 
 
-def unattributed_accesses_warning(per_kernel: dict) -> Optional[str]:
-    """The warning for accesses dropped because they had no source line (no -g), or None."""
+def unattributed_accesses_warning(
+    per_kernel: dict, attributed_kernels: Optional[set] = None
+) -> Optional[str]:
+    """The warning for accesses dropped because they had no source line, or None.
+
+    A kernel that also has attributed accesses was built with debug info, so
+    missing ``-g`` is not the cause there.
+    """
     if not per_kernel:
         return None
-    detail = "; ".join(f"{name}: {n}" for name, n in per_kernel.items())
-    return (
-        "Some global memory accesses could not be matched to a source line and were NOT "
-        f"analyzed, so they are missing from these results ({detail} wave executions). "
-        "The binary was most likely built without debug info: rebuild with -g (keep -O1 or higher)."
-    )
+    attributed_kernels = attributed_kernels or set()
+    no_debug = {k: n for k, n in per_kernel.items() if k not in attributed_kernels}
+    partial = {k: n for k, n in per_kernel.items() if k in attributed_kernels}
+    parts = []
+    if no_debug:
+        detail = "; ".join(f"{name}: {n}" for name, n in no_debug.items())
+        parts.append(
+            "Global memory accesses could not be matched to a source line and were NOT analyzed, "
+            f"so they are missing from these results ({detail} wave executions). None of these "
+            "kernels' accesses has a source line: the binary was most likely built without debug "
+            "info. Rebuild with -g (keep -O1 or higher)."
+        )
+    if partial:
+        detail = "; ".join(f"{name}: {n}" for name, n in partial.items())
+        parts.append(
+            "Some global memory accesses could not be matched to a source line and were NOT "
+            f"analyzed ({detail} wave executions). These kernels have debug info (their other "
+            "accesses were attributed), so -g is not missing; Omniprobe could not map these "
+            "particular instructions to a line."
+        )
+    return " ".join(parts)
 
 
 def silent_kernels_warning(kernel_names: list[str]) -> Optional[str]:
@@ -864,9 +967,8 @@ def silent_kernels_warning(kernel_names: list[str]) -> Optional[str]:
         return None
     return (
         f"{len(kernel_names)} instrumented kernel(s) reported no global or LDS memory access: "
-        f"{'; '.join(kernel_names)}. If they do access memory, the accesses were not seen: "
-        "most likely the code was built at -O0 (rebuild with -O1 or higher, e.g. CMake "
-        "-DCMAKE_BUILD_TYPE=RelWithDebInfo), or the pointers were loaded from device memory."
+        f"{'; '.join(kernel_names)}. Omniprobe analyzes global and LDS accesses only; scratch "
+        "(private) and constant accesses are not reported."
     )
 
 
@@ -964,7 +1066,9 @@ def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
         for w in (
             uninstrumented_warning(getattr(result, "uninstrumented_kernels", None)),
             flat_accesses_warning(flat),
-            unattributed_accesses_warning(unattributed),
+            unattributed_accesses_warning(
+                unattributed, {k.kernel_name for k in result.kernels if k.accesses}
+            ),
             silent_kernels_warning(silent),
         )
         if w

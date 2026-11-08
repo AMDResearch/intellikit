@@ -98,10 +98,12 @@ def test_no_warning_when_everything_was_instrumented():
 
 def test_kernel_without_any_access_is_flagged():
     result = _result()
-    result.kernels.append(KernelMemoryResult(kernel_name="built_at_O0", dispatch_id=3, accesses=[]))
+    result.kernels.append(KernelMemoryResult(kernel_name="no_memory", dispatch_id=3, accesses=[]))
     warnings = summarize_memory(result)["warnings"]
     assert len(warnings) == 1
-    assert "built_at_O0" in warnings[0] and "-O0" in warnings[0]
+    # Omniprobe e807927+ analyzes -O0 code, so -O0 is no longer offered as the cause.
+    assert "no_memory" in warnings[0] and "-O0" not in warnings[0]
+    assert "global and LDS accesses only" in warnings[0]
 
 
 def test_unanalyzed_flat_accesses_are_flagged_with_counts():
@@ -109,7 +111,8 @@ def test_unanalyzed_flat_accesses_are_flagged_with_counts():
     result.kernels[0].unanalyzed_flat_accesses = 128
     warnings = summarize_memory(result)["warnings"]
     assert len(warnings) == 1
-    assert "strided: 128" in warnings[0] and "flat" in warnings[0] and "-O0" in warnings[0]
+    assert "strided: 128" in warnings[0] and "flat" in warnings[0]
+    assert "different address spaces" in warnings[0] and "older Omniprobe" in warnings[0]
 
 
 def test_unattributed_accesses_point_at_debug_info_not_O0():

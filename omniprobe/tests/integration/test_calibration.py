@@ -207,19 +207,15 @@ def test_indirect_gather_is_seen(calibration):
     assert max(a.excess_cache_lines for a in reads) > 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Omniprobe limitation: accesses through a pointer loaded from device memory "
-        "are flat (generic) address space, which MemoryAnalysis ignores "
-        "(memory_analysis_handler.cc:229-251). Reported 2026-11-08."
-    ),
-)
 def test_pointer_loaded_from_memory_is_seen(calibration):
+    """Omniprobe e807927+ classifies flat accesses per wave at run time: a pointer loaded
+    from device memory is analyzed as global (in[i * 16]: 30 excess lines per execution)."""
     kernel = _kernel(calibration, "via_table")
-    _, _, executions = _totals(kernel, _line_of("CAL_TABLE"), "global", "read")
-    assert executions == WAVES
+    line = _line_of("CAL_TABLE")
+    excess, _, executions = _totals(kernel, line, "global", "read")
+    assert (executions, excess) == (WAVES, 30 * WAVES)
+    excess, _, executions = _totals(kernel, line, "global", "write")
+    assert (executions, excess) == (WAVES, 0)
 
 
 def test_kernel_without_arguments_is_seen(calibration):
@@ -237,8 +233,17 @@ def test_kernel_without_arguments_is_not_reported_as_uninstrumented(calibration)
     assert not [k for k in missing if k.startswith("no_args")], missing
 
 
-def test_pointer_loaded_from_memory_is_reported_as_unanalyzed(calibration):
-    """The flat-pointer blind spot is at least loud: Omniprobe counts what it could not analyze."""
+def test_pointer_loaded_from_memory_is_not_left_unanalyzed(calibration):
+    """All lanes of each wave point into global memory, so nothing is left as flat."""
+    assert _kernel(calibration, "via_table").unanalyzed_flat_accesses == 0
+
+
+def test_unattributed_access_in_a_kernel_with_debug_info_is_not_blamed_on_g(calibration):
+    """via_table is built with -g and has attributed accesses; Omniprobe 22c4d95 still leaves
+    one wave-level access per wave without a line. The warning must not ask for -g."""
+    from omniprobe_ik import MemoryAnalysisResult, summarize_memory
+
     kernel = _kernel(calibration, "via_table")
-    # in[i * 16] and out[i] through table pointers: 2 flat accesses per wave execution.
-    assert kernel.unanalyzed_flat_accesses == 2 * WAVES
+    assert kernel.accesses and kernel.unattributed_accesses == WAVES
+    warnings = " ".join(summarize_memory(MemoryAnalysisResult(kernels=[kernel]))["warnings"])
+    assert "not missing" in warnings and "rebuild with -g" not in warnings.lower()

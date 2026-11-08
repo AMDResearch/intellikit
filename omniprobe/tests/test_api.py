@@ -284,3 +284,76 @@ class TestInstrumentationFlags:
         monkeypatch.setattr("omniprobe_ik.api.detect_offload_arch", lambda: None)
         with pytest.raises(RuntimeError, match="offload_arch"):
             instrumentation_flags("memory")
+
+
+class TestKernelFilterMissed:
+    """Parsing Omniprobe b71927b's end-of-run warning (text from src/interceptor.cc:311-321)."""
+
+    LOG = (
+        "omniprobe: WARNING: no dispatched kernel matched the kernel filter -k '^gstride', so "
+        "none ran instrumented. The filter is an ECMAScript regex searched in the demangled "
+        "name; the instrumented kernels dispatched were:\n"
+        "  void gstride<1>(float const*, float*) [clone .kd] (1 dispatch)\n"
+        "  via_table(float* const*) [clone .kd] (3 dispatches)\n"
+        "  ... and 4 more\n"
+        "Ending kernelDB\n"
+    )
+
+    def test_parses_filter_and_candidates(self):
+        from omniprobe_ik.api import kernel_filter_missed
+
+        assert kernel_filter_missed(self.LOG) == (
+            "^gstride",
+            [
+                "void gstride<1>(float const*, float*) [clone .kd]",
+                "via_table(float* const*) [clone .kd]",
+            ],
+        )
+
+    def test_absent_warning_is_none(self):
+        from omniprobe_ik.api import kernel_filter_missed
+
+        assert kernel_filter_missed("Kernel filter excluded foo; running uninstrumented") is None
+        assert kernel_filter_missed(None) is None
+
+    def test_raised_instead_of_rebuild_advice(self):
+        from omniprobe_ik import KernelFilterMatchedNothingError, NoInstrumentedKernelsError
+        from omniprobe_ik.api import _raise_no_data
+
+        with pytest.raises(KernelFilterMatchedNothingError) as err:
+            _raise_no_data("memory", "./app", "^gstride", [], self.LOG)
+        assert isinstance(err.value, NoInstrumentedKernelsError)
+        assert "do not rebuild" in str(err.value) and "Rebuild" not in str(err.value)
+
+
+class TestEnvironmentProblem:
+    def test_22c4d95_kerneldb_error_is_environment(self):
+        from omniprobe_ik.api import environment_problem
+
+        log = (
+            "HSA intercept registered\nomniprobe: ERROR: kernelDB could not read /tmp/x.co: boom\n"
+        )
+        assert "ROCM_PATH" in environment_problem(log)
+
+    def test_13ca707_missing_objdump_is_environment(self):
+        from omniprobe_ik.api import environment_problem
+
+        log = (
+            "HSA intercept registered\nsh: /opt/rocm/llvm/bin/llvm-objdump: No such file or "
+            "directory\n[hsaInterceptor] Command failed\n"
+        )
+        assert "could not run /opt/rocm/llvm/bin/llvm-objdump" in environment_problem(log)
+
+
+class TestUnattributedWarning:
+    def test_kernel_without_any_line_is_blamed_on_g(self):
+        from omniprobe_ik.api import unattributed_accesses_warning
+
+        text = unattributed_accesses_warning({"k": 64}, set())
+        assert "-g" in text and "not missing" not in text
+
+    def test_kernel_with_attributed_accesses_is_not(self):
+        from omniprobe_ik.api import unattributed_accesses_warning
+
+        text = unattributed_accesses_warning({"k": 64}, {"k"})
+        assert "-g is not missing" in text and "Rebuild with -g" not in text

@@ -143,8 +143,8 @@ def test_partially_instrumented_build_names_the_missing_kernel(probe, tmp_path_f
     assert warnings and "other_tu_kernel" in warnings[0]
 
 
-def test_O0_build_is_flagged_not_silent(probe, tmp_path_factory):
-    """At -O0 Omniprobe sees no accesses; the summary must say so instead of reporting 'none'."""
+def test_O0_build_is_analyzed(probe, tmp_path_factory):
+    """Omniprobe e807927+ classifies -O0's flat accesses at run time: same finding as -O2."""
     from omniprobe_ik import instrumentation_flags, summarize_memory
 
     from .conftest import STRIDED_KERNEL
@@ -160,8 +160,14 @@ def test_O0_build_is_flagged_not_silent(probe, tmp_path_factory):
     assert build.returncode == 0, build.stderr[-2000:]
 
     summary = summarize_memory(probe.analyze_memory(command=str(tmp / "app")))
-    assert summary["global_sites"] == []
-    assert any("-O0" in w and "strided_copy" in w for w in summary["warnings"]), summary["warnings"]
+    line = STRIDED_KERNEL.splitlines().index("        out[idx] = in[idx] * 2.0f;", 15) + 1
+    sites = {
+        (s["kernel"].split("(")[0], s["line"], s["access_type"]): s["excess_per_execution"]
+        for s in summary["global_sites"]
+    }
+    # Lanes 16 floats apart: min(64, 2 * 16) - 2 = 30 excess lines per wave execution.
+    assert sites == {("strided_copy", line, "read"): 30.0, ("strided_copy", line, "write"): 30.0}
+    assert summary["warnings"] == []
 
 
 def test_build_without_debug_info_is_flagged(probe, tmp_path_factory):
@@ -191,10 +197,10 @@ def test_build_without_debug_info_is_flagged(probe, tmp_path_factory):
     Path("/opt/rocm/llvm/bin/llvm-objdump").exists(),
     reason="needs a node where /opt/rocm is not a full ROCm install",
 )
-def test_missing_rocm_path_is_reported_as_environment(probe, tmp_path_factory, monkeypatch):
-    """Without ROCM_PATH Omniprobe cannot find llvm-objdump and reports nothing; the error
-    must point at the environment, not ask for a rebuild of an instrumented binary."""
-    from omniprobe_ik import NoInstrumentedKernelsError, instrumentation_flags
+def test_unset_rocm_path_still_reports(probe, tmp_path_factory, monkeypatch):
+    """Omniprobe 149cf2c+ finds a ROCm with llvm-objdump itself; without ROCM_PATH (and no
+    /opt/rocm) it still attributes accesses. Before, it reported nothing."""
+    from omniprobe_ik import instrumentation_flags
 
     from .conftest import STRIDED_KERNEL
 
@@ -209,6 +215,6 @@ def test_missing_rocm_path_is_reported_as_environment(probe, tmp_path_factory, m
     assert build.returncode == 0, build.stderr[-2000:]
 
     monkeypatch.delenv("ROCM_PATH", raising=False)
-    with pytest.raises(NoInstrumentedKernelsError) as err:
-        probe.analyze_memory(command=str(tmp / "app"))
-    assert "ROCM_PATH" in str(err.value) and "do not rebuild" in str(err.value)
+    result = probe.analyze_memory(command=str(tmp / "app"))
+    names = {k.kernel_name.split("(")[0] for k in result.kernels if k.accesses}
+    assert names == {"coalesced_copy", "strided_copy"}

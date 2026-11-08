@@ -23,7 +23,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Optional
 
-from .api import _NOT_INSTALLED, find_plugin_dir, parse_uninstrumented_kernels
+from .api import (
+    _NOT_INSTALLED,
+    KernelFilterMatchedNothingError,
+    find_plugin_dir,
+    kernel_filter_message,
+    kernel_filter_missed,
+    parse_uninstrumented_kernels,
+)
 
 # Analyzer names Omniprobe accepts with -a, and the plugin each needs at compile time.
 ANALYZER_PLUGINS = {
@@ -101,7 +108,9 @@ def run_analyzer(
             ``"csv"`` (printed). What the application and message handlers print
             is in ``AnalyzerRun.stdout``; Omniprobe's own messages in ``stderr``.
         extra_args: More ``omniprobe`` options, e.g. ``["--library-filter", "f.json"]``.
-        check: Raise ``RuntimeError`` if omniprobe exits non-zero.
+        check: Raise ``RuntimeError`` if omniprobe exits non-zero, and
+            ``KernelFilterMatchedNothingError`` if *kernel_filter* matched no
+            dispatched instrumented kernel.
         python_handler: Path of a Python module defining ``handleAddressMessage(msg)``,
             ``handleTimeMessage(msg)`` and optionally ``handleReport(msg)``; runs
             it through Omniprobe's ``PythonHandler`` (``analyzer`` is then ignored;
@@ -153,9 +162,16 @@ def run_analyzer(
         if failed and check:
             raise RuntimeError(f"Python handler not used: {failed[0]}")
     if check and completed.returncode != 0:
-        raise RuntimeError(
-            f"omniprobe exited with code {completed.returncode}: "
-            f"{(completed.stderr or completed.stdout)[-2000:]}"
+        log = f"{completed.stdout}\n{completed.stderr}"
+        # Omniprobe 149cf2c+ ends configuration errors with "omniprobe: ERROR: ..." and
+        # exit status 1 before the application runs; lead with those lines.
+        errors = [line for line in log.splitlines() if "omniprobe: ERROR:" in line]
+        detail = "\n".join(errors) if errors else (completed.stderr or completed.stdout)[-2000:]
+        raise RuntimeError(f"omniprobe exited with code {completed.returncode}: {detail}")
+    missed = kernel_filter_missed(f"{completed.stdout}\n{completed.stderr}")
+    if check and missed is not None:
+        raise KernelFilterMatchedNothingError(
+            kernel_filter_message(command, kernel_filter or missed[0], missed[1]), missed[1]
         )
     return run
 
