@@ -100,7 +100,7 @@ def main():
         # and bb.line are empty and you only get block ids.
         # Omniprobe only sees kernels compiled with its instrumentation plugin, and
         # each analysis needs its own plugin; instrumentation_flags() returns the
-        # -fpass-plugin, -fgpu-rdc and --offload-arch flags for this one.
+        # -fpass-plugin and --offload-arch flags for this one.
         print("Step 2: Compiling kernel with Omniprobe instrumentation (and -g)...")
         binary_file = tmp_path / "divergent"
         try:

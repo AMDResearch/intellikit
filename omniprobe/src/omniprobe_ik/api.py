@@ -132,6 +132,7 @@ def instrumentation_flags(
     analysis: str = "memory",
     offload_arch: Optional[str] = None,
     omniprobe_path: Optional[str] = None,
+    rdc: bool = False,
 ) -> list[str]:
     """Return the ``hipcc`` flags that make kernels visible to an Omniprobe analysis.
 
@@ -147,11 +148,18 @@ def instrumentation_flags(
             ``rocminfo`` if omitted.
         omniprobe_path: Path to the ``omniprobe`` executable, used to find the
             plugins. Defaults to the one on ``PATH``.
+        rdc: Add ``-fgpu-rdc``. Instrumentation does not need it; set it only
+            when the application already builds with relocatable device code,
+            and keep its build mode otherwise. Measured on gfx90a (Omniprobe
+            9b8a3c4): without RDC, every kernel -- including ``static`` and
+            anonymous-namespace ones, across translation units -- is matched;
+            with RDC and the plugin, linking two or more translation units
+            fails with ``duplicate symbol: __hip_cuid_...``.
 
     Returns:
         A list such as ``["-fpass-plugin=/.../libAMDGCNSubmitAddressMessages-rocm.so",
-        "-fgpu-rdc", "--offload-arch=gfx90a"]``. Pass ``-fgpu-rdc`` to the link
-        step too when compiling and linking separately.
+        "--offload-arch=gfx90a"]``. With ``rdc=True``, ``-fgpu-rdc`` is added;
+        pass it to the link step too when compiling and linking separately.
 
     Raises:
         ValueError: Unknown analysis.
@@ -168,7 +176,10 @@ def instrumentation_flags(
             "could not detect the GPU architecture with rocminfo; pass offload_arch, e.g. 'gfx90a'"
         )
 
-    return [f"-fpass-plugin={plugin}", "-fgpu-rdc", f"--offload-arch={arch}"]
+    flags = [f"-fpass-plugin={plugin}", f"--offload-arch={arch}"]
+    if rdc:
+        flags.insert(1, "-fgpu-rdc")
+    return flags
 
 
 def _no_data_message(analysis: str, command: str, kernel_filter: Optional[str]) -> str:
@@ -176,9 +187,7 @@ def _no_data_message(analysis: str, command: str, kernel_filter: Optional[str]) 
     try:
         flags = " ".join(instrumentation_flags(analysis))
     except (FileNotFoundError, RuntimeError):
-        flags = (
-            f"-fpass-plugin=<omniprobe>/lib/plugins/{plugin} -fgpu-rdc --offload-arch=<gfx arch>"
-        )
+        flags = f"-fpass-plugin=<omniprobe>/lib/plugins/{plugin} --offload-arch=<gfx arch>"
 
     lines = [
         f"Omniprobe reported no instrumented kernels for {command!r}.",

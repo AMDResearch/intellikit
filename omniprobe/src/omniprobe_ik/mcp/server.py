@@ -135,7 +135,9 @@ def analyze_basic_blocks(
 
 
 @mcp.tool()
-def get_instrumentation_flags(analysis: str = "memory", offload_arch: str = None) -> dict:
+def get_instrumentation_flags(
+    analysis: str = "memory", offload_arch: str = None, rdc: bool = False
+) -> dict:
     """Get the hipcc flags that make kernels visible to an Omniprobe analysis.
 
     Omniprobe only analyzes kernels compiled with its LLVM instrumentation
@@ -145,18 +147,24 @@ def get_instrumentation_flags(analysis: str = "memory", offload_arch: str = None
     Args:
         analysis: 'memory' or 'basic_blocks'. Each needs a different plugin.
         offload_arch: GPU architecture such as 'gfx90a'; detected if omitted.
+        rdc: Add -fgpu-rdc. Leave False unless the application already builds
+            with relocatable device code: instrumentation does not need it, and
+            with the plugin, RDC builds of two or more source files fail to link.
 
     Returns:
         Dictionary with 'flags' (list of hipcc arguments), 'plugin' (path of
         the pass plugin) and 'compile_example'.
     """
-    flags = instrumentation_flags(analysis, offload_arch=offload_arch)
+    flags = instrumentation_flags(analysis, offload_arch=offload_arch, rdc=rdc)
     return {
         "analysis": analysis,
         "flags": flags,
         "plugin": flags[0].split("=", 1)[1],
         "compile_example": "hipcc -g -O2 " + " ".join(flags) + " app.hip -o app",
-        "note": "Pass -fgpu-rdc to the link step too when compiling and linking separately.",
+        "note": (
+            "Add these to the application's existing device-compile flags and keep its "
+            "build mode (RDC or not). With rdc=True, also pass -fgpu-rdc to the link step."
+        ),
     }
 
 

@@ -103,7 +103,7 @@ def main():
         # and without debug info those fields come back empty.
         # Omniprobe only sees kernels compiled with its instrumentation plugin, and
         # each analysis needs its own plugin; instrumentation_flags() returns the
-        # -fpass-plugin, -fgpu-rdc and --offload-arch flags for this one.
+        # -fpass-plugin and --offload-arch flags for this one.
         print("Step 2: Compiling kernel with Omniprobe instrumentation (and -g)...")
         binary_file = tmp_path / "strided"
         try:

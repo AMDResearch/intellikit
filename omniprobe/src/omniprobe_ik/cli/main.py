@@ -62,7 +62,7 @@ Examples:
         "flags",
         help="Print the hipcc flags that instrument kernels for an analysis",
         description=(
-            "Print the hipcc flags (Omniprobe pass plugin, -fgpu-rdc, --offload-arch) "
+            "Print the hipcc flags (Omniprobe pass plugin, --offload-arch) "
             "that make kernels visible to the given analysis"
         ),
     )
@@ -70,6 +70,11 @@ Examples:
     flags_parser.add_argument(
         "--offload-arch",
         help="GPU architecture, e.g. gfx90a (default: detected with rocminfo)",
+    )
+    flags_parser.add_argument(
+        "--rdc",
+        action="store_true",
+        help="Add -fgpu-rdc; only for applications that already build with relocatable device code",
     )
 
     return parser
@@ -136,7 +141,9 @@ def flags_command(args) -> int:
     """Print the compile flags for an analysis."""
     from omniprobe_ik import instrumentation_flags
 
-    print(" ".join(instrumentation_flags(args.analysis, offload_arch=args.offload_arch)))
+    print(
+        " ".join(instrumentation_flags(args.analysis, offload_arch=args.offload_arch, rdc=args.rdc))
+    )
     return 0
 
 

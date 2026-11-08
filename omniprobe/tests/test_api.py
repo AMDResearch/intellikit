@@ -225,6 +225,17 @@ class TestInstrumentationFlags:
         flags = instrumentation_flags("memory", offload_arch="gfx90a", omniprobe_path=str(exe))
         assert flags == [
             f"-fpass-plugin={plugins / 'libAMDGCNSubmitAddressMessages-rocm.so'}",
+            "--offload-arch=gfx90a",
+        ]
+
+    def test_rdc_is_opt_in(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OMNIPROBE_PLUGIN_DIR", raising=False)
+        exe, plugins = self._fake_tree(tmp_path)
+        flags = instrumentation_flags(
+            "memory", offload_arch="gfx90a", omniprobe_path=str(exe), rdc=True
+        )
+        assert flags == [
+            f"-fpass-plugin={plugins / 'libAMDGCNSubmitAddressMessages-rocm.so'}",
             "-fgpu-rdc",
             "--offload-arch=gfx90a",
         ]

@@ -7,7 +7,7 @@ Demonstrates using Omniprobe to measure how long each basic block of a kernel ta
 The Python script:
 
 1. Writes a HIP kernel with a data-dependent branch to a temporary directory
-2. Compiles it with `hipcc -O2 -g` plus the Omniprobe instrumentation flags from `instrumentation_flags()` (`-fpass-plugin=...`, `-fgpu-rdc`, `--offload-arch=...`)
+2. Compiles it with `hipcc -O2 -g` plus the Omniprobe instrumentation flags from `instrumentation_flags()` (`-fpass-plugin=...`, `--offload-arch=...`)
 3. Runs `analyze_basic_blocks` and prints the costliest blocks by median cycles
 
 The kernel branches on thread index. One side does a couple of multiplies; the other

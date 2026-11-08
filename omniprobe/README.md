@@ -12,7 +12,7 @@ Omniprobe must be **pre-installed** on the system. This package does not bundle 
 2. **Omniprobe Python API** — the Omniprobe repository must be on `PYTHONPATH` or installed so that `from omniprobe.api import Omniprobe` works
 3. **ROCm 7.0+** and a supported AMD GPU
 4. **Python 3.10+**
-5. **An instrumented build of the application.** Omniprobe only analyzes kernels compiled with its LLVM pass plugin (`-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so -fgpu-rdc --offload-arch=<arch>`), and memory and basic-block analysis use different plugins. `instrumentation_flags()` and `omniprobe-ik flags` return the exact flags; a binary built without them raises `NoInstrumentedKernelsError`.
+5. **An instrumented build of the application.** Omniprobe only analyzes kernels compiled with its LLVM pass plugin (`-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so --offload-arch=<arch>`), and memory and basic-block analysis use different plugins. `instrumentation_flags()` and `omniprobe-ik flags` return the exact flags; a binary built without them raises `NoInstrumentedKernelsError`.
 
 ## Installation
 

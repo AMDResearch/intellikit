@@ -133,17 +133,32 @@ Each analysis needs its own plugin, so memory and basic-block analysis need sepa
 | Memory | `libAMDGCNSubmitAddressMessages-rocm.so` |
 | Basic blocks | `libAMDGCNSubmitBBStart-rocm.so` |
 
-The plugins live in `lib/plugins/` of the Omniprobe build or install tree. `instrumentation_flags` locates them next to the `omniprobe` executable on `PATH` (or in `OMNIPROBE_PLUGIN_DIR`) and returns the complete flag set: `-fpass-plugin=<plugin>`, `-fgpu-rdc` and `--offload-arch=<gfx arch>`, detected with `rocminfo` unless given.
+The plugins live in `lib/plugins/` of the Omniprobe build or install tree. `instrumentation_flags` locates them next to the `omniprobe` executable on `PATH` (or in `OMNIPROBE_PLUGIN_DIR`) and returns the flag set: `-fpass-plugin=<plugin>` and `--offload-arch=<gfx arch>`, detected with `rocminfo` unless given.
 
 ```python
 from omniprobe_ik import instrumentation_flags
 
 instrumentation_flags("memory")
 # ['-fpass-plugin=/opt/omniprobe/lib/plugins/libAMDGCNSubmitAddressMessages-rocm.so',
-#  '-fgpu-rdc', '--offload-arch=gfx90a']
+#  '--offload-arch=gfx90a']
 ```
 
-From a shell, `omniprobe-ik flags memory` or `omniprobe-ik flags basic-blocks` prints the same flags. When compiling and linking separately, pass `-fgpu-rdc` to the link step as well.
+From a shell, `omniprobe-ik flags memory` or `omniprobe-ik flags basic-blocks` prints the same flags.
+
+### Relocatable device code (`-fgpu-rdc`)
+
+Instrumentation does **not** need `-fgpu-rdc`, although Omniprobe's own documentation says so.
+Add the flags to the application's existing device-compile flags and keep its build mode. Measured
+on gfx90a with Omniprobe `9b8a3c4`:
+
+| Build mode | Result |
+|------------|--------|
+| Without `-fgpu-rdc` (one-step or separate compile and link) | Every kernel is matched, including `static` and anonymous-namespace kernels and kernels in other translation units |
+| With `-fgpu-rdc`, one translation unit | Works; internal-linkage kernels are renamed `<name>.intern.<hash>` and may fail to match at run time (Omniprobe defect `bf_intern-clone-name`) |
+| With `-fgpu-rdc`, two or more translation units | Linking fails: `lld: error: duplicate symbol: __hip_cuid_...` |
+
+If an application must build with RDC, use `instrumentation_flags(..., rdc=True)` or
+`omniprobe-ik flags --rdc` and pass `-fgpu-rdc` to the link step as well.
 
 ### Adding `-g`
 

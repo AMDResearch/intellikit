@@ -13,7 +13,7 @@ Omniprobe must be pre-installed on the system:
 - The `omniprobe` executable must be on `PATH`
 - The Omniprobe Python API (`omniprobe.api`) must be importable (Omniprobe repo on `PYTHONPATH` or installed)
 - ROCm 7.0+ and a supported AMD GPU
-- **The application must be rebuilt with Omniprobe's instrumentation plugin.** Omniprobe only sees kernels compiled with `-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so -fgpu-rdc --offload-arch=<gfx arch>`. An ordinary build is reported as "no instrumented kernels" (`NoInstrumentedKernelsError`). Get the exact flags with `omniprobe-ik flags memory|basic-blocks`, `instrumentation_flags(...)`, or the MCP tool `get_instrumentation_flags`. Memory and basic-block analysis use **different plugins**, so they need separate builds.
+- **The application must be rebuilt with Omniprobe's instrumentation plugin.** Omniprobe only sees kernels compiled with `-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so --offload-arch=<gfx arch>`. An ordinary build is reported as "no instrumented kernels" (`NoInstrumentedKernelsError`). Get the exact flags with `omniprobe-ik flags memory|basic-blocks`, `instrumentation_flags(...)`, or the MCP tool `get_instrumentation_flags`. Memory and basic-block analysis use **different plugins**, so they need separate builds.
 
 ## When to Use
 

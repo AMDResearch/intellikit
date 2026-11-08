@@ -7,7 +7,7 @@ Demonstrates using Omniprobe to find uncoalesced global memory accesses.
 The Python script:
 
 1. Writes a HIP file containing two kernels to a temporary directory
-2. Compiles it with `hipcc -O2 -g` plus the Omniprobe instrumentation flags from `instrumentation_flags()` (`-fpass-plugin=...`, `-fgpu-rdc`, `--offload-arch=...`)
+2. Compiles it with `hipcc -O2 -g` plus the Omniprobe instrumentation flags from `instrumentation_flags()` (`-fpass-plugin=...`, `--offload-arch=...`)
 3. Runs `analyze_memory` and reports the worst accesses per kernel
 
 The two kernels do identical arithmetic and differ only in indexing:
