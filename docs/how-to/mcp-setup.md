@@ -54,7 +54,9 @@ To configure MCP servers using `uv` and a cloned IntelliKit repository, set up y
       "command": "uv",
       "args": ["run", "--directory", "/path/to/intellikit/omniprobe", "omniprobe-mcp"],
       "env": {
-        "PYTHONPATH": "/path/to/omniprobe-source",
+        "PATH": "/path/to/omniprobe-install/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
+        "PYTHONPATH": "/path/to/omniprobe-install",
+        "ROCM_PATH": "/opt/rocm",
         "ROCR_VISIBLE_DEVICES": "0"
       }
     }
@@ -62,7 +64,7 @@ To configure MCP servers using `uv` and a cloned IntelliKit repository, set up y
 }
 ```
 
-Replace `/path/to/intellikit` with the actual path to your cloned IntelliKit repository. For `omniprobe-mcp`, also set `PYTHONPATH` to an Omniprobe **source** checkout (its install tree does not include the Python API) and pick the GPU with `ROCR_VISIBLE_DEVICES`: MCP clients usually start servers with a minimal environment, so neither is inherited from your shell.
+Replace `/path/to/intellikit` with the actual path to your cloned IntelliKit repository. For `omniprobe-mcp`, also set `PATH` to include the `omniprobe` executable, `PYTHONPATH` to Omniprobe's install prefix (it contains `omniprobe/api`; a source checkout also works), `ROCM_PATH` to the ROCm installation Omniprobe was built against, and pick the GPU with `ROCR_VISIBLE_DEVICES`: MCP clients usually start servers with a minimal environment, so none of these is inherited from your shell. Without `ROCM_PATH` Omniprobe looks for its ROCm tools under `/opt/rocm`; if they are not there it reports nothing, and `analyze_memory` says so.
 
 ## Using pip-installed packages
 
@@ -96,7 +98,7 @@ IntelliKit provides the following MCP servers.
 | `hip-docs-mcp` | `rocm_mcp` | Accesses HIP documentation|
 | `rocminfo-mcp` | `rocm_mcp` | Queries GPU hardware topology|
 | `uprof-profiler-mcp` | `uprof_mcp` | Profiles CPU hotspots using AMD uProf|
-| `omniprobe-mcp` | `omniprobe` | Finds uncoalesced accesses and LDS bank conflicts at source level, and basic-block execution counts; exposes `get_instrumentation_flags`, `analyze_memory`, `analyze_basic_blocks`, and `list_analyzers`|
+| `omniprobe-mcp` | `omniprobe` | Finds uncoalesced accesses and LDS bank conflicts at source level, and basic-block execution counts; exposes `get_instrumentation_flags`, `analyze_memory`, `analyze_basic_blocks`, `run_analyzer`, and `list_analyzers`|
 
 ## Agent skills
 

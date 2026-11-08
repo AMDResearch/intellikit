@@ -10,6 +10,9 @@ and later) with it.
 """
 
 import subprocess
+from pathlib import Path
+
+import pytest
 
 
 from .conftest import (
@@ -182,3 +185,30 @@ def test_build_without_debug_info_is_flagged(probe, tmp_path_factory):
     warnings = summarize_memory(result)["warnings"]
     assert any("-g" in w and "strided_copy" in w for w in warnings), warnings
     assert not any("-O0" in w for w in warnings), warnings
+
+
+@pytest.mark.skipif(
+    Path("/opt/rocm/llvm/bin/llvm-objdump").exists(),
+    reason="needs a node where /opt/rocm is not a full ROCm install",
+)
+def test_missing_rocm_path_is_reported_as_environment(probe, tmp_path_factory, monkeypatch):
+    """Without ROCM_PATH Omniprobe cannot find llvm-objdump and reports nothing; the error
+    must point at the environment, not ask for a rebuild of an instrumented binary."""
+    from omniprobe_ik import NoInstrumentedKernelsError, instrumentation_flags
+
+    from .conftest import STRIDED_KERNEL
+
+    tmp = tmp_path_factory.mktemp("norocm")
+    src = tmp / "strided.hip"
+    src.write_text(STRIDED_KERNEL)
+    build = subprocess.run(
+        ["hipcc", "-O2", "-g", *instrumentation_flags("memory"), str(src), "-o", str(tmp / "app")],
+        capture_output=True,
+        text=True,
+    )
+    assert build.returncode == 0, build.stderr[-2000:]
+
+    monkeypatch.delenv("ROCM_PATH", raising=False)
+    with pytest.raises(NoInstrumentedKernelsError) as err:
+        probe.analyze_memory(command=str(tmp / "app"))
+    assert "ROCM_PATH" in str(err.value) and "do not rebuild" in str(err.value)

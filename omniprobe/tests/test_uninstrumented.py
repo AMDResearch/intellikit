@@ -89,3 +89,27 @@ def test_split_exit_summary_still_names_the_kernel(monkeypatch):
     assert probe.analyze_memory("./app").uninstrumented_kernels == [
         "other_tu_kernel(float const*, float*) [clone .kd]"
     ]
+
+
+NO_ROCM_LOG = """\
+>>>>>>>> HSA intercept registered.
+Found instrumented alternative for copy(float const*, float*, int) [clone .kd]
+sh: line 1: /opt/rocm/llvm/bin/llvm-objdump: No such file or directory
+[hsaInterceptor] Command failed with return code: 32512
+"""
+
+
+def test_missing_rocm_tool_is_reported_as_environment_not_build(monkeypatch):
+    monkeypatch.delenv("ROCM_PATH", raising=False)
+    probe = _probe_with_log(monkeypatch, MagicMock(kernels=[]), NO_ROCM_LOG)
+    with pytest.raises(NoInstrumentedKernelsError) as err:
+        probe.analyze_memory("./app")
+    message = str(err.value)
+    assert "ROCM_PATH" in message and "llvm-objdump" in message
+    assert "do not rebuild" in message and "Rebuild the application" not in message
+
+
+def test_interceptor_that_never_loaded_is_reported_as_environment(monkeypatch):
+    probe = _probe_with_log(monkeypatch, MagicMock(kernels=[]), "app output only\n")
+    with pytest.raises(NoInstrumentedKernelsError, match="interceptor did not load"):
+        probe.analyze_memory("./app")

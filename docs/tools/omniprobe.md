@@ -357,10 +357,16 @@ environment, so set it, and the GPU selection, in the server's configuration:
   "env": {
     "PATH": "/opt/omniprobe-install/omniprobe/bin:/opt/rocm/bin:/usr/bin:/bin",
     "PYTHONPATH": "/opt/omniprobe-install",
+    "ROCM_PATH": "/opt/rocm",
     "ROCR_VISIBLE_DEVICES": "0"
   }
 }
 ```
+
+Set `ROCM_PATH` to the ROCm installation Omniprobe was built against: without it Omniprobe runs
+ROCm tools (e.g. `llvm-objdump`) from `/opt/rocm`, and where they are missing it reports no results
+even for an instrumented binary. `analyze_memory` then raises an error that names `ROCM_PATH`
+rather than asking for a rebuild.
 
 If `PYTHONPATH` is missing, the wrapper also looks for the API next to the `omniprobe` executable on
 `PATH` (install prefix, or the source tree a build tree's symlink points to).

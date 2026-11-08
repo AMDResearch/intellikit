@@ -101,11 +101,12 @@ instruction) to get the per-wave-execution value the summary prints.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `NoInstrumentedKernelsError` / "no instrumented kernels" | Binary built without the plugin, or wrong plugin | Rebuild with `$(omniprobe-ik flags memory)`; `make clean` first |
-| `ImportError: omniprobe.api` | Omniprobe's install prefix (or source tree) not on `PYTHONPATH` (MCP servers start with a minimal env) | Set `PYTHONPATH` (and `ROCR_VISIBLE_DEVICES`) in the shell or MCP `env` |
+| `ImportError: omniprobe.api` | Omniprobe's install prefix (or source tree) not on `PYTHONPATH` (MCP servers start with a minimal env) | Set `PYTHONPATH` (and `ROCM_PATH`, `ROCR_VISIBLE_DEVICES`) in the shell or MCP `env` |
 | Link error `duplicate symbol: __hip_cuid_...` | `-fgpu-rdc` with ≥ 2 files on Omniprobe older than 3003058 | Update Omniprobe, or drop `-fgpu-rdc` unless the project needs it |
 | `WARNING: … ran WITHOUT instrumentation` / `uninstrumented_kernels` non-empty | That kernel's file was built without the plugin | Rebuild that file with the flags (every file that defines a kernel) |
 | A kernel or line is missing | Blind spot above, or `--kernel` regex too narrow | See Blind spots; filter on demangled names |
 | `RuntimeError: omniprobe exited with code N` | The application itself failed | Run the binary alone first; fix arguments/inputs |
+| "no instrumented kernels" / "no results" naming `ROCM_PATH` or `llvm-objdump`, though the binary was built with the flags | Omniprobe cannot find its ROCm tools: `ROCM_PATH` unset (MCP servers start with a minimal env) and `/opt/rocm` is not that ROCm | Set `ROCM_PATH=/opt/rocm-<version>` in the shell or MCP `env`; do not rebuild |
 | No GPU / runs on the wrong GPU | `HIP_VISIBLE_DEVICES` set to the same id as `ROCR_VISIBLE_DEVICES` selects nothing | Set only `ROCR_VISIBLE_DEVICES` |
 
 ## Other analyzers, and writing your own

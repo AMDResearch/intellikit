@@ -313,12 +313,57 @@ def _warn_uninstrumented(kernels: Optional[list[str]]) -> None:
         logger.warning(message)
 
 
+_MISSING_TOOL = re.compile(
+    r"^sh: (?:line \d+: )?(\S+): (?:No such file or directory|command not found)", re.M
+)
+
+
+def environment_problem(log: Optional[str]) -> Optional[str]:
+    """Why Omniprobe's own environment, not the build, kept it from reporting, or None.
+
+    Signals in Omniprobe's output (measured with Omniprobe 13ca707): without ROCM_PATH it
+    runs ``/opt/rocm/llvm/bin/llvm-objdump`` and, where that does not exist, prints
+    ``sh: ...: No such file or directory`` and ``[hsaInterceptor] Command failed``, then
+    reports nothing although it found the instrumented clones. If the interceptor never
+    printed ``HSA intercept registered``, it did not load at all.
+    """
+    if not log:
+        return None
+    rocm = os.environ.get("ROCM_PATH")
+    where = f"ROCM_PATH is {rocm!r}" if rocm else "ROCM_PATH is not set, so /opt/rocm is assumed"
+    missing = _MISSING_TOOL.search(log)
+    if missing or "[hsaInterceptor] Command failed" in log:
+        what = f"could not run {missing.group(1)}" if missing else "had a helper command fail"
+        return (
+            f"Omniprobe {what} ({where}). Set ROCM_PATH to the ROCm installation Omniprobe was "
+            "built against (e.g. /opt/rocm-<version>) in the shell, or in the MCP server's "
+            "'env' configuration, and rerun."
+        )
+    if "HSA intercept registered" not in log and "instrumented alternative" not in log:
+        return (
+            "Omniprobe's interceptor did not load, so no dispatch was observed. Check the "
+            f"environment Omniprobe runs in ({where}; PATH, LD_LIBRARY_PATH, and in an MCP setup "
+            "the server's 'env' configuration)."
+        )
+    return None
+
+
 def _no_data_message(
     analysis: str,
     command: str,
     kernel_filter: Optional[str],
     uninstrumented: Optional[list[str]] = None,
+    log: Optional[str] = None,
 ) -> str:
+    env_problem = environment_problem(log)
+    if env_problem:
+        lines = [f"Omniprobe reported no results for {command!r}: {env_problem}"]
+        if log and "Found instrumented alternative" in log:
+            lines.append(
+                "The application is instrumented (Omniprobe found its instrumented kernels); "
+                "do not rebuild it."
+            )
+        return "\n".join(lines)
     plugin = ANALYSIS_PLUGINS[analysis]
     try:
         flags = " ".join(instrumentation_flags(analysis))
@@ -501,7 +546,9 @@ class Omniprobe:
         result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
         if not result.kernels:
             raise NoInstrumentedKernelsError(
-                _no_data_message("memory", command, kernel_filter, result.uninstrumented_kernels)
+                _no_data_message(
+                    "memory", command, kernel_filter, result.uninstrumented_kernels, log
+                )
             )
         _warn_uninstrumented(result.uninstrumented_kernels)
         return result
@@ -541,7 +588,7 @@ class Omniprobe:
         if not result.kernels:
             raise NoInstrumentedKernelsError(
                 _no_data_message(
-                    "basic_blocks", command, kernel_filter, result.uninstrumented_kernels
+                    "basic_blocks", command, kernel_filter, result.uninstrumented_kernels, log
                 )
             )
         _warn_uninstrumented(result.uninstrumented_kernels)
