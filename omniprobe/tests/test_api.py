@@ -14,7 +14,9 @@ from omniprobe_ik.api import (
     KernelMemoryResult,
     MemoryAccess,
     MemoryAnalysisResult,
+    NoInstrumentedKernelsError,
     Omniprobe,
+    instrumentation_flags,
 )
 
 
@@ -165,3 +167,115 @@ class TestDataclassDefaults:
 
         bb = BasicBlockResult()
         assert bb.kernels == []
+
+
+def _probe_returning(memory=None, basic_blocks=None):
+    """An Omniprobe wrapper whose upstream returns the given results."""
+    probe = Omniprobe.__new__(Omniprobe)
+    probe._upstream = MagicMock()
+    probe._upstream.analyze_memory.return_value = memory
+    probe._upstream.analyze_basic_blocks.return_value = basic_blocks
+    return probe
+
+
+class TestNoInstrumentedKernels:
+    """An empty upstream result is an error that explains the plugin requirement."""
+
+    def test_empty_memory_result_raises(self, monkeypatch):
+        monkeypatch.setenv("OMNIPROBE_PLUGIN_DIR", "/nonexistent")
+        probe = _probe_returning(memory=MagicMock(kernels=[]))
+        with pytest.raises(NoInstrumentedKernelsError) as excinfo:
+            probe.analyze_memory("./app")
+        message = str(excinfo.value)
+        assert "-fpass-plugin" in message
+        assert "libAMDGCNSubmitAddressMessages-rocm.so" in message
+        assert "kernel_filter" not in message
+
+    def test_empty_bb_result_names_bb_plugin_and_filter(self, monkeypatch):
+        monkeypatch.setenv("OMNIPROBE_PLUGIN_DIR", "/nonexistent")
+        probe = _probe_returning(basic_blocks=MagicMock(kernels=[]))
+        with pytest.raises(NoInstrumentedKernelsError) as excinfo:
+            probe.analyze_basic_blocks("./app", kernel_filter="foo.*")
+        message = str(excinfo.value)
+        assert "libAMDGCNSubmitBBStart-rocm.so" in message
+        assert "'foo.*'" in message
+
+    def test_is_a_runtime_error(self):
+        assert issubclass(NoInstrumentedKernelsError, RuntimeError)
+
+
+class TestInstrumentationFlags:
+    """Locating the plugin and building the hipcc flags."""
+
+    @staticmethod
+    def _fake_tree(tmp_path):
+        """A fake Omniprobe tree: bin/omniprobe plus lib/plugins/*.so."""
+        (tmp_path / "bin").mkdir()
+        exe = tmp_path / "bin" / "omniprobe"
+        exe.write_text("#!/bin/sh\n")
+        plugins = tmp_path / "lib" / "plugins"
+        plugins.mkdir(parents=True)
+        for name in ("libAMDGCNSubmitAddressMessages-rocm.so", "libAMDGCNSubmitBBStart-rocm.so"):
+            (plugins / name).write_bytes(b"")
+        return exe, plugins
+
+    def test_memory_flags(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OMNIPROBE_PLUGIN_DIR", raising=False)
+        exe, plugins = self._fake_tree(tmp_path)
+        flags = instrumentation_flags("memory", offload_arch="gfx90a", omniprobe_path=str(exe))
+        assert flags == [
+            f"-fpass-plugin={plugins / 'libAMDGCNSubmitAddressMessages-rocm.so'}",
+            "-fgpu-rdc",
+            "--offload-arch=gfx90a",
+        ]
+
+    def test_basic_blocks_uses_bbstart_and_accepts_hyphen(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OMNIPROBE_PLUGIN_DIR", raising=False)
+        exe, plugins = self._fake_tree(tmp_path)
+        flags = instrumentation_flags(
+            "basic-blocks", offload_arch="gfx942", omniprobe_path=str(exe)
+        )
+        assert flags[0] == f"-fpass-plugin={plugins / 'libAMDGCNSubmitBBStart-rocm.so'}"
+
+    def test_unresolved_symlink_is_tried_first(self, tmp_path, monkeypatch):
+        """A build tree's bin/omniprobe is a symlink into the source tree."""
+        monkeypatch.delenv("OMNIPROBE_PLUGIN_DIR", raising=False)
+        build = tmp_path / "build"
+        build.mkdir()
+        _, plugins = self._fake_tree(build)
+        (build / "bin" / "omniprobe").unlink()
+        source = tmp_path / "src" / "omniprobe"
+        source.parent.mkdir()
+        source.write_text("#!/bin/sh\n")
+        (build / "bin" / "omniprobe").symlink_to(source)
+        flags = instrumentation_flags(
+            "memory", offload_arch="gfx90a", omniprobe_path=str(build / "bin" / "omniprobe")
+        )
+        assert flags[0].startswith(f"-fpass-plugin={plugins}")
+
+    def test_env_override(self, tmp_path, monkeypatch):
+        _, plugins = self._fake_tree(tmp_path)
+        monkeypatch.setenv("OMNIPROBE_PLUGIN_DIR", str(plugins))
+        flags = instrumentation_flags("memory", offload_arch="gfx90a")
+        assert flags[0] == f"-fpass-plugin={plugins / 'libAMDGCNSubmitAddressMessages-rocm.so'}"
+
+    def test_missing_plugins_raise(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OMNIPROBE_PLUGIN_DIR", raising=False)
+        (tmp_path / "bin").mkdir()
+        exe = tmp_path / "bin" / "omniprobe"
+        exe.write_text("")
+        with pytest.raises(FileNotFoundError, match="OMNIPROBE_PLUGIN_DIR"):
+            instrumentation_flags("memory", offload_arch="gfx90a", omniprobe_path=str(exe))
+
+    def test_unknown_analysis(self, tmp_path, monkeypatch):
+        _, plugins = self._fake_tree(tmp_path)
+        monkeypatch.setenv("OMNIPROBE_PLUGIN_DIR", str(plugins))
+        with pytest.raises(ValueError, match="unknown analysis"):
+            instrumentation_flags("heatmap", offload_arch="gfx90a")
+
+    def test_undetectable_arch_raises(self, tmp_path, monkeypatch):
+        _, plugins = self._fake_tree(tmp_path)
+        monkeypatch.setenv("OMNIPROBE_PLUGIN_DIR", str(plugins))
+        monkeypatch.setattr("omniprobe_ik.api.detect_offload_arch", lambda: None)
+        with pytest.raises(RuntimeError, match="offload_arch"):
+            instrumentation_flags("memory")

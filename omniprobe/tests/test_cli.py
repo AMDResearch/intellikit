@@ -38,3 +38,10 @@ class TestCLIParser:
         parser = create_parser()
         args = parser.parse_args(["memory", "-o", "out.json", "./app"])
         assert args.output == "out.json"
+
+    def test_flags_subcommand(self):
+        parser = create_parser()
+        args = parser.parse_args(["flags", "basic-blocks", "--offload-arch", "gfx942"])
+        assert args.command == "flags"
+        assert args.analysis == "basic-blocks"
+        assert args.offload_arch == "gfx942"

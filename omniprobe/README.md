@@ -12,6 +12,7 @@ Omniprobe must be **pre-installed** on the system. This package does not bundle 
 2. **Omniprobe Python API** — the Omniprobe repository must be on `PYTHONPATH` or installed so that `from omniprobe.api import Omniprobe` works
 3. **ROCm 7.0+** and a supported AMD GPU
 4. **Python 3.10+**
+5. **An instrumented build of the application.** Omniprobe only analyzes kernels compiled with its LLVM pass plugin (`-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so -fgpu-rdc --offload-arch=<arch>`), and memory and basic-block analysis use different plugins. `instrumentation_flags()` and `omniprobe-ik flags` return the exact flags; a binary built without them raises `NoInstrumentedKernelsError`.
 
 ## Installation
 
@@ -28,7 +29,11 @@ pip install "git+https://github.com/AMDResearch/intellikit.git@main#subdirectory
 ### Python API
 
 ```python
-from omniprobe_ik import Omniprobe
+from omniprobe_ik import Omniprobe, instrumentation_flags
+
+# Build ./my_gpu_app with these (plus -g) first; basic blocks need
+# instrumentation_flags("basic_blocks") and a separate build
+print(" ".join(instrumentation_flags("memory")))
 
 probe = Omniprobe()
 
@@ -49,11 +54,13 @@ for kernel in result.kernels:
 ### CLI
 
 ```bash
-# Memory analysis
+# Build with the memory plugin, then run memory analysis
+hipcc -g -O2 $(omniprobe-ik flags memory) my_gpu_app.hip -o my_gpu_app
 omniprobe-ik memory ./my_gpu_app
 
-# Basic-block analysis
-omniprobe-ik basic-blocks ./my_gpu_app
+# Basic-block analysis needs its own build
+hipcc -g -O2 $(omniprobe-ik flags basic-blocks) my_gpu_app.hip -o my_gpu_app_bb
+omniprobe-ik basic-blocks ./my_gpu_app_bb
 
 # Filter kernels
 omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app
@@ -69,7 +76,7 @@ omniprobe-mcp --transport stdio
 omniprobe-mcp --transport http --port 8000
 ```
 
-The MCP server exposes three tools: `analyze_memory`, `analyze_basic_blocks`, and `list_analyzers`.
+The MCP server exposes four tools: `get_instrumentation_flags`, `analyze_memory`, `analyze_basic_blocks`, and `list_analyzers`.
 
 ## Analysis Types
 

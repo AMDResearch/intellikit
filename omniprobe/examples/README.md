@@ -8,7 +8,10 @@ Runnable examples for the two analyses this package exposes.
 | [`02_basic_block_timing/`](02_basic_block_timing/) | `analyze_basic_blocks` | Per-block cycle counts and latency percentiles |
 
 Each example is self-contained: it writes a HIP kernel to a temporary directory,
-compiles it with `hipcc`, and analyses the resulting binary. Nothing is left behind.
+compiles it with `hipcc` and the Omniprobe instrumentation plugin for its analysis
+(the flags come from `instrumentation_flags()`), and analyses the resulting binary.
+Nothing is left behind. Omniprobe only sees kernels built with the plugin, which is
+why the examples never use a plain `hipcc` build.
 
 ## Requirements
 

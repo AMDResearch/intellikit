@@ -17,12 +17,17 @@ def create_parser() -> argparse.ArgumentParser:
         description="Omniprobe - GPU Memory and Basic-Block Analysis (IntelliKit)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
+Omniprobe only sees kernels compiled with its instrumentation plugin.
+Build the application with the flags 'omniprobe-ik flags' prints first.
+
 Examples:
-  # Memory coalescing analysis
+  # Compile for memory analysis, then analyze
+  hipcc -g $(omniprobe-ik flags memory) my_gpu_app.hip -o my_gpu_app
   omniprobe-ik memory ./my_gpu_app
 
-  # Basic-block timing analysis
-  omniprobe-ik basic-blocks ./my_gpu_app
+  # Basic-block timing needs a different plugin, so a separate build
+  hipcc -g $(omniprobe-ik flags basic-blocks) my_gpu_app.hip -o my_gpu_app_bb
+  omniprobe-ik basic-blocks ./my_gpu_app_bb
 
   # Filter to specific kernels
   omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app
@@ -51,6 +56,21 @@ Examples:
         description="Measure cycle counts and percentile distributions for each basic block",
     )
     _add_common_args(bb_parser)
+
+    # -- flags subcommand ---------------------------------------------------
+    flags_parser = subparsers.add_parser(
+        "flags",
+        help="Print the hipcc flags that instrument kernels for an analysis",
+        description=(
+            "Print the hipcc flags (Omniprobe pass plugin, -fgpu-rdc, --offload-arch) "
+            "that make kernels visible to the given analysis"
+        ),
+    )
+    flags_parser.add_argument("analysis", choices=["memory", "basic-blocks"])
+    flags_parser.add_argument(
+        "--offload-arch",
+        help="GPU architecture, e.g. gfx90a (default: detected with rocminfo)",
+    )
 
     return parser
 
@@ -109,6 +129,14 @@ def bb_command(args) -> int:
 
     output = _format_bb_result(result)
     _write_output(output, args.output)
+    return 0
+
+
+def flags_command(args) -> int:
+    """Print the compile flags for an analysis."""
+    from omniprobe_ik import instrumentation_flags
+
+    print(" ".join(instrumentation_flags(args.analysis, offload_arch=args.offload_arch)))
     return 0
 
 
@@ -189,6 +217,8 @@ def main() -> int:
             return memory_command(args)
         elif args.command == "basic-blocks":
             return bb_command(args)
+        elif args.command == "flags":
+            return flags_command(args)
         else:
             parser.print_help()
             return 1

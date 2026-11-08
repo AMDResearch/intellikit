@@ -36,7 +36,13 @@ The Python package is named `omniprobe-ik` and imports as `omniprobe_ik`, to avo
 
 ## Quick start
 
-The following example analyses an application and prints the accesses that cost the most excess cache lines.
+Omniprobe analyzes only kernels that were compiled with its instrumentation plugin, so the first step is always a build with the right flags (see [Compiling for Omniprobe](#compiling-for-omniprobe)):
+
+```bash
+hipcc -g -O2 $(omniprobe-ik flags memory) my_gpu_app.hip -o my_gpu_app
+```
+
+The following example then analyses the application and prints the accesses that cost the most excess cache lines.
 
 ```python
 from omniprobe_ik import Omniprobe
@@ -73,7 +79,30 @@ Memory analysis reports these fields per access site:
 
 Basic-block analysis reports cycle counts as a distribution — `min_cycles`, `max_cycles`, and the `p25`/`p50`/`p75`/`p95`/`p99` percentiles — rather than a single average. A block whose p99 sits far above its p50 is being reached by waves under very different conditions, which an average hides.
 
-## Compiling with `-g`
+## Compiling for Omniprobe
+
+Omniprobe instruments kernels at compile time. An LLVM pass plugin clones every kernel and injects data-collection calls into the clone; at run time Omniprobe swaps the clone in. A kernel compiled without the plugin has no clone, so Omniprobe has nothing to observe: it exits successfully and reports no kernels. `analyze_memory` and `analyze_basic_blocks` turn that case into a `NoInstrumentedKernelsError` that explains the fix, rather than returning an empty result.
+
+Each analysis needs its own plugin, so memory and basic-block analysis need separate builds:
+
+| Analysis | Plugin passed with `-fpass-plugin=` |
+|----------|-------------------------------------|
+| Memory | `libAMDGCNSubmitAddressMessages-rocm.so` |
+| Basic blocks | `libAMDGCNSubmitBBStart-rocm.so` |
+
+The plugins live in `lib/plugins/` of the Omniprobe build or install tree. `instrumentation_flags` locates them next to the `omniprobe` executable on `PATH` (or in `OMNIPROBE_PLUGIN_DIR`) and returns the complete flag set: `-fpass-plugin=<plugin>`, `-fgpu-rdc` and `--offload-arch=<gfx arch>`, detected with `rocminfo` unless given.
+
+```python
+from omniprobe_ik import instrumentation_flags
+
+instrumentation_flags("memory")
+# ['-fpass-plugin=/opt/omniprobe/lib/plugins/libAMDGCNSubmitAddressMessages-rocm.so',
+#  '-fgpu-rdc', '--offload-arch=gfx90a']
+```
+
+From a shell, `omniprobe-ik flags memory` or `omniprobe-ik flags basic-blocks` prints the same flags. When compiling and linking separately, pass `-fgpu-rdc` to the link step as well.
+
+### Adding `-g`
 
 Both analyses attribute their findings to source locations, so debug information changes what you can act on.
 
@@ -108,7 +137,19 @@ probe = Omniprobe(
 - `kernel_filter`: optional ECMAScript regex limiting which kernels are analysed
 - `dispatches`: which dispatches to capture — `"all"`, `"random"`, or `"1"`
 
-Constructing `Omniprobe` raises `ImportError` if Omniprobe's Python API is not importable, and `FileNotFoundError` if the executable cannot be found.
+Constructing `Omniprobe` raises `ImportError` if Omniprobe's Python API is not importable, and `FileNotFoundError` if the executable cannot be found. Both methods raise `NoInstrumentedKernelsError` (a `RuntimeError`) when Omniprobe reports no kernel — almost always a binary built without the plugin; the message names the flags to rebuild with.
+
+### `instrumentation_flags`
+
+```python
+instrumentation_flags(
+    analysis="memory",     # "memory" or "basic_blocks"
+    offload_arch=None,     # e.g. "gfx90a"; detected with rocminfo if None
+    omniprobe_path=None,   # used to locate lib/plugins; None uses PATH
+)
+```
+
+Returns the list of `hipcc` flags described in [Compiling for Omniprobe](#compiling-for-omniprobe). Raises `FileNotFoundError` if the plugins cannot be located and `RuntimeError` if no architecture is given and none can be detected.
 
 ### `MemoryAccess`
 
@@ -147,6 +188,10 @@ bb.wave_count               # Waves that executed this block
 ## CLI
 
 ```bash
+# Print the hipcc flags for an analysis (build with these first)
+omniprobe-ik flags memory
+omniprobe-ik flags basic-blocks --offload-arch gfx942
+
 # Memory analysis
 omniprobe-ik memory ./my_gpu_app
 
@@ -173,10 +218,11 @@ omniprobe-mcp --transport stdio
 omniprobe-mcp --transport http --port 8000
 ```
 
-The server exposes three tools:
+The server exposes four tools:
 
 | Tool | Purpose |
 |------|---------|
+| `get_instrumentation_flags` | Returns the `hipcc` flags that instrument kernels for an analysis |
 | `analyze_memory` | Runs memory analysis, returns per-kernel access findings |
 | `analyze_basic_blocks` | Runs basic-block analysis, returns per-kernel timing data |
 | `list_analyzers` | Reports the available analysis types and which tool calls each |

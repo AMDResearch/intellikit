@@ -4,10 +4,15 @@
 """End-to-end basic-block timing against a real Omniprobe installation.
 
 Companion to ``test_memory_analysis.py``, covering the second of the two
-analyses the package exposes.
+analyses the package exposes. The main tests use a single-kernel program:
+Omniprobe's basic-block JSON for more than one kernel does not parse yet, which
+``test_multi_kernel_program`` tracks separately.
 """
 
+import pytest
+
 from .conftest import (
+    OMNIPROBE_JSON_FIX,
     skip_no_gpu,
     skip_no_hipcc,
     skip_no_omniprobe,
@@ -17,17 +22,17 @@ from .conftest import (
 pytestmark = [skip_no_omniprobe, skip_no_upstream_api, skip_no_gpu, skip_no_hipcc]
 
 
-def test_basic_block_analysis_reports_blocks(probe, strided_binary):
+def test_basic_block_analysis_reports_blocks(probe, branching_bb_binary):
     """A real run reports at least one kernel carrying at least one basic block."""
-    result = probe.analyze_basic_blocks(command=str(strided_binary))
+    result = probe.analyze_basic_blocks(command=str(branching_bb_binary))
 
-    assert result.kernels, "analysis returned no kernels for a binary that launched two"
+    assert result.kernels, "analysis returned no kernels for a binary that launched one"
     assert any(kernel.basic_blocks for kernel in result.kernels), (
         "kernels were reported but none carried any basic blocks"
     )
 
 
-def test_cycle_percentiles_are_ordered(probe, strided_binary):
+def test_cycle_percentiles_are_ordered(probe, branching_bb_binary):
     """Percentiles must be monotonic and bounded by min/max.
 
     A distribution whose p50 sits outside [min, max], or whose p99 falls below
@@ -35,7 +40,7 @@ def test_cycle_percentiles_are_ordered(probe, strided_binary):
     cheapest assertion that would catch one, and it needs no knowledge of what
     the true cycle counts should be.
     """
-    result = probe.analyze_basic_blocks(command=str(strided_binary))
+    result = probe.analyze_basic_blocks(command=str(branching_bb_binary))
 
     checked = 0
     for kernel in result.kernels:
@@ -55,9 +60,9 @@ def test_cycle_percentiles_are_ordered(probe, strided_binary):
     assert checked > 0, "no basic blocks were available to check"
 
 
-def test_wave_counts_are_positive(probe, strided_binary):
+def test_wave_counts_are_positive(probe, branching_bb_binary):
     """Any block that was timed must have been executed by at least one wave."""
-    result = probe.analyze_basic_blocks(command=str(strided_binary))
+    result = probe.analyze_basic_blocks(command=str(branching_bb_binary))
 
     timed = [bb for kernel in result.kernels for bb in kernel.basic_blocks if bb.max_cycles > 0]
 
@@ -65,3 +70,21 @@ def test_wave_counts_are_positive(probe, strided_binary):
     assert all(bb.wave_count > 0 for bb in timed), (
         "a block reported timing data but a wave_count of zero"
     )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=ValueError,
+    reason=(
+        "Omniprobe defect: BasicBlockAnalysis JSON for more than one kernel is two "
+        f"concatenated objects, not valid JSON. Fixed by {OMNIPROBE_JSON_FIX}; "
+        "remove this marker when that lands."
+    ),
+)
+def test_multi_kernel_program(probe, strided_bb_binary):
+    """Both kernels of a two-kernel program are reported."""
+    result = probe.analyze_basic_blocks(command=str(strided_bb_binary))
+
+    names = {kernel.kernel_name for kernel in result.kernels}
+    assert any("coalesced" in name for name in names), sorted(names)
+    assert any("strided" in name for name in names), sorted(names)

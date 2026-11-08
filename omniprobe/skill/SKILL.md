@@ -13,6 +13,7 @@ Omniprobe must be pre-installed on the system:
 - The `omniprobe` executable must be on `PATH`
 - The Omniprobe Python API (`omniprobe.api`) must be importable (Omniprobe repo on `PYTHONPATH` or installed)
 - ROCm 7.0+ and a supported AMD GPU
+- **The application must be rebuilt with Omniprobe's instrumentation plugin.** Omniprobe only sees kernels compiled with `-fpass-plugin=<omniprobe>/lib/plugins/<plugin>.so -fgpu-rdc --offload-arch=<gfx arch>`. An ordinary build is reported as "no instrumented kernels" (`NoInstrumentedKernelsError`). Get the exact flags with `omniprobe-ik flags memory|basic-blocks`, `instrumentation_flags(...)`, or the MCP tool `get_instrumentation_flags`. Memory and basic-block analysis use **different plugins**, so they need separate builds.
 
 ## When to Use
 
@@ -24,18 +25,21 @@ Omniprobe must be pre-installed on the system:
 ## Instructions
 
 1. **Ensure the target runs on AMD ROCm** (e.g. `hipcc`-built binary or Python script that launches HIP/ROCm kernels).
-2. **Choose execution path:**
-   - If an Omniprobe MCP server is available: use `list_analyzers` to see analysis types, then `analyze_memory` or `analyze_basic_blocks`.
+2. **Rebuild the target with the instrumentation flags** for the analysis you want, plus `-g` for source lines (see Prerequisites). Without this step every analysis fails with "no instrumented kernels".
+3. **Choose execution path:**
+   - If an Omniprobe MCP server is available: use `list_analyzers` to see analysis types, `get_instrumentation_flags` for the build flags, then `analyze_memory` or `analyze_basic_blocks`.
    - Otherwise: run the CLI or Python API.
 
 ### CLI
 
 ```bash
-# Memory coalescing analysis
+# Memory coalescing analysis: build with the memory plugin, then analyze
+hipcc -g -O2 $(omniprobe-ik flags memory) my_gpu_app.hip -o my_gpu_app
 omniprobe-ik memory ./my_gpu_app
 
-# Basic-block timing
-omniprobe-ik basic-blocks ./my_gpu_app
+# Basic-block timing: a separate build with the basic-block plugin
+hipcc -g -O2 $(omniprobe-ik flags basic-blocks) my_gpu_app.hip -o my_gpu_app_bb
+omniprobe-ik basic-blocks ./my_gpu_app_bb
 
 # Filter kernels by name
 omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app
@@ -47,7 +51,11 @@ omniprobe-ik memory --output results.json ./my_gpu_app
 ### Python API
 
 ```python
-from omniprobe_ik import Omniprobe
+from omniprobe_ik import Omniprobe, instrumentation_flags
+
+# hipcc flags for each analysis; build the application with them first
+mem_flags = instrumentation_flags("memory")
+bb_flags = instrumentation_flags("basic_blocks")
 
 probe = Omniprobe()
 
@@ -70,8 +78,9 @@ for kernel in bb.kernels:
 
 1. Identify the GPU executable or script to analyze.
 2. Choose analysis type: `memory` for coalescing/bank conflicts, `basic-blocks` for ISA timing.
-3. Optionally filter kernels with `--kernel` regex.
-4. Interpret results:
+3. Rebuild with that analysis's instrumentation flags and `-g`.
+4. Optionally filter kernels with `--kernel` regex.
+5. Interpret results:
    - High `excess_cache_lines` → uncoalesced global memory accesses
    - Non-zero `bank_conflicts` → LDS bank conflicts
    - High `max_cycles` relative to `min_cycles` → variable-latency basic blocks

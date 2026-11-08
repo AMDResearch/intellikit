@@ -101,9 +101,21 @@ def main():
 
         # -g matters here: Omniprobe reports findings against source_file:line:column,
         # and without debug info those fields come back empty.
-        print("Step 2: Compiling kernel (with -g for source-line mapping)...")
+        # Omniprobe only sees kernels compiled with its instrumentation plugin, and
+        # each analysis needs its own plugin; instrumentation_flags() returns the
+        # -fpass-plugin, -fgpu-rdc and --offload-arch flags for this one.
+        print("Step 2: Compiling kernel with Omniprobe instrumentation (and -g)...")
         binary_file = tmp_path / "strided"
-        cmd = ["hipcc", str(kernel_file), "-o", str(binary_file), "-O2", "-g"]
+        try:
+            from omniprobe_ik import instrumentation_flags
+
+            flags = instrumentation_flags("memory")
+        except (ImportError, FileNotFoundError, RuntimeError) as e:
+            print(f"  Cannot locate Omniprobe's instrumentation plugin: {e}")
+            print("  Compiling without it; Omniprobe will find nothing to analyze.")
+            flags = []
+        cmd = ["hipcc", str(kernel_file), "-o", str(binary_file), "-O2", "-g", *flags]
+        print(f"  {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:

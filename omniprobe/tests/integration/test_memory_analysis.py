@@ -12,6 +12,7 @@ tool: they compile a kernel, analyze it, and assert on what comes back.
 import pytest
 
 from .conftest import (
+    OMNIPROBE_JSON_FIX,
     skip_no_gpu,
     skip_no_hipcc,
     skip_no_omniprobe,
@@ -81,6 +82,15 @@ def test_strided_kernel_wastes_more_bandwidth(probe, strided_binary):
     )
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=ValueError,
+    reason=(
+        "Omniprobe defect: when -k filters out the first-dispatched kernel, the "
+        "MemoryAnalysis JSON starts with ',' and does not parse. Fixed by "
+        f"{OMNIPROBE_JSON_FIX}; remove this marker when that lands."
+    ),
+)
 def test_kernel_filter_narrows_results(probe, strided_binary):
     """The kernel_filter regex actually restricts which kernels are analyzed."""
     result = probe.analyze_memory(command=str(strided_binary), kernel_filter="strided.*")
@@ -89,3 +99,15 @@ def test_kernel_filter_narrows_results(probe, strided_binary):
     assert all("strided" in kernel.kernel_name for kernel in result.kernels), (
         f"filter leaked non-matching kernels: {sorted(k.kernel_name for k in result.kernels)}"
     )
+
+
+def test_uninstrumented_binary_raises(probe, uninstrumented_binary):
+    """A binary built without the plugin is an explanatory error, not an empty result.
+
+    This is the mistake users will make most often, and the one an empty result
+    hides best: Omniprobe exits 0 and reports nothing.
+    """
+    from omniprobe_ik import NoInstrumentedKernelsError
+
+    with pytest.raises(NoInstrumentedKernelsError, match="-fpass-plugin"):
+        probe.analyze_memory(command=str(uninstrumented_binary))

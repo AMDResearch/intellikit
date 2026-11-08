@@ -8,7 +8,7 @@ import argparse
 
 from fastmcp import FastMCP
 
-from omniprobe_ik import Omniprobe
+from omniprobe_ik import ANALYSIS_PLUGINS, Omniprobe, instrumentation_flags
 
 mcp = FastMCP("IntelliKit Omniprobe")
 
@@ -24,6 +24,10 @@ def analyze_memory(
     Instruments the given command with Omniprobe's memory analysis and returns
     per-kernel results showing uncoalesced global accesses, LDS bank conflicts,
     and excess cache lines for each memory access site.
+
+    The application must have been compiled with the flags from
+    get_instrumentation_flags('memory'); otherwise this raises an error saying
+    no instrumented kernels were found.
 
     Args:
         command: Shell command to analyze (e.g., './my_gpu_app' or 'python train.py').
@@ -80,6 +84,10 @@ def analyze_basic_blocks(
     returns per-kernel timing data including cycle counts and percentile
     distributions for each basic block.
 
+    The application must have been compiled with the flags from
+    get_instrumentation_flags('basic_blocks') -- a different plugin from the
+    memory analysis, so a separate build.
+
     Args:
         command: Shell command to analyze (e.g., './my_gpu_app').
         kernel_filter: Optional ECMAScript regex to limit which kernels are analysed.
@@ -127,6 +135,32 @@ def analyze_basic_blocks(
 
 
 @mcp.tool()
+def get_instrumentation_flags(analysis: str = "memory", offload_arch: str = None) -> dict:
+    """Get the hipcc flags that make kernels visible to an Omniprobe analysis.
+
+    Omniprobe only analyzes kernels compiled with its LLVM instrumentation
+    plugin. Call this before analyze_memory or analyze_basic_blocks and rebuild
+    the application with the returned flags (plus -g for source lines).
+
+    Args:
+        analysis: 'memory' or 'basic_blocks'. Each needs a different plugin.
+        offload_arch: GPU architecture such as 'gfx90a'; detected if omitted.
+
+    Returns:
+        Dictionary with 'flags' (list of hipcc arguments), 'plugin' (path of
+        the pass plugin) and 'compile_example'.
+    """
+    flags = instrumentation_flags(analysis, offload_arch=offload_arch)
+    return {
+        "analysis": analysis,
+        "flags": flags,
+        "plugin": flags[0].split("=", 1)[1],
+        "compile_example": "hipcc -g -O2 " + " ".join(flags) + " app.hip -o app",
+        "note": "Pass -fgpu-rdc to the link step too when compiling and linking separately.",
+    }
+
+
+@mcp.tool()
 def list_analyzers() -> dict:
     """List available Omniprobe analysis types.
 
@@ -146,6 +180,7 @@ def list_analyzers() -> dict:
                     "memory accesses, LDS bank conflicts, and excess cache lines."
                 ),
                 "tool": "analyze_memory",
+                "plugin": ANALYSIS_PLUGINS["memory"],
             },
             {
                 "name": "basic_blocks",
@@ -154,9 +189,14 @@ def list_analyzers() -> dict:
                     "percentile distributions for each ISA basic block."
                 ),
                 "tool": "analyze_basic_blocks",
+                "plugin": ANALYSIS_PLUGINS["basic_blocks"],
             },
         ],
-        "note": "Use the 'tool' field value to call the corresponding analysis.",
+        "note": (
+            "Use the 'tool' field value to call the corresponding analysis. The "
+            "application must first be compiled with the analysis's plugin; "
+            "get_instrumentation_flags returns the exact hipcc flags."
+        ),
     }
 
 

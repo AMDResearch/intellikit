@@ -12,13 +12,17 @@ ISA timing through IntelliKit's standard interfaces.
 from importlib.metadata import PackageNotFoundError, version as _get_version
 
 from .api import (
+    ANALYSIS_PLUGINS,
     BasicBlock,
     BasicBlockResult,
     KernelBBResult,
     KernelMemoryResult,
     MemoryAccess,
     MemoryAnalysisResult,
+    NoInstrumentedKernelsError,
     Omniprobe,
+    detect_offload_arch,
+    instrumentation_flags,
 )
 
 try:
@@ -27,7 +31,11 @@ except PackageNotFoundError:
     __version__ = "0.1.1"
 
 __all__ = [
+    "ANALYSIS_PLUGINS",
     "Omniprobe",
+    "NoInstrumentedKernelsError",
+    "instrumentation_flags",
+    "detect_offload_arch",
     "MemoryAnalysisResult",
     "KernelMemoryResult",
     "MemoryAccess",
