@@ -176,6 +176,41 @@ def get_instrumentation_flags(
 
 
 @mcp.tool()
+def run_analyzer(
+    analyzer: str,
+    command: str,
+    kernel_filter: str = None,
+    dispatches: str = "all",
+    max_output_chars: int = 20000,
+) -> dict:
+    """Run any Omniprobe analyzer, or a message-handler plugin (.so) you built, and return its raw output.
+
+    Use for analyses analyze_memory/analyze_basic_blocks do not cover: 'Heatmap'
+    (accesses per memory page), 'AddressLogger' (per-wave address trace),
+    'BasicBlockLogger' (per-wave block entries), or the absolute path of a
+    bespoke handler that counts something no stock analyzer does. Build the
+    application with the plugin the analyzer needs first (memory plugin for
+    Heatmap/AddressLogger, basic-block plugin for BasicBlockLogger).
+
+    Returns:
+        returncode, output (the analyzer's JSON, truncated to max_output_chars),
+        log (stdout + stderr, truncated from the front -- what a bespoke
+        handler prints is here, since omniprobe forwards it on stderr),
+        truncated flag, and uninstrumented_kernels.
+    """
+    from omniprobe_ik import run_analyzer as _run
+
+    run = _run(analyzer, command, kernel_filter=kernel_filter, dispatches=dispatches)
+    return {
+        "returncode": run.returncode,
+        "output": run.output[:max_output_chars],
+        "log": run.log[-max_output_chars:],
+        "truncated": len(run.output) > max_output_chars or len(run.log) > max_output_chars,
+        "uninstrumented_kernels": run.uninstrumented_kernels,
+    }
+
+
+@mcp.tool()
 def list_analyzers() -> dict:
     """List available Omniprobe analysis types.
 
@@ -213,6 +248,16 @@ def list_analyzers() -> dict:
             "application must first be compiled with the analysis's plugin; "
             "get_instrumentation_flags returns the exact hipcc flags."
         ),
+        "raw_analyzers": [
+            {"name": "Heatmap", "plugin": "memory", "tool": "run_analyzer"},
+            {"name": "AddressLogger", "plugin": "memory", "tool": "run_analyzer"},
+            {"name": "BasicBlockLogger", "plugin": "basic_blocks", "tool": "run_analyzer"},
+            {
+                "name": "<path to your handler .so>",
+                "plugin": "the one your handler expects",
+                "tool": "run_analyzer",
+            },
+        ],
         "known_blind_spots": KNOWN_BLIND_SPOTS,
     }
 

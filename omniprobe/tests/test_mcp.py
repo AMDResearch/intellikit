@@ -21,4 +21,5 @@ class TestMCPToolRegistration:
         assert "analyze_basic_blocks" in tool_names
         assert "list_analyzers" in tool_names
         assert "get_instrumentation_flags" in tool_names
-        assert len(tool_names) == 4
+        assert "run_analyzer" in tool_names
+        assert len(tool_names) == 5

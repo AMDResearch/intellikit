@@ -122,6 +122,10 @@ are never instrumented and are not listed.
   `float* p = table[k]; p[i]`). These are generic (flat) address-space accesses, and
   MemoryAnalysis ignores them silently. Pointers passed as kernel arguments, held in a by-value
   struct argument, or stored in `__constant__` variables are seen.
+- **Code built at `-O0`.** Pointers are kept on the stack and every access becomes generic (flat),
+  so instrumented kernels report no accesses at all. This is CMake's default (no build type) and its
+  `Debug` type. Build with `-O1` or higher (CMake: `-DCMAKE_BUILD_TYPE=RelWithDebInfo`);
+  `summarize_memory` warns when an instrumented kernel reports no global or LDS access.
 - **Kernels without parameters.** They are cloned at compile time but not matched at run time
   ("No instrumented alternative found"), so they report nothing.
 - **Kernels with internal linkage** (`static` or in an anonymous namespace) are often not matched
@@ -179,6 +183,25 @@ Both analyses attribute their findings to source locations, so debug information
 | **Without `-g`** | Correct | Empty |
 
 Compile with `-g` unless you only need aggregate counts. The numbers are right either way; without it you cannot map them back to code.
+
+## Other analyzers and bespoke handlers
+
+`run_analyzer(analyzer, command, ...)` (CLI `omniprobe-ik run`, MCP `run_analyzer`) runs any Omniprobe
+analyzer — `Heatmap`, `AddressLogger`, `BasicBlockLogger`, `MemoryAnalysis`, `BasicBlockAnalysis` —
+or a message-handler plugin you built, and returns everything it produced (`output` for JSON
+formats; `log` for what was printed — the `omniprobe` launcher forwards the application's and the
+handlers' output on its stderr). `analyze_heatmap`, `log_addresses` and `log_basic_blocks` parse
+the first three into typed results.
+
+A **bespoke handler** is a C++ class derived from `dh_comms::message_handler_base` with
+`handle(message)` (return `true` if it consumed the message) and `report()` (called once per
+dispatch), exported through `extern "C" getMessageHandlers(kernel, dispatch_id, handlers)`. Address
+messages (`user_type == address`) carry one 64-bit address per active lane; `user_data` packs the
+access kind (bits 0–1), address space (bits 2–5) and size in bytes (bits 6 and up). Omniprobe does
+not install its headers, so build against its source tree: `handler_build_flags()` /
+`omniprobe-ik handler-flags` give the `hipcc` command. `omniprobe/examples/04_custom_handler/` is a
+complete handler with a test against hand-computed counts; test any handler that way before using
+it on a real application. `omniprobe/examples/05_cmake_app/` shows instrumenting a CMake project.
 
 ## API
 

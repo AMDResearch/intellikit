@@ -37,8 +37,11 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
      `make clean && make HIPFLAGS="-O2 -g $(omniprobe-ik flags memory)"` (read the Makefile for the
      variable name and its current value). Every file that contains a kernel needs the plugin.
    - CMake: configure a **fresh** build directory with
-     `-DCMAKE_HIP_FLAGS="-g $(omniprobe-ik flags memory)"` (or `CMAKE_CXX_FLAGS` when hipcc is the
-     C++ compiler).
+     `-DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_HIP_FLAGS="$(omniprobe-ik flags memory)"` (or
+     `CMAKE_CXX_FLAGS` when hipcc is the C++ compiler).
+   - **Optimise: `-O1` or higher.** At `-O0` (CMake's default build type, or `Debug`) pointers go
+     through the stack and Omniprobe sees **no** accesses at all. With CMake use
+     `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
    - **Do not add `-fgpu-rdc`.** Instrumentation does not need it, and with the plugin an RDC build
      of two or more files fails to link (`duplicate symbol: __hip_cuid_...`). Only if the project
      already builds with RDC, keep it and use `omniprobe-ik flags memory --rdc`.
@@ -76,6 +79,8 @@ instruction) to get the per-wave-execution value the summary prints.
   or stored in `__constant__` variables are seen. To measure such an access, temporarily pass the
   pointer as a kernel argument (or a by-value struct), rebuild, rerun — and say in your answer that
   you did so and why.
+- **Code built at `-O0`**: every kernel appears with no accesses (the summary warns). Rebuild
+  with `-O1` or higher.
 - **Kernels without parameters** are not matched at run time ("No instrumented alternative found").
   Temporarily add an unused pointer parameter to measure them.
 - **Architecture**: cache-line analysis exists for gfx906/908 (64-B lines) and gfx90a/940-942
@@ -94,6 +99,50 @@ instruction) to get the per-wave-execution value the summary prints.
 | A kernel or line is missing | Blind spot above, or `--kernel` regex too narrow | See Blind spots; filter on demangled names |
 | `RuntimeError: omniprobe exited with code N` | The application itself failed | Run the binary alone first; fix arguments/inputs |
 | No GPU / runs on the wrong GPU | `HIP_VISIBLE_DEVICES` set to the same id as `ROCR_VISIBLE_DEVICES` selects nothing | Set only `ROCR_VISIBLE_DEVICES` |
+
+## Other analyzers, and writing your own
+
+`omniprobe-ik run <analyzer> ./app` (MCP `run_analyzer`, Python `run_analyzer`) runs any Omniprobe
+analyzer: `Heatmap` (accesses per 1 MiB page), `AddressLogger` (every wave's addresses; Python
+`log_addresses`), `BasicBlockLogger` (every wave's block entries; `log_basic_blocks`) — memory build
+for the first two, basic-block build for the last.
+
+When no analyzer counts what you need (e.g. executions by partially active waves, a stride
+histogram, accesses to one buffer), **write a message handler** — about 60 lines of C++:
+
+```cpp
+#include "plugin.h"   // from the Omniprobe source tree; pulls in dh_comms
+class my_counter_t : public dh_comms::message_handler_base {
+ public:
+  my_counter_t(std::string kernel, uint64_t dispatch) : kernel_(std::move(kernel)) {}
+  bool handle(const dh_comms::message_t &m) override {
+    const auto &h = m.wave_header();
+    if (h.user_type != dh_comms::message_type::address) return false;  // not ours
+    unsigned rw = h.user_data & 0x3;            // 1 read, 2 write
+    unsigned space = (h.user_data >> 2) & 0xf;  // dh_comms::address_space::global / shared / constant / flat
+    unsigned bytes = h.user_data >> 6;          // access size
+    size_t lanes = m.no_data_items();           // active lanes; m.data_item(i) -> const uint64_t* address
+    // h.exec (mask), h.dwarf_line, h.dwarf_column, h.timestamp are also available
+    /* count something */ return true;
+  }
+  void report() override { std::printf("MY_COUNTER {...}\n"); }  // once per dispatch
+ private:
+  std::string kernel_;
+};
+extern "C" PUBLIC_API void getMessageHandlers(const std::string &kernel, uint64_t dispatch,
+    std::vector<dh_comms::message_handler_base *> &out) { out.push_back(new my_counter_t(kernel, dispatch)); }
+```
+
+- Build it as a shared library with the command `omniprobe-ik handler-flags` prints (hipcc,
+  `-fPIC -shared`, the Omniprobe **source** tree's include dirs, `-ldh_comms`; Python
+  `handler_build_flags()`). Omniprobe does not install its headers.
+- Build the application with `$(omniprobe-ik flags memory)` (address messages) or
+  `basic-blocks` (block messages, `user_type == basic_block_start`), then run
+  `omniprobe-ik run /absolute/path/libmy_counter.so ./app`. What `report()` prints arrives on
+  omniprobe's **stderr** (Python: `run.log`).
+- **Test it first** on a small kernel whose answer you can compute by hand (e.g. 1000 threads in
+  blocks of 256 → 16 waves, the last with 40 active lanes), then run it on the real application.
+- Every wave also loads its kernel arguments (`constant` space) — filter on `space` as needed.
 
 ## Analyses and their plugins
 

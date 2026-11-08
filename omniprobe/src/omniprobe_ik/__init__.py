@@ -25,6 +25,24 @@ from .api import (
     instrumentation_flags,
     parse_uninstrumented_kernels,
     summarize_memory,
+    uninstrumented_warning,
+)
+
+from .raw import (
+    ANALYZER_PLUGINS,
+    AddressRecord,
+    AddressTrace,
+    AnalyzerRun,
+    BasicBlockTrace,
+    BBRecord,
+    HeatmapPage,
+    HeatmapResult,
+    KernelHeatmap,
+    analyze_heatmap,
+    handler_build_flags,
+    log_addresses,
+    log_basic_blocks,
+    run_analyzer,
 )
 
 try:
@@ -33,12 +51,27 @@ except PackageNotFoundError:
     __version__ = "0.1.1"
 
 __all__ = [
+    "run_analyzer",
+    "AnalyzerRun",
+    "ANALYZER_PLUGINS",
+    "handler_build_flags",
+    "analyze_heatmap",
+    "HeatmapResult",
+    "KernelHeatmap",
+    "HeatmapPage",
+    "log_addresses",
+    "AddressTrace",
+    "AddressRecord",
+    "log_basic_blocks",
+    "BasicBlockTrace",
+    "BBRecord",
     "ANALYSIS_PLUGINS",
     "Omniprobe",
     "NoInstrumentedKernelsError",
     "instrumentation_flags",
     "summarize_memory",
     "parse_uninstrumented_kernels",
+    "uninstrumented_warning",
     "detect_offload_arch",
     "MemoryAnalysisResult",
     "KernelMemoryResult",

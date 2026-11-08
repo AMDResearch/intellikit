@@ -80,6 +80,28 @@ Examples:
         help="Add -fgpu-rdc; only for applications that already build with relocatable device code",
     )
 
+    # -- run subcommand (any analyzer or a bespoke handler .so) -------------
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run any Omniprobe analyzer, or a message-handler plugin (.so) you built",
+        description=(
+            "Run omniprobe with any analyzer (Heatmap, AddressLogger, BasicBlockLogger, "
+            "MemoryAnalysis, BasicBlockAnalysis) or the path to a handler plugin, and print "
+            "what it produced."
+        ),
+    )
+    run_parser.add_argument("analyzer", help="Analyzer name or path to a handler .so")
+    _add_common_args(run_parser)
+    run_parser.add_argument(
+        "--format", choices=["json", "csv"], default="json", help="Omniprobe log format"
+    )
+
+    # -- handler-flags subcommand -------------------------------------------
+    subparsers.add_parser(
+        "handler-flags",
+        help="Print the hipcc command for building a bespoke message-handler plugin",
+    )
+
     return parser
 
 
@@ -140,6 +162,32 @@ def bb_command(args) -> int:
     warning = uninstrumented_warning(result.uninstrumented_kernels)
     output = (f"WARNING: {warning}\n\n" if warning else "") + _format_bb_result(result)
     _write_output(output, args.output)
+    return 0
+
+
+def run_command(args) -> int:
+    """Run any analyzer or handler and print its output."""
+    from omniprobe_ik import run_analyzer, uninstrumented_warning
+
+    run = run_analyzer(
+        args.analyzer,
+        args.target,
+        kernel_filter=args.kernel,
+        dispatches=args.dispatches,
+        log_format=args.format,
+    )
+    warning = uninstrumented_warning(run.uninstrumented_kernels)
+    if warning:
+        print(f"WARNING: {warning}", file=sys.stderr)
+    _write_output(run.output or run.log, args.output)
+    return 0
+
+
+def handler_flags_command(args) -> int:
+    """Print the build command for a bespoke handler."""
+    from omniprobe_ik import handler_build_flags
+
+    print(handler_build_flags()["compile"])
     return 0
 
 
@@ -249,6 +297,10 @@ def main() -> int:
             return bb_command(args)
         elif args.command == "flags":
             return flags_command(args)
+        elif args.command == "run":
+            return run_command(args)
+        elif args.command == "handler-flags":
+            return handler_flags_command(args)
         else:
             parser.print_help()
             return 1
