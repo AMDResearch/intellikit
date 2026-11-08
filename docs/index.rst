@@ -22,6 +22,7 @@ The IntelliKit source code is hosted in the `AMDResearch/intellikit <https://git
       * :doc:`Set up skills <how-to/skills-setup>`
       * :doc:`Profile an application <getting-started/quickstart>`
       * :doc:`Use IntelliKit end to end <how-to/workflow>`
+      * :doc:`Choose a tool <how-to/choose-a-tool>`
 
    .. grid-item-card:: Reference
 

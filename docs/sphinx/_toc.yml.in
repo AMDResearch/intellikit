@@ -26,6 +26,8 @@ subtrees:
     title: Profile an application
   - file: how-to/workflow
     title: Use IntelliKit end to end
+  - file: how-to/choose-a-tool
+    title: Choose a tool
 
 - caption: Reference
   entries:
