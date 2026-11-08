@@ -71,8 +71,13 @@ for line in profiler.source_lines[:5]:
 ### Find the accesses wasting bandwidth
 
 Linex tells you which lines are slow. Omniprobe tells you which accesses are moving more data than
-they need to, and how much that costs. Compile with `-g` here as well — without it the counts are
-still correct, but they cannot be mapped back to source.
+they need to, and how much that costs. Omniprobe only sees kernels compiled with its
+instrumentation plugin, so this step needs its own build: add the flags `omniprobe-ik flags memory`
+prints, and `-g` so the counts map back to source.
+
+```bash
+hipcc -g -O2 $(omniprobe-ik flags memory) my_app.hip -o my_app
+```
 
 ```python
 from omniprobe_ik import Omniprobe
@@ -89,7 +94,7 @@ for kernel in result.kernels:
 ```
 
 Omniprobe also reports per-basic-block cycle counts as a distribution through
-`analyze_basic_blocks`, so a block whose `p99` sits far above its `p50` stands out as one being
+`analyze_basic_blocks` (from a separate build with `omniprobe-ik flags basic-blocks`), so a block whose `p99` sits far above its `p50` stands out as one being
 reached under very different conditions — something an average hides.
 
 ```{note}
