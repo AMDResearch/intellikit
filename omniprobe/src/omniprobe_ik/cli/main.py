@@ -29,8 +29,9 @@ Examples:
   hipcc -g $(omniprobe-ik flags basic-blocks) my_gpu_app.hip -o my_gpu_app_bb
   omniprobe-ik basic-blocks ./my_gpu_app_bb
 
-  # Filter to specific kernels
-  omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app
+  # Filter to specific kernels; application arguments follow the target
+  omniprobe-ik memory --kernel "matmul.*" --output out.json ./my_gpu_app input.dat
+  omniprobe-ik memory --kernel "matmul.*" -- ./my_gpu_app --size 1024
 
   # Output as JSON
   omniprobe-ik memory --output results.json ./my_gpu_app
@@ -52,10 +53,10 @@ Examples:
     # -- basic-blocks subcommand --------------------------------------------
     bb_parser = subparsers.add_parser(
         "basic-blocks",
-        help="Report which basic blocks execute and how many waves reach each",
+        help="Count exactly how often each basic block executes",
         description=(
-            "Report which basic blocks execute and how many waves reach each. Omniprobe's "
-            "per-block cycle fields are not per-block cost today; use metrix for time."
+            "Count exactly how often each basic block executes (wave entries, active lanes), "
+            "with source lines. Not timing: use metrix for time."
         ),
     )
     _add_common_args(bb_parser)
@@ -109,7 +110,12 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     """Add arguments shared between memory and basic-blocks subcommands."""
     parser.add_argument(
         "target",
-        help="Target application command to analyze",
+        help="Application to analyze (its arguments follow it, or after --)",
+    )
+    parser.add_argument(
+        "app_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments for the application",
     )
     parser.add_argument(
         "--kernel",
@@ -136,7 +142,7 @@ def memory_command(args) -> int:
 
     probe = Omniprobe()
     result = probe.analyze_memory(
-        command=args.target,
+        command=_command(args),
         kernel_filter=args.kernel,
         dispatches=args.dispatches,
     )
@@ -152,7 +158,7 @@ def bb_command(args) -> int:
 
     probe = Omniprobe()
     result = probe.analyze_basic_blocks(
-        command=args.target,
+        command=_command(args),
         kernel_filter=args.kernel,
         dispatches=args.dispatches,
     )
@@ -165,13 +171,28 @@ def bb_command(args) -> int:
     return 0
 
 
+def _command(args) -> str:
+    """The application command line: target plus its arguments.
+
+    Omniprobe splits the command on whitespace, so a single argument that
+    itself contains spaces cannot be passed through.
+    """
+    app_args = [a for a in args.app_args if a != "--"] if args.app_args else []
+    for arg in app_args:
+        if any(ch.isspace() for ch in arg):
+            raise ValueError(
+                f"application argument {arg!r} contains whitespace, which Omniprobe cannot pass through"
+            )
+    return " ".join([args.target, *app_args])
+
+
 def run_command(args) -> int:
     """Run any analyzer or handler and print its output."""
     from omniprobe_ik import run_analyzer, uninstrumented_warning
 
     run = run_analyzer(
         args.analyzer,
-        args.target,
+        _command(args),
         kernel_filter=args.kernel,
         dispatches=args.dispatches,
         log_format=args.format,
@@ -261,9 +282,13 @@ def _format_bb_result(result) -> str:
         lines.append(f"Kernel: {kernel.kernel_name} (dispatch {kernel.dispatch_id})")
         lines.append(f"  Basic blocks: {len(kernel.basic_blocks)}")
 
-        for bb in sorted(kernel.basic_blocks, key=lambda b: b.wave_count, reverse=True):
+        for bb in sorted(kernel.basic_blocks, key=lambda b: b.wave_visits, reverse=True):
             loc = f"{bb.source_file}:{bb.line}"
-            lines.append(f"  BB {bb.bb_id} ({loc}): reached by {bb.wave_count} waves")
+            occupancy = bb.active_lanes / bb.wave_visits if bb.wave_visits else 0.0
+            lines.append(
+                f"  BB {bb.bb_id} ({loc}): {bb.wave_visits} wave entries, "
+                f"{bb.active_lanes} active lanes ({occupancy:.1f} per entry)"
+            )
         lines.append("")
 
     return "\n".join(lines)
