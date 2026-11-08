@@ -192,7 +192,7 @@ probe = Omniprobe(
 **Arguments shared by both methods:**
 
 - `command`: application command line to instrument
-- `kernel_filter`: optional ECMAScript regex limiting which kernels are analysed
+- `kernel_filter`: optional ECMAScript regex limiting which kernels are analysed, searched within the **demangled** kernel name (for example `'gstride<16>'`; a mangled name such as `_Z7gstride...` matches nothing)
 - `dispatches`: which dispatches to capture — `"all"`, `"random"`, or `"1"`
 
 Constructing `Omniprobe` raises `ImportError` if Omniprobe's Python API is not importable, and `FileNotFoundError` if the executable cannot be found. Both methods raise `NoInstrumentedKernelsError` (a `RuntimeError`) when Omniprobe reports no kernel — almost always a binary built without the plugin; the message names the flags to rebuild with.
