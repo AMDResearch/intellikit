@@ -23,3 +23,18 @@ class TestMCPToolRegistration:
         assert "get_instrumentation_flags" in tool_names
         assert "run_analyzer" in tool_names
         assert len(tool_names) == 5
+
+
+class TestDiscoveryGuidance:
+    """What an agent that never opens a skill sees: server instructions and tool descriptions."""
+
+    def test_server_instructions_name_the_trigger_and_workflow(self):
+        text = mcp.instructions
+        assert "global_load_efficiency" in text
+        assert "get_instrumentation_flags" in text and "analyze_memory" in text
+
+    def test_analyze_memory_description_leads_with_when_to_use_it(self):
+        tools = {t.name: t for t in asyncio.run(mcp.list_tools())}
+        description = tools["analyze_memory"].description
+        assert "global_load_efficiency" in description
+        assert "index array" in description

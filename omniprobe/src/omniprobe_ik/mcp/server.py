@@ -11,7 +11,20 @@ from fastmcp import FastMCP
 from omniprobe_ik import ANALYSIS_PLUGINS, Omniprobe, instrumentation_flags, summarize_memory
 from omniprobe_ik.api import KNOWN_BLIND_SPOTS, uninstrumented_warning
 
-mcp = FastMCP("IntelliKit Omniprobe")
+mcp = FastMCP(
+    "IntelliKit Omniprobe",
+    instructions=(
+        "Omniprobe names the exact source line (file:line:column) of each memory access that "
+        "wastes bandwidth: uncoalesced or scattered global loads/stores (e.g. gathers through an "
+        "index array) and LDS bank conflicts, with a measured cost per wave execution. Kernel-level "
+        "profilers cannot do this: metrix gives per-kernel counters and linex gives stall cycles "
+        "per line, but neither says which access is scattered. Use Omniprobe when a kernel shows "
+        "low memory.global_load_efficiency (or store efficiency) or LDS bank conflicts in metrix, "
+        "or when a kernel indexes memory indirectly, before concluding where the memory "
+        "inefficiency is or rewriting code. Workflow: get_instrumentation_flags, rebuild with "
+        "those flags plus -g at -O1 or higher, then analyze_memory on the rebuilt binary."
+    ),
+)
 
 
 @mcp.tool()
@@ -20,13 +33,17 @@ def analyze_memory(
     kernel_filter: str = None,
     dispatches: str = "all",
 ) -> dict:
-    """Find the source lines whose memory accesses waste bandwidth: uncoalesced global accesses and LDS bank conflicts.
+    """Name the source line of each memory access that wastes bandwidth (uncoalesced/scattered global access, LDS bank conflict), measured, worst first; build with get_instrumentation_flags first.
+
+    Use this when metrix shows low memory.global_load_efficiency or
+    global_store_efficiency (scattered accesses), LDS bank conflicts, or when a
+    kernel reads through an index array (gather) -- to find WHICH access is
+    responsible and how bad it is, instead of guessing from the source. A high
+    achieved bandwidth does not rule this out: wasted bytes count as bandwidth.
 
     First build the application with the flags from
-    get_instrumentation_flags('memory') (plus -g); a normal build raises "no
-    instrumented kernels". Use it after a kernel-level profiler (e.g. metrix
-    coalescing efficiency or LDS bank conflicts) shows a problem, to find which
-    access causes it.
+    get_instrumentation_flags('memory') plus -g, at -O1 or higher; a normal
+    build raises "no instrumented kernels", and -O0 builds report nothing.
 
     Args:
         command: Shell command to analyze (e.g., './my_gpu_app' or 'python train.py').
