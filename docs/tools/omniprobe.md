@@ -112,8 +112,8 @@ choose what to fix first.
 Excess cache lines are fetched into L2; they become DRAM (HBM) traffic only when L2 cannot keep
 them until they are reused. In an HBM-bound kernel whose wasted lines stay in L2, making the access
 contiguous may change little. Judge a fix by HBM bytes and kernel time before and after (Metrix
-`memory.bytes_transferred_hbm`, `memory.hbm_read_bandwidth`, kernel duration), and look for index
-arrays a restructuring can remove altogether: the index loads are traffic of their own.
+`memory.bytes_transferred_hbm`, `memory.hbm_read_bandwidth`, kernel duration), not by excess lines
+alone. Loads of index arrays are memory traffic too.
 
 ### Kernels that ran without instrumentation
 

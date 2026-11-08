@@ -75,9 +75,7 @@ instruction) to get the per-wave-execution value the summary prints.
   stay in L2 (the data is reused soon), making the access contiguous may not speed up an HBM-bound
   kernel. Judge a fix by HBM bytes and kernel time before and after (metrix
   `memory.bytes_transferred_hbm`, `memory.hbm_read_bandwidth`, kernel duration), not by excess lines
-  alone. Index arrays are traffic too: a restructuring that **eliminates an index array** (e.g.
-  storing data in the order it is consumed, built once and reused every iteration) often gains
-  more than making the gather contiguous.
+  alone. Loads of index arrays are memory traffic too.
 - A load and a store on the same line are separate sites.
 
 ## Blind spots — when Omniprobe reports nothing for an access you suspect
