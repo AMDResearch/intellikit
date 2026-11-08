@@ -587,7 +587,22 @@ KNOWN_BLIND_SPOTS = [
     "space) are not recorded; pointer arguments, by-value struct members and __constant__ "
     "pointers are.",
     "Kernels without parameters are not matched at run time and report nothing.",
+    "Code built at -O0 (e.g. CMake's default or Debug build type) reports no accesses: "
+    "pointers go through the stack and become generic (flat) accesses. Build with -O1 or "
+    "higher plus -g (CMake: -DCMAKE_BUILD_TYPE=RelWithDebInfo).",
 ]
+
+
+def silent_kernels_warning(kernel_names: list[str]) -> Optional[str]:
+    """The warning for instrumented kernels that reported no global or LDS access, or None."""
+    if not kernel_names:
+        return None
+    return (
+        f"{len(kernel_names)} instrumented kernel(s) reported no global or LDS memory access: "
+        f"{'; '.join(kernel_names)}. If they do access memory, the accesses were not seen: "
+        "most likely the code was built at -O0 (rebuild with -O1 or higher, e.g. CMake "
+        "-DCMAKE_BUILD_TYPE=RelWithDebInfo), or the pointers were loaded from device memory."
+    )
 
 
 def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
@@ -664,9 +679,17 @@ def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
 
     global_sites.sort(key=lambda s: s["excess_cache_lines"], reverse=True)
     lds_sites.sort(key=lambda s: s["bank_conflicts"], reverse=True)
-    warning = uninstrumented_warning(getattr(result, "uninstrumented_kernels", None))
+    silent = [k.kernel_name for k in result.kernels if not k.accesses]
+    warnings = [
+        w
+        for w in (
+            uninstrumented_warning(getattr(result, "uninstrumented_kernels", None)),
+            silent_kernels_warning(silent),
+        )
+        if w
+    ]
     return {
-        "warnings": [warning] if warning else [],
+        "warnings": warnings,
         "uninstrumented_kernels": getattr(result, "uninstrumented_kernels", None),
         "global_sites": global_sites[:top],
         "lds_sites": lds_sites[:top],

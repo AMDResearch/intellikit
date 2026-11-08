@@ -133,3 +133,24 @@ def test_partially_instrumented_build_names_the_missing_kernel(probe, tmp_path_f
     assert not [k for k in result.uninstrumented_kernels if "static_kernel" in k]
     warnings = summarize_memory(result)["warnings"]
     assert warnings and "other_tu_kernel" in warnings[0]
+
+
+def test_O0_build_is_flagged_not_silent(probe, tmp_path_factory):
+    """At -O0 Omniprobe sees no accesses; the summary must say so instead of reporting 'none'."""
+    from omniprobe_ik import instrumentation_flags, summarize_memory
+
+    from .conftest import STRIDED_KERNEL
+
+    tmp = tmp_path_factory.mktemp("o0")
+    src = tmp / "strided.hip"
+    src.write_text(STRIDED_KERNEL)
+    build = subprocess.run(
+        ["hipcc", "-O0", "-g", *instrumentation_flags("memory"), str(src), "-o", str(tmp / "app")],
+        capture_output=True,
+        text=True,
+    )
+    assert build.returncode == 0, build.stderr[-2000:]
+
+    summary = summarize_memory(probe.analyze_memory(command=str(tmp / "app")))
+    assert summary["global_sites"] == []
+    assert any("-O0" in w and "strided_copy" in w for w in summary["warnings"]), summary["warnings"]

@@ -94,3 +94,11 @@ def test_uninstrumented_kernels_become_a_warning():
 def test_no_warning_when_everything_was_instrumented():
     summary = summarize_memory(_result())
     assert summary["warnings"] == []
+
+
+def test_kernel_without_any_access_is_flagged():
+    result = _result()
+    result.kernels.append(KernelMemoryResult(kernel_name="built_at_O0", dispatch_id=3, accesses=[]))
+    warnings = summarize_memory(result)["warnings"]
+    assert len(warnings) == 1
+    assert "built_at_O0" in warnings[0] and "-O0" in warnings[0]
