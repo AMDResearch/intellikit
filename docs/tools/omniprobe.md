@@ -79,6 +79,49 @@ Memory analysis reports these fields per access site:
 
 Basic-block analysis reports cycle counts as a distribution — `min_cycles`, `max_cycles`, and the `p25`/`p50`/`p75`/`p95`/`p99` percentiles — rather than a single average. A block whose p99 sits far above its p50 is being reached by waves under very different conditions, which an average hides.
 
+## Reading the results
+
+These definitions are pinned by `omniprobe/tests/integration/test_calibration.py`, which checks
+them against closed-form expectations on real hardware. Every number is a **total over the
+dispatch**, keyed by source location, memory space and access type (a load and a store on the same
+line are separate entries; Omniprobe may also split one location into several entries, so sum
+them).
+
+| Field | Meaning |
+|-------|---------|
+| `execution_count` | Wave executions of the instrumented instruction (one per wave each time it runs) |
+| `excess_cache_lines` | Global only. Cache lines touched beyond the minimum the active lanes needed: per wave execution, `ceil(active_lanes × access_bytes / line)` lines are needed and the distinct lines actually touched are counted |
+| `bank_conflicts` | LDS only. Extra serialized cycles from bank conflicts: 32 banks of 4 bytes, a 64-lane wave checked as two halves of 32 lanes (8-byte accesses: four groups of 16; 16-byte: eight of 8); each group costs `ways − 1`, where `ways` is the largest number of distinct dwords mapped to one bank. Lanes reading the same dword (broadcast) cost nothing |
+
+Worked values on gfx90a (128-byte lines), 4-byte accesses, 64 active lanes, **per wave execution**:
+
+| Lane stride (floats) | 1 | 2 | 4 | 8 | 16 | 32 | 64 |
+|---|---|---|---|---|---|---|---|
+| global `excess_cache_lines` | 0 | 2 | 6 | 14 | 30 | 62 | 62 |
+| LDS `bank_conflicts` | 0 | 2 | 6 | 14 | 30 | 62 | 62 |
+
+An LDS stride of 33 (a padded tile) gives 0 conflicts.
+
+To rank findings, divide by `execution_count`. `excess_cache_lines / execution_count` is the
+wasted lines per wave execution: 0 is perfectly coalesced and 62 is the worst case (every lane on
+its own line). The raw total ranks sites by how much bandwidth they waste overall, so use it to
+choose what to fix first.
+
+### What Omniprobe cannot see
+
+- **Accesses through a pointer that was itself loaded from device memory** (for example
+  `float* p = table[k]; p[i]`). These are generic (flat) address-space accesses, and
+  MemoryAnalysis ignores them silently. Pointers passed as kernel arguments, held in a by-value
+  struct argument, or stored in `__constant__` variables are seen.
+- **Kernels without parameters.** They are cloned at compile time but not matched at run time
+  ("No instrumented alternative found"), so they report nothing.
+- **Kernels with internal linkage** (`static` or in an anonymous namespace) are often not matched
+  at run time either, for the same symptom. Check Omniprobe's stderr for
+  `No instrumented alternative found for <kernel>`.
+- **Architectures without a cache-line size in Omniprobe's table** (gfx906/908: 64 bytes;
+  gfx90a/940/941/942: 128 bytes). On any other architecture, global cache-line analysis is
+  skipped and only LDS analysis remains.
+
 ## Compiling for Omniprobe
 
 Omniprobe instruments kernels at compile time. An LLVM pass plugin clones every kernel and injects data-collection calls into the clone; at run time Omniprobe swaps the clone in. A kernel compiled without the plugin has no clone, so Omniprobe has nothing to observe: it exits successfully and reports no kernels. `analyze_memory` and `analyze_basic_blocks` turn that case into a `NoInstrumentedKernelsError` that explains the fix, rather than returning an empty result.
