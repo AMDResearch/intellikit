@@ -3,15 +3,14 @@
 
 """How the application's build mode affects instrumentation.
 
-``instrumentation_flags`` leaves out ``-fgpu-rdc`` by default. These tests pin
-why: a multi-file program built without RDC has every kernel matched, including
-``static`` and anonymous-namespace ones, while the same program built with RDC
-and the plugin fails to link.
+``instrumentation_flags`` leaves out ``-fgpu-rdc`` by default; instrumentation
+does not need it. A multi-file program has every kernel matched, including
+``static`` and anonymous-namespace ones, both without RDC and (Omniprobe 3003058
+and later) with it.
 """
 
 import subprocess
 
-import pytest
 
 from .conftest import (
     skip_no_gpu,
@@ -94,17 +93,23 @@ def test_non_rdc_multi_file_build_matches_every_kernel(probe, tmp_path_factory):
     assert excess("other_tu_kernel") == 16 * 30
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Omniprobe defect: with -fgpu-rdc and the pass plugin, linking two or more "
-        "translation units fails with 'duplicate symbol: __hip_cuid_...'. Reported 2026-11-08."
-    ),
-)
-def test_rdc_multi_file_build_links(tmp_path_factory):
-    _, build = _build_two_tus(tmp_path_factory, "two_tu_rdc", rdc=True)
-    assert build.returncode == 0, build.stderr[-500:]
+def test_rdc_multi_file_build_matches_every_kernel(probe, tmp_path_factory):
+    """With -fgpu-rdc, two translation units link and every kernel is measured exactly."""
+    binary, build = _build_two_tus(tmp_path_factory, "two_tu_rdc", rdc=True)
+    assert build.returncode == 0, build.stderr[-2000:]
+
+    result = probe.analyze_memory(command=str(binary))
+
+    def excess(fragment):
+        matches = [k for k in result.kernels if fragment in k.kernel_name]
+        assert len(matches) == 1, [k.kernel_name for k in result.kernels]
+        return sum(a.excess_cache_lines for a in matches[0].accesses)
+
+    assert not result.uninstrumented_kernels, result.uninstrumented_kernels
+    assert len(result.kernels) == 3
+    assert excess("anon_kernel") == 16 * 6
+    assert excess("static_kernel") == 16 * 14
+    assert excess("other_tu_kernel") == 16 * 30
 
 
 def test_partially_instrumented_build_names_the_missing_kernel(probe, tmp_path_factory):
@@ -154,3 +159,26 @@ def test_O0_build_is_flagged_not_silent(probe, tmp_path_factory):
     summary = summarize_memory(probe.analyze_memory(command=str(tmp / "app")))
     assert summary["global_sites"] == []
     assert any("-O0" in w and "strided_copy" in w for w in summary["warnings"]), summary["warnings"]
+
+
+def test_build_without_debug_info_is_flagged(probe, tmp_path_factory):
+    """Without -g every global access is dropped; the summary must say so and name -g."""
+    from omniprobe_ik import instrumentation_flags, summarize_memory
+
+    from .conftest import STRIDED_KERNEL
+
+    tmp = tmp_path_factory.mktemp("nog")
+    src = tmp / "strided.hip"
+    src.write_text(STRIDED_KERNEL)
+    build = subprocess.run(
+        ["hipcc", "-O2", *instrumentation_flags("memory"), str(src), "-o", str(tmp / "app")],
+        capture_output=True,
+        text=True,
+    )
+    assert build.returncode == 0, build.stderr[-2000:]
+
+    result = probe.analyze_memory(command=str(tmp / "app"))
+    assert sum(k.unattributed_accesses for k in result.kernels) > 0
+    warnings = summarize_memory(result)["warnings"]
+    assert any("-g" in w and "strided_copy" in w for w in warnings), warnings
+    assert not any("-O0" in w for w in warnings), warnings

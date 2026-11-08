@@ -110,3 +110,13 @@ def test_unanalyzed_flat_accesses_are_flagged_with_counts():
     warnings = summarize_memory(result)["warnings"]
     assert len(warnings) == 1
     assert "strided: 128" in warnings[0] and "flat" in warnings[0] and "-O0" in warnings[0]
+
+
+def test_unattributed_accesses_point_at_debug_info_not_O0():
+    result = _result()
+    result.kernels.append(
+        KernelMemoryResult(kernel_name="no_g", dispatch_id=3, accesses=[], unattributed_accesses=32)
+    )
+    warnings = summarize_memory(result)["warnings"]
+    assert len(warnings) == 1
+    assert "no_g: 32" in warnings[0] and "-g" in warnings[0] and "-O0" not in warnings[0]

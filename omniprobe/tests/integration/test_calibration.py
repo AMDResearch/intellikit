@@ -181,6 +181,15 @@ def test_lds_bank_conflicts(calibration, stride):
     assert conflicts == WAVES * 2 * (ways - 1)
 
 
+@pytest.mark.parametrize("stride", LDS_STRIDES)
+def test_lds_location_is_one_entry(calibration, stride):
+    """Omniprobe 3c6182d reports one entry per LDS source location (earlier ones split it)."""
+    kernel = _kernel(calibration, f"void lstride<{stride}>")
+    line = _line_of("CAL_LDS_LOAD")
+    entries = [a for a in kernel.accesses if a.line == line and a.memory_space == "lds"]
+    assert len([a for a in entries if a.access_type == "read"]) == 1, entries
+
+
 def test_pointers_in_a_by_value_struct_are_seen(calibration):
     kernel = _kernel(calibration, "via_struct")
     excess, _, executions = _totals(kernel, _line_of("CAL_STRUCT"), "global", "read")
@@ -213,15 +222,6 @@ def test_pointer_loaded_from_memory_is_seen(calibration):
     assert executions == WAVES
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=KeyError,
-    reason=(
-        "Omniprobe defect: a kernel with no parameters gets an instrumented clone at "
-        "compile time but 'No instrumented alternative found' at run time. Reported "
-        "2026-11-08."
-    ),
-)
 def test_kernel_without_arguments_is_seen(calibration):
     names = [n for n in calibration if n.startswith("no_args")]
     if not names:
@@ -231,11 +231,10 @@ def test_kernel_without_arguments_is_seen(calibration):
     assert executions == WAVES
 
 
-def test_kernel_without_arguments_is_reported_as_uninstrumented(calibration):
-    """The zero-parameter blind spot is at least loud: the kernel is named as missing."""
-    missing = calibration["__uninstrumented__"]
-    assert missing is not None
-    assert [k for k in missing if k.startswith("no_args")], missing
+def test_kernel_without_arguments_is_not_reported_as_uninstrumented(calibration):
+    """Omniprobe ac6ce8e instruments kernels without parameters; they must not be listed as missing."""
+    missing = calibration["__uninstrumented__"] or []
+    assert not [k for k in missing if k.startswith("no_args")], missing
 
 
 def test_pointer_loaded_from_memory_is_reported_as_unanalyzed(calibration):

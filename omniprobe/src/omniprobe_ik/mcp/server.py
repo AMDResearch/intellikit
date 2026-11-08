@@ -76,6 +76,7 @@ def analyze_memory(
                 "kernel_name": k.kernel_name,
                 "dispatch_id": k.dispatch_id,
                 "unanalyzed_flat_accesses": k.unanalyzed_flat_accesses,
+                "unattributed_accesses": k.unattributed_accesses,
                 "accesses": [
                     {
                         "source_file": a.source_file,
@@ -198,20 +199,24 @@ def run_analyzer(
     dispatches: str = "all",
     max_output_chars: int = 20000,
 ) -> dict:
-    """Run any Omniprobe analyzer, or a message-handler plugin (.so) you built, and return its raw output.
+    """Run any Omniprobe analyzer, or a message handler you wrote (.so plugin or .py module), and return its raw output.
 
     Use for analyses analyze_memory/analyze_basic_blocks do not cover: 'Heatmap'
     (accesses per memory page), 'AddressLogger' (per-wave address trace),
     'BasicBlockLogger' (per-wave block entries), or the absolute path of a
-    bespoke handler that counts something no stock analyzer does. Build the
+    bespoke handler that counts something no stock analyzer does: a C++ plugin
+    (.so) or a Python module (.py) defining handleAddressMessage(msg),
+    handleTimeMessage(msg) and optionally handleReport(msg). A Python handler sees
+    only address, kernel and dispatch_id per active lane (no source line, no
+    read/write, no address space; kernel-argument loads are included). Build the
     application with the plugin the analyzer needs first (memory plugin for
-    Heatmap/AddressLogger, basic-block plugin for BasicBlockLogger).
+    Heatmap/AddressLogger/Python handlers, basic-block plugin for BasicBlockLogger).
 
     Returns:
         returncode, output (the analyzer's JSON, truncated to max_output_chars),
-        log (stdout + stderr, truncated from the front -- what a bespoke
-        handler prints is here, since omniprobe forwards it on stderr),
-        truncated flag, and uninstrumented_kernels.
+        stdout (what the application and handlers printed -- a handler's report
+        is here), stderr (Omniprobe's own messages and warnings), both truncated
+        from the front, truncated flag, and uninstrumented_kernels.
     """
     from omniprobe_ik import run_analyzer as _run
 
@@ -219,8 +224,9 @@ def run_analyzer(
     return {
         "returncode": run.returncode,
         "output": run.output[:max_output_chars],
-        "log": run.log[-max_output_chars:],
-        "truncated": len(run.output) > max_output_chars or len(run.log) > max_output_chars,
+        "stdout": run.stdout[-max_output_chars:],
+        "stderr": run.stderr[-max_output_chars:],
+        "truncated": any(len(s) > max_output_chars for s in (run.output, run.stdout, run.stderr)),
         "uninstrumented_kernels": run.uninstrumented_kernels,
     }
 

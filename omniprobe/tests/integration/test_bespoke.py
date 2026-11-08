@@ -67,12 +67,34 @@ def test_bespoke_handler_counts_match_hand_computed_values(built):
 
     module, handler, app, _ = built
     run = run_analyzer(str(handler), str(app))
-    rows = {(r["kernel"].split("(")[0], r["space"]): r for r in module.counts_from(run.log)}
+    rows = {(r["kernel"].split("(")[0], r["space"]): r for r in module.counts_from(run.stdout)}
+    assert "ACCESS_COUNTER" not in run.stderr
 
     glob = rows[("copy_n", "global")]
     assert {k: glob[k] for k in module.EXPECTED_GLOBAL} == module.EXPECTED_GLOBAL
     kernarg = rows[("copy_n", "constant")]
     assert (kernarg["load_executions"], kernarg["lanes"]) == (16, 16 * 64)
+
+
+def test_python_handler_counts_match_hand_computed_values(built):
+    """A .py handler runs through PythonHandler; its report is on stdout, not stderr."""
+    from omniprobe_ik import run_analyzer
+
+    _, _, app, _ = built
+    path = EXAMPLES / "06_python_handler" / "analyze_python_handler.py"
+    spec = importlib.util.spec_from_file_location("analyze_python_handler", path)
+    example = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(example)
+
+    run = run_analyzer(str(EXAMPLES / "06_python_handler" / "address_counter.py"), str(app))
+    rows = example.counts_from(run.stdout)
+    assert len(rows) == 1, run.stdout[-2000:] + run.stderr[-2000:]
+    row = rows[0]
+    assert row["kernel"].startswith("copy_n")
+    # 2000 global lane accesses + 16 waves x 64 lanes loading a kernel argument
+    assert row["lane_accesses"] == 2000 + 16 * 64
+    assert row["distinct_addresses"] >= 2000
+    assert "ADDRESS_COUNTER" not in run.stderr
 
 
 def test_handler_build_flags_point_at_existing_paths():

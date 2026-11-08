@@ -292,8 +292,7 @@ def uninstrumented_warning(kernels: Optional[list[str]]) -> Optional[str]:
     return (
         f"{len(kernels)} dispatched kernel(s) ran WITHOUT instrumentation and are missing from "
         f"these results: {names}. Rebuild the files that define them with the instrumentation "
-        "flags; kernels without parameters, and internal-linkage kernels in -fgpu-rdc builds, "
-        "are known not to match."
+        "flags (every file that defines a kernel needs them)."
     )
 
 
@@ -363,6 +362,9 @@ class KernelMemoryResult:
     # Accesses in the generic (flat) address space, which memory analysis cannot
     # classify: pointers loaded from device memory, or code built at -O0.
     unanalyzed_flat_accesses: int = 0
+    # Global accesses dropped because no ISA instruction was found for their source
+    # line: all of them when the binary has no debug info (-g). Omniprobe 821ba07+.
+    unattributed_accesses: int = 0
 
 
 @dataclass
@@ -564,6 +566,7 @@ class Omniprobe:
                     dispatch_id=k.dispatch_id,
                     accesses=accesses,
                     unanalyzed_flat_accesses=getattr(k, "unanalyzed_flat_accesses", 0) or 0,
+                    unattributed_accesses=getattr(k, "unattributed_accesses", 0) or 0,
                 )
             )
         return MemoryAnalysisResult(kernels=kernels)
@@ -611,7 +614,8 @@ KNOWN_BLIND_SPOTS = [
     "Accesses through a pointer that was itself loaded from device memory (flat address "
     "space) are not recorded; pointer arguments, by-value struct members and __constant__ "
     "pointers are.",
-    "Kernels without parameters are not matched at run time and report nothing.",
+    "Code built without -g: global accesses cannot be matched to source lines and are "
+    "dropped (counted in unattributed_accesses). Build with -g.",
     "Code built at -O0 (e.g. CMake's default or Debug build type) reports no accesses: "
     "pointers go through the stack and become generic (flat) accesses. Build with -O1 or "
     "higher plus -g (CMake: -DCMAKE_BUILD_TYPE=RelWithDebInfo).",
@@ -631,6 +635,18 @@ def flat_accesses_warning(per_kernel: dict) -> Optional[str]:
     )
 
 
+def unattributed_accesses_warning(per_kernel: dict) -> Optional[str]:
+    """The warning for accesses dropped because they had no source line (no -g), or None."""
+    if not per_kernel:
+        return None
+    detail = "; ".join(f"{name}: {n}" for name, n in per_kernel.items())
+    return (
+        "Some global memory accesses could not be matched to a source line and were NOT "
+        f"analyzed, so they are missing from these results ({detail} wave executions). "
+        "The binary was most likely built without debug info: rebuild with -g (keep -O1 or higher)."
+    )
+
+
 def silent_kernels_warning(kernel_names: list[str]) -> Optional[str]:
     """The warning for instrumented kernels that reported no global or LDS access, or None."""
     if not kernel_names:
@@ -647,7 +663,7 @@ def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
     """Rank the access sites of a memory analysis, worst first.
 
     Entries that share kernel, location, memory space and access type are
-    merged first (Omniprobe sometimes splits one location into several).
+    merged first (Omniprobe before 3c6182d split one LDS location into several).
     Sites with nothing to report are left out.
 
     Returns:
@@ -722,12 +738,22 @@ def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
         for k in result.kernels
         if getattr(k, "unanalyzed_flat_accesses", 0)
     }
-    silent = [k.kernel_name for k in result.kernels if not k.accesses and k.kernel_name not in flat]
+    unattributed = {
+        k.kernel_name: k.unattributed_accesses
+        for k in result.kernels
+        if getattr(k, "unattributed_accesses", 0)
+    }
+    silent = [
+        k.kernel_name
+        for k in result.kernels
+        if not k.accesses and k.kernel_name not in flat and k.kernel_name not in unattributed
+    ]
     warnings = [
         w
         for w in (
             uninstrumented_warning(getattr(result, "uninstrumented_kernels", None)),
             flat_accesses_warning(flat),
+            unattributed_accesses_warning(unattributed),
             silent_kernels_warning(silent),
         )
         if w

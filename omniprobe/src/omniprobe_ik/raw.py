@@ -14,6 +14,7 @@ it provides them (Omniprobe 75ef62b and later), otherwise parsed from
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -31,6 +32,7 @@ ANALYZER_PLUGINS = {
     "AddressLogger": "memory",
     "BasicBlockAnalysis": "basic_blocks",
     "BasicBlockLogger": "basic_blocks",
+    "PythonHandler": "memory",
 }
 
 
@@ -48,9 +50,9 @@ class AnalyzerRun:
 
     @property
     def log(self) -> str:
-        """stdout and stderr together. The omniprobe launcher forwards what the
-        application and message handlers print on its **stderr**, so a bespoke
-        handler's printf output is found here, not in ``stdout`` alone."""
+        """stdout and stderr together. Since Omniprobe 821ba07 what the application
+        and message handlers (C++ ``report()``, Python ``handleReport``) print is on
+        ``stdout``, and Omniprobe's own messages and warnings are on ``stderr``."""
         return f"{self.stdout}\n{self.stderr}"
 
     def json_records(self) -> Iterator[dict]:
@@ -83,26 +85,42 @@ def run_analyzer(
     extra_args: Optional[list[str]] = None,
     omniprobe_path: Optional[str] = None,
     check: bool = True,
+    python_handler: Optional[str] = None,
 ) -> AnalyzerRun:
     """Run ``omniprobe -i -a <analyzer> ... -- <command>`` and return what it produced.
 
     Args:
         analyzer: An Omniprobe analyzer name (``MemoryAnalysis``, ``Heatmap``,
-            ``AddressLogger``, ``BasicBlockAnalysis``, ``BasicBlockLogger``) or
-            the path to a message-handler plugin (``.so``) you built.
+            ``AddressLogger``, ``BasicBlockAnalysis``, ``BasicBlockLogger``), the
+            path to a message-handler plugin (``.so``) you built, or the path to a
+            Python handler module (``.py``; same as ``python_handler``).
         command: Application command line; split with ``shlex``, so quoting works.
         kernel_filter: ECMAScript regex searched in the demangled kernel name.
         dispatches: ``"all"``, ``"random"`` or ``"1"``.
         log_format: ``"json"`` (written to a file, returned as ``output``) or
-            ``"csv"`` (printed; see ``log``). What custom handlers print arrives
-            on omniprobe's stderr; read ``AnalyzerRun.log``.
+            ``"csv"`` (printed). What the application and message handlers print
+            is in ``AnalyzerRun.stdout``; Omniprobe's own messages in ``stderr``.
         extra_args: More ``omniprobe`` options, e.g. ``["--library-filter", "f.json"]``.
         check: Raise ``RuntimeError`` if omniprobe exits non-zero.
+        python_handler: Path of a Python module defining ``handleAddressMessage(msg)``,
+            ``handleTimeMessage(msg)`` and optionally ``handleReport(msg)``; runs
+            it through Omniprobe's ``PythonHandler`` (``analyzer`` is then ignored;
+            build with the memory plugin). Each address message carries only
+            ``address``, ``kernel`` and ``dispatch_id``. Omniprobe 13ca707 or later.
 
     The application must be built with the plugin the analyzer needs (see
     ``ANALYZER_PLUGINS`` and ``instrumentation_flags``).
     """
     exe = _omniprobe_exe(omniprobe_path)
+    env = None
+    if python_handler is None and analyzer.endswith(".py"):
+        python_handler = analyzer
+    if python_handler is not None:
+        handler = Path(python_handler).resolve()
+        if not handler.is_file():
+            raise FileNotFoundError(f"Python handler not found: {handler}")
+        analyzer = "PythonHandler"
+        env = {**os.environ, "OMNIPROBE_PYTHON_HANDLER": str(handler)}
     if analyzer.endswith(".so"):
         analyzer = str(Path(analyzer).resolve())
     with tempfile.TemporaryDirectory(prefix="omniprobe_ik_") as tmp:
@@ -114,7 +132,7 @@ def run_analyzer(
             args += ["-k", kernel_filter]
         args += list(extra_args or [])
         args += ["--", *shlex.split(command)]
-        completed = subprocess.run(args, capture_output=True, text=True)
+        completed = subprocess.run(args, capture_output=True, text=True, env=env)
         output = out.read_text() if out.exists() else ""
     run = AnalyzerRun(
         analyzer=analyzer,

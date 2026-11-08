@@ -84,14 +84,17 @@ Examples:
     # -- run subcommand (any analyzer or a bespoke handler .so) -------------
     run_parser = subparsers.add_parser(
         "run",
-        help="Run any Omniprobe analyzer, or a message-handler plugin (.so) you built",
+        help="Run any Omniprobe analyzer, or a message handler you wrote (.so or .py)",
         description=(
             "Run omniprobe with any analyzer (Heatmap, AddressLogger, BasicBlockLogger, "
-            "MemoryAnalysis, BasicBlockAnalysis) or the path to a handler plugin, and print "
-            "what it produced."
+            "MemoryAnalysis, BasicBlockAnalysis), the path to a handler plugin (.so) or a "
+            "Python handler module (.py), and print what it produced: the analyzer's JSON, "
+            "or else what the application and handler printed (stdout)."
         ),
     )
-    run_parser.add_argument("analyzer", help="Analyzer name or path to a handler .so")
+    run_parser.add_argument(
+        "analyzer", help="Analyzer name, or path to a handler .so or Python handler .py"
+    )
     _add_common_args(run_parser)
     run_parser.add_argument(
         "--format", choices=["json", "csv"], default="json", help="Omniprobe log format"
@@ -200,7 +203,7 @@ def run_command(args) -> int:
     warning = uninstrumented_warning(run.uninstrumented_kernels)
     if warning:
         print(f"WARNING: {warning}", file=sys.stderr)
-    _write_output(run.output or run.log, args.output)
+    _write_output(run.output or run.stdout, args.output)
     return 0
 
 

@@ -75,9 +75,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix="omniprobe_example_") as tmp_dir:
         handler, app = build(Path(tmp_dir))
         run = run_analyzer(str(handler), str(app))
-        # The omniprobe launcher forwards what the application and handlers print on
-        # its stderr, so read both streams (run.log).
-        rows = counts_from(run.log)
+        # What the handler prints is on omniprobe's stdout; its own messages on stderr.
+        rows = counts_from(run.stdout)
 
     for row in rows:
         print(json.dumps(row))
