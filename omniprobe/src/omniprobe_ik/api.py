@@ -260,11 +260,21 @@ class _CapturingSubprocess:
 
 
 def _uninstrumented(upstream_result, log: Optional[str]) -> Optional[list[str]]:
-    """Uninstrumented kernel names: upstream's own list if it reports one, else from the log."""
+    """Uninstrumented kernel names: upstream's own list and the per-dispatch log lines, merged.
+
+    Upstream parses the summary Omniprobe prints at exit, but other Omniprobe threads
+    still write to stderr then and can split an entry mid-line ("... (1 dispatchComms
+    Runner shutting down"), which drops it (measured with Omniprobe 13ca707: 1 of 24
+    runs). The per-dispatch "No instrumented alternative found for" lines are written
+    earlier and stay intact, so both sources are used.
+    """
     reported = getattr(upstream_result, "uninstrumented_kernels", None)
-    if isinstance(reported, dict):
-        return [k for k in reported if not k.startswith("__amd_rocclr_")]
-    return None if log is None else parse_uninstrumented_kernels(log)
+    if not isinstance(reported, dict):
+        return None if log is None else parse_uninstrumented_kernels(log)
+    names = [k for k in reported if not k.startswith("__amd_rocclr_")]
+    if log is not None:
+        names += [k for k in parse_uninstrumented_kernels(log) if k not in names]
+    return names
 
 
 def _call_capturing_log(func, **kwargs):

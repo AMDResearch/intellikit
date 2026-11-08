@@ -71,3 +71,21 @@ def test_zero_kernels_error_names_the_uninstrumented_ones(monkeypatch):
     probe = _probe_with_log(monkeypatch, MagicMock(kernels=[]), LOG)
     with pytest.raises(NoInstrumentedKernelsError, match="other_kernel"):
         probe.analyze_memory("./app")
+
+
+def test_split_exit_summary_still_names_the_kernel(monkeypatch):
+    """Omniprobe's exit summary can be split by another thread's output; the per-dispatch
+    line still names the kernel (seen with Omniprobe 13ca707)."""
+    log = (
+        "No instrumented alternative found for other_tu_kernel(float const*, float*) [clone .kd]\n"
+        "omniprobe: WARNING: 1 kernel(s) ran uninstrumented because no instrumented clone was "
+        "found; they are missing from the analysis:\n"
+        "  other_tu_kernel(float const*, float*) [clone .kd] (1 dispatchComms Runner shutting down\n"
+        "signal_runner is shutting down\n)\n"
+    )
+    kernel = MagicMock(kernel_name="k", dispatch_id=1, accesses=[])
+    upstream = MagicMock(kernels=[kernel], uninstrumented_kernels={})  # upstream's parse lost it
+    probe = _probe_with_log(monkeypatch, upstream, log)
+    assert probe.analyze_memory("./app").uninstrumented_kernels == [
+        "other_tu_kernel(float const*, float*) [clone .kd]"
+    ]
