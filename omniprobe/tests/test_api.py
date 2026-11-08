@@ -357,3 +357,50 @@ class TestUnattributedWarning:
 
         text = unattributed_accesses_warning({"k": 64}, {"k"})
         assert "-g is not missing" in text and "Rebuild with -g" not in text
+
+
+class TestOmniprobeMessagesPassThrough:
+    """Omniprobe's own warnings reach the caller, so an empty result explains itself."""
+
+    FUTURE = (
+        "Found instrumented alternative for k(int*) [clone .kd]\n"
+        "omniprobe: WARNING: the random dispatch was excluded by the kernel filter\n"
+        "  k(int*) [clone .kd] (3 dispatches)\n"
+        "Ending kernelDB\n"
+    )
+
+    def test_messages_keep_continuation_lines(self):
+        from omniprobe_ik.api import omniprobe_messages
+
+        assert omniprobe_messages(self.FUTURE) == [
+            "omniprobe: WARNING: the random dispatch was excluded by the kernel filter\n"
+            "  k(int*) [clone .kd] (3 dispatches)"
+        ]
+        assert omniprobe_messages(None) == []
+
+    def test_unknown_warning_is_in_the_error(self):
+        from omniprobe_ik import NoInstrumentedKernelsError
+        from omniprobe_ik.api import _raise_no_data
+
+        with pytest.raises(NoInstrumentedKernelsError) as err:
+            _raise_no_data("memory", "./app", None, [], self.FUTURE)
+        assert "the random dispatch was excluded by the kernel filter" in str(err.value)
+
+    def test_random_with_filter_is_named_as_the_cause(self):
+        from omniprobe_ik import NoInstrumentedKernelsError
+        from omniprobe_ik.api import _raise_no_data
+
+        log = (
+            "Found instrumented alternative for a(int*) [clone .kd]\n"
+            "Kernel filter excluded a(int*) [clone .kd]; running uninstrumented\n"
+            "Found instrumented alternative for b(int*) [clone .kd]\n"
+        )
+        with pytest.raises(NoInstrumentedKernelsError) as err:
+            _raise_no_data("memory", "./app", "^b", [], log, "random")
+        text = str(err.value)
+        assert "dispatches='random'" in text and "do not rebuild" in text
+        assert "Rebuild the application" not in text
+        # Same log with dispatches="all" keeps the ordinary explanation.
+        with pytest.raises(NoInstrumentedKernelsError) as err:
+            _raise_no_data("memory", "./app", "^b", [], log, "all")
+        assert "dispatches='random'" not in str(err.value)

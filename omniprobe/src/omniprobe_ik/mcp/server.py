@@ -52,6 +52,8 @@ def analyze_memory(
             kernel name ('void name<4>(...)' for a template kernel, so '^name' misses
             it). If it matches no dispatched kernel, the error says so and lists them.
         dispatches: Which dispatches to capture — 'all', 'random', or '1' (default: 'all').
+            With kernel_filter, 'random' often captures nothing: Omniprobe draws the
+            dispatch from all dispatches, including the ones the filter excludes.
 
     Returns:
         Dictionary with:
@@ -119,6 +121,8 @@ def analyze_basic_blocks(
         kernel_filter: Optional ECMAScript regex, searched anywhere in the demangled
             kernel name ('^name' misses a template kernel 'void name<4>(...)').
         dispatches: Which dispatches to capture — 'all', 'random', or '1' (default: 'all').
+            With kernel_filter, 'random' often captures nothing: Omniprobe draws the
+            dispatch from all dispatches, including the ones the filter excludes.
 
     Returns:
         Dictionary with 'kernels' list. Each kernel contains:
@@ -139,6 +143,7 @@ def analyze_basic_blocks(
     warning = uninstrumented_warning(result.uninstrumented_kernels)
     return {
         "warnings": [warning] if warning else [],
+        "omniprobe_messages": result.omniprobe_messages,
         "uninstrumented_kernels": result.uninstrumented_kernels,
         "kernels": [
             {
@@ -235,6 +240,7 @@ def run_analyzer(
         "stderr": run.stderr[-max_output_chars:],
         "truncated": any(len(s) > max_output_chars for s in (run.output, run.stdout, run.stderr)),
         "uninstrumented_kernels": run.uninstrumented_kernels,
+        "omniprobe_messages": run.omniprobe_messages,
     }
 
 

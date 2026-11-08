@@ -25,6 +25,7 @@ from typing import Iterator, Optional
 
 from .api import (
     _NOT_INSTALLED,
+    omniprobe_messages,
     KernelFilterMatchedNothingError,
     find_plugin_dir,
     kernel_filter_message,
@@ -54,6 +55,8 @@ class AnalyzerRun:
     stderr: str
     output: str = ""  # contents of the -o file (JSON formats); "" if none was written
     uninstrumented_kernels: list[str] = field(default_factory=list)
+    # Omniprobe's own "omniprobe: WARNING/ERROR:" messages, verbatim.
+    omniprobe_messages: list[str] = field(default_factory=list)
 
     @property
     def log(self) -> str:
@@ -103,7 +106,9 @@ def run_analyzer(
             Python handler module (``.py``; same as ``python_handler``).
         command: Application command line; split with ``shlex``, so quoting works.
         kernel_filter: ECMAScript regex searched in the demangled kernel name.
-        dispatches: ``"all"``, ``"random"`` or ``"1"``.
+        dispatches: ``"all"``, ``"random"`` or ``"1"``. With *kernel_filter*,
+            ``"random"`` often captures nothing (Omniprobe 22c4d95 draws from all
+            dispatches, including excluded ones).
         log_format: ``"json"`` (written to a file, returned as ``output``) or
             ``"csv"`` (printed). What the application and message handlers print
             is in ``AnalyzerRun.stdout``; Omniprobe's own messages in ``stderr``.
@@ -158,6 +163,7 @@ def run_analyzer(
         uninstrumented_kernels=parse_uninstrumented_kernels(
             f"{completed.stdout}\n{completed.stderr}"
         ),
+        omniprobe_messages=omniprobe_messages(f"{completed.stdout}\n{completed.stderr}"),
     )
     if python_handler is not None:
         # Omniprobe 13ca707 fell back to its default handler (exit 0) when the module was

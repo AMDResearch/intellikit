@@ -142,7 +142,10 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         "-d",
         choices=["all", "random", "1"],
         default="all",
-        help="Which dispatches to capture (default: all)",
+        help=(
+            "Which dispatches to capture (default: all). With --kernel, 'random' often "
+            "captures nothing: Omniprobe draws from all dispatches, including excluded ones"
+        ),
     )
     parser.add_argument(
         "--output",

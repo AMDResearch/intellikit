@@ -566,16 +566,67 @@ def kernel_filter_message(command: str, kernel_filter: str, dispatched: list[str
     )
 
 
-def _raise_no_data(analysis, command, kernel_filter, uninstrumented, log) -> None:
+_OMNIPROBE_MESSAGE = re.compile(r"omniprobe: (?:WARNING|ERROR): .*(?:\n  .*)*")
+_INSTRUMENTED = re.compile(r"^Found instrumented alternative for (.+?)\s*$", re.M)
+_EXCLUDED = re.compile(r"^Kernel filter excluded (.+?); running uninstrumented\s*$", re.M)
+
+
+def omniprobe_messages(log: Optional[str]) -> list[str]:
+    """Omniprobe's own ``omniprobe: WARNING:`` / ``omniprobe: ERROR:`` messages in a run's log.
+
+    Each message keeps its indented continuation lines (e.g. the kernel list after
+    the kernel-filter warning). Passed through so that callers see why Omniprobe
+    reported what it did, including warnings this wrapper does not know yet.
+    """
+    if not log:
+        return []
+    seen: list[str] = []
+    for match in _OMNIPROBE_MESSAGE.finditer(log):
+        text = match.group(0).rstrip()
+        if text not in seen:
+            seen.append(text)
+    return seen
+
+
+def random_dispatch_missed(
+    log: Optional[str], kernel_filter: Optional[str], dispatches: str
+) -> bool:
+    """True if ``dispatches="random"`` with a filter is the likely reason nothing was captured.
+
+    Omniprobe 22c4d95 draws the random dispatch from all dispatches, including the
+    ones the kernel filter excludes (measured: 9 of 12 runs empty in pnimpl's repro,
+    4 of 4 here), so a kernel the filter matches can run uninstrumented.
+    """
+    if dispatches != "random" or kernel_filter is None or not log:
+        return False
+    excluded = set(_EXCLUDED.findall(log))
+    return any(name not in excluded for name in _INSTRUMENTED.findall(log))
+
+
+def _raise_no_data(
+    analysis, command, kernel_filter, uninstrumented, log, dispatches: str = "all"
+) -> None:
+    messages = omniprobe_messages(log)
     missed = kernel_filter_missed(log)
     if missed is not None:
         used_filter, dispatched = missed
-        raise KernelFilterMatchedNothingError(
-            kernel_filter_message(command, kernel_filter or used_filter, dispatched), dispatched
-        )
-    raise NoInstrumentedKernelsError(
-        _no_data_message(analysis, command, kernel_filter, uninstrumented, log)
-    )
+        text = kernel_filter_message(command, kernel_filter or used_filter, dispatched)
+        if messages:
+            text += "\nOmniprobe's own messages:\n" + "\n".join(messages)
+        raise KernelFilterMatchedNothingError(text, dispatched)
+    if random_dispatch_missed(log, kernel_filter, dispatches):
+        lines = [
+            f"Omniprobe captured nothing for {command!r} with dispatches='random' and "
+            f"kernel_filter {kernel_filter!r}. The filter matches an instrumented kernel, but "
+            "Omniprobe picks the random dispatch among all dispatches, including the ones the "
+            "filter excludes, so the matching kernel can run uninstrumented. The application is "
+            "instrumented; do not rebuild it. Use dispatches='all' (or '1') with a filter."
+        ]
+    else:
+        lines = [_no_data_message(analysis, command, kernel_filter, uninstrumented, log)]
+    if messages:
+        lines.append("Omniprobe's own messages:\n" + "\n".join(messages))
+    raise NoInstrumentedKernelsError("\n".join(lines))
 
 
 def _no_data_message(
@@ -665,6 +716,8 @@ class MemoryAnalysisResult:
 
     kernels: list[KernelMemoryResult] = field(default_factory=list)
     uninstrumented_kernels: Optional[list[str]] = field(default_factory=list)
+    # Omniprobe's own "omniprobe: WARNING/ERROR:" messages from the run, verbatim.
+    omniprobe_messages: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -702,6 +755,8 @@ class BasicBlockResult:
 
     kernels: list[KernelBBResult] = field(default_factory=list)
     uninstrumented_kernels: Optional[list[str]] = field(default_factory=list)
+    # Omniprobe's own "omniprobe: WARNING/ERROR:" messages from the run, verbatim.
+    omniprobe_messages: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -757,7 +812,9 @@ class Omniprobe:
                 demangled kernel name (a template kernel's name starts with its
                 return type, e.g. ``void name<4>(...)``, so ``^name`` misses it).
             dispatches: Which dispatches to capture — ``"all"``, ``"random"``,
-                or ``"1"``.
+                or ``"1"``. With a *kernel_filter*, ``"random"`` often captures
+                nothing (Omniprobe 22c4d95 draws from all dispatches, including the
+                excluded ones); the error then says so.
 
         Returns:
             A :class:`MemoryAnalysisResult` containing per-kernel memory
@@ -778,8 +835,11 @@ class Omniprobe:
         )
         result = self._convert_memory_result(upstream_result)
         result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
+        result.omniprobe_messages = omniprobe_messages(log)
         if not result.kernels:
-            _raise_no_data("memory", command, kernel_filter, result.uninstrumented_kernels, log)
+            _raise_no_data(
+                "memory", command, kernel_filter, result.uninstrumented_kernels, log, dispatches
+            )
         _warn_uninstrumented(result.uninstrumented_kernels)
         return result
 
@@ -797,7 +857,9 @@ class Omniprobe:
                 demangled kernel name (a template kernel's name starts with its
                 return type, e.g. ``void name<4>(...)``, so ``^name`` misses it).
             dispatches: Which dispatches to capture — ``"all"``, ``"random"``,
-                or ``"1"``.
+                or ``"1"``. With a *kernel_filter*, ``"random"`` often captures
+                nothing (Omniprobe 22c4d95 draws from all dispatches, including the
+                excluded ones); the error then says so.
 
         Returns:
             A :class:`BasicBlockResult` containing per-kernel basic-block
@@ -818,9 +880,15 @@ class Omniprobe:
         )
         result = self._convert_bb_result(upstream_result)
         result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
+        result.omniprobe_messages = omniprobe_messages(log)
         if not result.kernels:
             _raise_no_data(
-                "basic_blocks", command, kernel_filter, result.uninstrumented_kernels, log
+                "basic_blocks",
+                command,
+                kernel_filter,
+                result.uninstrumented_kernels,
+                log,
+                dispatches,
             )
         _warn_uninstrumented(result.uninstrumented_kernels)
         return result
@@ -1076,6 +1144,7 @@ def summarize_memory(result: MemoryAnalysisResult, top: int = 10) -> dict:
     return {
         "warnings": warnings,
         "uninstrumented_kernels": getattr(result, "uninstrumented_kernels", None),
+        "omniprobe_messages": getattr(result, "omniprobe_messages", []),
         "global_sites": global_sites[:top],
         "lds_sites": lds_sites[:top],
         "kernels": sorted(

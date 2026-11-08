@@ -54,7 +54,9 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
    The regex is searched anywhere in the **demangled** name (`'advance'`, `'gstride<16>'`). A
    template kernel's name starts with its return type (`void gstride<16>(float const*, float*)`), so
    `'^gstride'` matches nothing; a filter that matches no dispatched kernel is an error listing the
-   kernels that were dispatched.
+   kernels that were dispatched. With `--kernel`, `--dispatches random` often captures nothing
+   (Omniprobe draws the dispatch from all dispatches, including excluded ones). Omniprobe's own
+   warnings are in `omniprobe_messages` and quoted in errors.
 3. **Read the ranked summary** ("Top sites", or `summary` from MCP / `summarize_memory()`): worst
    sites first, with file:line:column, read/write, and a per-wave-execution value (below).
    **Check `warnings` / `uninstrumented_kernels` first**: a kernel listed there ran without

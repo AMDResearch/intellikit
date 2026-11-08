@@ -267,7 +267,7 @@ probe = Omniprobe(
 
 - `command`: application command line to instrument
 - `kernel_filter`: optional ECMAScript regex limiting which kernels are analysed, searched anywhere in the **demangled** kernel name (for example `'gstride<16>'`; a mangled name such as `_Z7gstride...` matches nothing). A template kernel's demangled name starts with its return type (`void gstride<16>(float const*, float*)`), so `'^gstride'` does not match it. If the filter matches none of the dispatched kernels, both methods raise `KernelFilterMatchedNothingError` (a `NoInstrumentedKernelsError`) listing the kernels that ran (Omniprobe b71927b and later print that list).
-- `dispatches`: which dispatches to capture — `"all"`, `"random"`, or `"1"`
+- `dispatches`: which dispatches to capture — `"all"` (default), `"random"`, or `"1"`. With a `kernel_filter`, `"random"` often captures nothing: Omniprobe 22c4d95 draws the random dispatch from all dispatches, including the ones the filter excludes (empty in 4 of 4 runs measured here); the error then names this cause. Results carry Omniprobe's own `omniprobe: WARNING:`/`ERROR:` messages in `omniprobe_messages`, and errors quote them.
 
 Constructing `Omniprobe` raises `ImportError` if Omniprobe's Python API is not importable, and `FileNotFoundError` if the executable cannot be found. Both methods raise `NoInstrumentedKernelsError` (a `RuntimeError`) when Omniprobe reports no kernel — almost always a binary built without the plugin; the message names the flags to rebuild with.
 
