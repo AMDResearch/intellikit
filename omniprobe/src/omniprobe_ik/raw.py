@@ -106,9 +106,10 @@ def run_analyzer(
             Python handler module (``.py``; same as ``python_handler``).
         command: Application command line; split with ``shlex``, so quoting works.
         kernel_filter: ECMAScript regex searched in the demangled kernel name.
-        dispatches: ``"all"``, ``"random"`` or ``"1"``. With *kernel_filter*,
-            ``"random"`` often captures nothing (Omniprobe 22c4d95 draws from all
-            dispatches, including excluded ones).
+        dispatches: Omniprobe's ``-d`` spec, per kernel from 1: ``"all"``, ``"N"``,
+            ``"A-B"``, ``"A-"``, comma lists, ``:count[:stride]`` repeats (Omniprobe
+            dbb53ed+). Omniprobe validates it: a malformed spec exits 2 before the
+            application runs, raised here as ``ValueError``.
         log_format: ``"json"`` (written to a file, returned as ``output``) or
             ``"csv"`` (printed). What the application and message handlers print
             is in ``AnalyzerRun.stdout``; Omniprobe's own messages in ``stderr``.
@@ -125,7 +126,8 @@ def run_analyzer(
             ``xcc_id``, ``timestamp``; Omniprobe b9492cd+), ``handleAddressMessage(msg)``
             (once per active lane: ``address``) and ``handleTimeMessage(msg)``, and
             optionally ``handleReport(msg)`` once per dispatch. Every message has
-            ``kernel`` and ``dispatch_id``. Omniprobe 13ca707 or later.
+            ``kernel`` and ``dispatch_id`` (and ``kernel_dispatch``, the kernel's own
+            dispatch number, from Omniprobe dbb53ed). Omniprobe 13ca707 or later.
 
     The application must be built with the plugin the analyzer needs (see
     ``ANALYZER_PLUGINS`` and ``instrumentation_flags``).
@@ -175,6 +177,10 @@ def run_analyzer(
             raise RuntimeError(f"Python handler not used: {failed[0]}")
     if check and completed.returncode != 0:
         log = f"{completed.stdout}\n{completed.stderr}"
+        # Omniprobe dbb53ed+ rejects a malformed -d with exit 2 and an argparse error line.
+        bad_spec = [line for line in log.splitlines() if "invalid dispatch spec" in line]
+        if bad_spec:
+            raise ValueError(bad_spec[0].split("error: ", 1)[-1])
         # Omniprobe 149cf2c+ ends configuration errors with "omniprobe: ERROR: ..." and
         # exit status 1 before the application runs; lead with those lines.
         errors = [line for line in log.splitlines() if "omniprobe: ERROR:" in line]
@@ -245,6 +251,8 @@ class KernelHeatmap:
     dispatch_id: int
     page_size: int
     pages: list[HeatmapPage] = field(default_factory=list)
+    # The kernel's own dispatch number (from 1), as -d selects; 0 before Omniprobe dbb53ed.
+    kernel_dispatch: int = 0
 
 
 @dataclass
@@ -278,6 +286,8 @@ class AddressRecord:
     line: int
     column: int
     addresses: list[int] = field(default_factory=list)
+    # The kernel's own dispatch number (from 1), as -d selects; 0 before Omniprobe dbb53ed.
+    kernel_dispatch: int = 0
 
 
 @dataclass
@@ -306,6 +316,8 @@ class BBRecord:
     source_file: str
     line: int
     column: int
+    # The kernel's own dispatch number (from 1), as -d selects; 0 before Omniprobe dbb53ed.
+    kernel_dispatch: int = 0
 
 
 @dataclass
@@ -319,6 +331,7 @@ def _common(r: dict) -> dict:
     return {
         "kernel_name": r.get("kernel_name", r.get("kernel", "")),
         "dispatch_id": r.get("dispatch_id", 0),
+        "kernel_dispatch": r.get("kernel_dispatch", 0),
         "timestamp": r.get("timestamp", 0),
         "exec_mask": r.get("exec", r.get("exec_mask", 0)),
         "active_lane_count": r.get("active_lane_count", 0),
@@ -381,7 +394,13 @@ def analyze_heatmap(
         ]
         size = pages[0].end_address - pages[0].start_address + 1 if pages else 0
         result.kernels.append(
-            KernelHeatmap(r.get("kernel", ""), r.get("dispatch_id", 0), size, pages)
+            KernelHeatmap(
+                r.get("kernel", ""),
+                r.get("dispatch_id", 0),
+                size,
+                pages,
+                kernel_dispatch=r.get("kernel_dispatch", 0),
+            )
         )
     return result
 

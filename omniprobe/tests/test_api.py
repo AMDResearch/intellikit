@@ -40,6 +40,7 @@ def _make_upstream_memory_result():
     kernel = MagicMock()
     kernel.kernel_name = "matmul_kernel"
     kernel.dispatch_id = 0
+    kernel.kernel_dispatch = 3
     kernel.accesses = [access]
 
     result = MagicMock()
@@ -60,6 +61,7 @@ def _make_upstream_bb_result():
     kernel = MagicMock()
     kernel.kernel_name = "matmul_kernel"
     kernel.dispatch_id = 0
+    kernel.kernel_dispatch = 2
     kernel.basic_blocks = [bb]
 
     result = MagicMock()
@@ -102,6 +104,7 @@ class TestAnalyzeMemory:
         assert isinstance(kernel, KernelMemoryResult)
         assert kernel.kernel_name == "matmul_kernel"
         assert kernel.dispatch_id == 0
+        assert kernel.kernel_dispatch == 3
 
         access = kernel.accesses[0]
         assert isinstance(access, MemoryAccess)
@@ -129,6 +132,7 @@ class TestAnalyzeBasicBlocks:
         kernel = result.kernels[0]
         assert isinstance(kernel, KernelBBResult)
         assert kernel.kernel_name == "matmul_kernel"
+        assert kernel.kernel_dispatch == 2
 
         bb = kernel.basic_blocks[0]
         assert isinstance(bb, BasicBlock)
@@ -364,7 +368,7 @@ class TestOmniprobeMessagesPassThrough:
 
     FUTURE = (
         "Found instrumented alternative for k(int*) [clone .kd]\n"
-        "omniprobe: WARNING: the random dispatch was excluded by the kernel filter\n"
+        "omniprobe: WARNING: a warning this IntelliKit version does not know\n"
         "  k(int*) [clone .kd] (3 dispatches)\n"
         "Ending kernelDB\n"
     )
@@ -373,7 +377,7 @@ class TestOmniprobeMessagesPassThrough:
         from omniprobe_ik.api import omniprobe_messages
 
         assert omniprobe_messages(self.FUTURE) == [
-            "omniprobe: WARNING: the random dispatch was excluded by the kernel filter\n"
+            "omniprobe: WARNING: a warning this IntelliKit version does not know\n"
             "  k(int*) [clone .kd] (3 dispatches)"
         ]
         assert omniprobe_messages(None) == []
@@ -384,23 +388,43 @@ class TestOmniprobeMessagesPassThrough:
 
         with pytest.raises(NoInstrumentedKernelsError) as err:
             _raise_no_data("memory", "./app", None, [], self.FUTURE)
-        assert "the random dispatch was excluded by the kernel filter" in str(err.value)
+        assert "a warning this IntelliKit version does not know" in str(err.value)
 
-    def test_random_with_filter_is_named_as_the_cause(self):
+    def test_no_random_dispatch_explanation(self):
+        """Omniprobe dbb53ed removed -d random (it exits 2), so the random-with-filter
+        explanation and its helper are gone; an empty capture gets the ordinary message."""
+        import omniprobe_ik.api as api
         from omniprobe_ik import NoInstrumentedKernelsError
-        from omniprobe_ik.api import _raise_no_data
 
+        assert not hasattr(api, "random_dispatch_missed")
         log = (
             "Found instrumented alternative for a(int*) [clone .kd]\n"
             "Kernel filter excluded a(int*) [clone .kd]; running uninstrumented\n"
-            "Found instrumented alternative for b(int*) [clone .kd]\n"
         )
         with pytest.raises(NoInstrumentedKernelsError) as err:
-            _raise_no_data("memory", "./app", "^b", [], log, "random")
-        text = str(err.value)
-        assert "dispatches='random'" in text and "do not rebuild" in text
-        assert "Rebuild the application" not in text
-        # Same log with dispatches="all" keeps the ordinary explanation.
-        with pytest.raises(NoInstrumentedKernelsError) as err:
-            _raise_no_data("memory", "./app", "^b", [], log, "all")
-        assert "dispatches='random'" not in str(err.value)
+            api._raise_no_data("memory", "./app", "^b", [], log)
+        assert "random" not in str(err.value)
+
+
+class TestKernelDispatch:
+    """Results carry Omniprobe's per-kernel dispatch number (dbb53ed+), 0 when absent."""
+
+    def test_missing_in_older_upstream_is_zero(self):
+        from types import SimpleNamespace
+
+        old = SimpleNamespace(
+            kernels=[SimpleNamespace(kernel_name="k", dispatch_id=4, accesses=[], basic_blocks=[])]
+        )
+        assert Omniprobe._convert_memory_result(old).kernels[0].kernel_dispatch == 0
+        assert Omniprobe._convert_bb_result(old).kernels[0].kernel_dispatch == 0
+
+    def test_raw_records_carry_it(self):
+        import dataclasses
+
+        from omniprobe_ik.raw import AddressRecord, BBRecord, KernelHeatmap, _common
+
+        common = _common({"kernel": "k", "dispatch_id": 7, "kernel_dispatch": 2})
+        assert (common["dispatch_id"], common["kernel_dispatch"]) == (7, 2)
+        assert _common({"kernel": "k"})["kernel_dispatch"] == 0
+        for cls in (AddressRecord, BBRecord, KernelHeatmap):
+            assert "kernel_dispatch" in {f.name for f in dataclasses.fields(cls)}

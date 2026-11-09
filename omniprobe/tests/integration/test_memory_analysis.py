@@ -140,23 +140,17 @@ def test_kernel_filter_matching_nothing_is_its_own_error(probe, tmp_path_factory
     assert "matched none of the instrumented kernels" in result.content[0].text
 
 
-def test_random_dispatch_with_filter_explains_an_empty_capture(probe, strided_binary):
-    """Omniprobe 22c4d95 draws the random dispatch from all dispatches, including ones the
-    filter excludes, so most runs capture nothing. Each run must either return the filtered
-    kernel or say that random-with-filter is why (not ask for a rebuild)."""
-    from omniprobe_ik import NoInstrumentedKernelsError
+def test_dispatch_spec_selects_and_reports_kernel_dispatch(probe, strided_binary):
+    """Omniprobe dbb53ed: -d numbers dispatches per kernel from 1, results say which one,
+    and a malformed spec is rejected before the application runs."""
+    from omniprobe_ik import run_analyzer
 
-    empty = 0
-    for _ in range(6):
-        try:
-            result = probe.analyze_memory(
-                command=str(strided_binary), kernel_filter="strided", dispatches="random"
-            )
-            assert all("strided" in k.kernel_name for k in result.kernels)
-        except NoInstrumentedKernelsError as err:
-            empty += 1
-            assert "dispatches='random'" in str(err) and "do not rebuild" in str(err), str(err)
-    assert empty >= 1, "expected at least one empty capture in 6 runs (measured: 4 of 4 here)"
+    result = probe.analyze_memory(command=str(strided_binary), dispatches="1")
+    assert result.kernels and all(k.kernel_dispatch == 1 for k in result.kernels)
+    with pytest.raises(ValueError, match="2,x"):
+        probe.analyze_memory(command=str(strided_binary), dispatches="2,x")
+    with pytest.raises(ValueError, match="invalid dispatch spec '2,x'"):
+        run_analyzer("MemoryAnalysis", str(strided_binary), dispatches="2,x")
 
 
 def test_omniprobe_messages_are_passed_through(probe, strided_binary):

@@ -140,11 +140,11 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--dispatches",
         "-d",
-        choices=["all", "random", "1"],
         default="all",
         help=(
-            "Which dispatches to capture (default: all). With --kernel, 'random' often "
-            "captures nothing: Omniprobe draws from all dispatches, including excluded ones"
+            "Which dispatches of each kernel to instrument, numbered per kernel from 1 "
+            "(default: all): N, A-B, A-, comma lists, :count[:stride] repeats, e.g. 2,5 or "
+            "1::100. Passed to Omniprobe (dbb53ed+), which validates it; see 'omniprobe -h'"
         ),
     )
     parser.add_argument(
@@ -264,6 +264,12 @@ def _format_memory_summary(result) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _dispatch_label(kernel) -> str:
+    """'dispatch D' plus the kernel's own dispatch number (what --dispatches selects), if known."""
+    kd = getattr(kernel, "kernel_dispatch", 0)
+    return f"dispatch {kernel.dispatch_id}" + (f", kernel dispatch {kd}" if kd else "")
+
+
 def _format_memory_result(result) -> str:
     """Format memory analysis result for display."""
     if not result.kernels:
@@ -271,7 +277,7 @@ def _format_memory_result(result) -> str:
 
     lines = []
     for kernel in result.kernels:
-        lines.append(f"Kernel: {kernel.kernel_name} (dispatch {kernel.dispatch_id})")
+        lines.append(f"Kernel: {kernel.kernel_name} ({_dispatch_label(kernel)})")
         lines.append(f"  Memory accesses: {len(kernel.accesses)}")
 
         for access in kernel.accesses:
@@ -297,7 +303,7 @@ def _format_bb_result(result) -> str:
 
     lines = []
     for kernel in result.kernels:
-        lines.append(f"Kernel: {kernel.kernel_name} (dispatch {kernel.dispatch_id})")
+        lines.append(f"Kernel: {kernel.kernel_name} ({_dispatch_label(kernel)})")
         lines.append(f"  Basic blocks: {len(kernel.basic_blocks)}")
 
         for bb in sorted(kernel.basic_blocks, key=lambda b: b.wave_visits, reverse=True):
@@ -392,6 +398,12 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
         return 130
+
+    except ValueError as e:
+        # A malformed --dispatches spec (Omniprobe's DispatchSpecError is a ValueError)
+        # is a usage error, as for Omniprobe itself: exit 2.
+        print(f"\nError: {e}", file=sys.stderr)
+        return 2 if "dispatch" in str(e) else 1
 
     except Exception as e:
         print(f"\nError: {e}", file=sys.stderr)

@@ -51,9 +51,9 @@ def analyze_memory(
         kernel_filter: Optional ECMAScript regex, searched anywhere in the demangled
             kernel name ('void name<4>(...)' for a template kernel, so '^name' misses
             it). If it matches no dispatched kernel, the error says so and lists them.
-        dispatches: Which dispatches to capture — 'all', 'random', or '1' (default: 'all').
-            With kernel_filter, 'random' often captures nothing: Omniprobe draws the
-            dispatch from all dispatches, including the ones the filter excludes.
+        dispatches: Which dispatches of each kernel to instrument, numbered per kernel
+            from 1 (default 'all'): 'N', 'A-B', 'A-', comma lists, ':count[:stride]'
+            repeats, e.g. '2,5' or '1::100'. Validated by Omniprobe (dbb53ed+).
 
     Returns:
         Dictionary with:
@@ -80,6 +80,7 @@ def analyze_memory(
             {
                 "kernel_name": k.kernel_name,
                 "dispatch_id": k.dispatch_id,
+                "kernel_dispatch": k.kernel_dispatch,
                 "unanalyzed_flat_accesses": k.unanalyzed_flat_accesses,
                 "unattributed_accesses": k.unattributed_accesses,
                 "accesses": [
@@ -120,9 +121,9 @@ def analyze_basic_blocks(
         command: Shell command to analyze (e.g., './my_gpu_app').
         kernel_filter: Optional ECMAScript regex, searched anywhere in the demangled
             kernel name ('^name' misses a template kernel 'void name<4>(...)').
-        dispatches: Which dispatches to capture — 'all', 'random', or '1' (default: 'all').
-            With kernel_filter, 'random' often captures nothing: Omniprobe draws the
-            dispatch from all dispatches, including the ones the filter excludes.
+        dispatches: Which dispatches of each kernel to instrument, numbered per kernel
+            from 1 (default 'all'): 'N', 'A-B', 'A-', comma lists, ':count[:stride]'
+            repeats, e.g. '2,5' or '1::100'. Validated by Omniprobe (dbb53ed+).
 
     Returns:
         Dictionary with 'kernels' list. Each kernel contains:
@@ -149,6 +150,7 @@ def analyze_basic_blocks(
             {
                 "kernel_name": k.kernel_name,
                 "dispatch_id": k.dispatch_id,
+                "kernel_dispatch": k.kernel_dispatch,
                 "basic_blocks": [
                     {
                         "bb_id": b.bb_id,
@@ -218,8 +220,9 @@ def run_analyzer(
     -- once per wave-level memory instruction, with addresses (one per active
     lane), lanes, exec, access_type, memory_space, access_size, source_file/line/
     column, block_idx, wave_num, cu_id, se_id, xcc_id, timestamp, kernel,
-    dispatch_id -- and/or handleAddressMessage(msg) (once per active lane: address,
-    kernel, dispatch_id), and optionally handleReport(msg) once per dispatch;
+    dispatch_id, kernel_dispatch -- and/or handleAddressMessage(msg) (once per active
+    lane: address, kernel, dispatch_id, kernel_dispatch), and optionally
+    handleReport(msg) once per dispatch;
     kernel-argument loads arrive as memory_space 'constant'. Build the application
     with the plugin the analyzer needs first (memory plugin for Heatmap/
     AddressLogger/Python handlers, basic-block plugin for BasicBlockLogger).

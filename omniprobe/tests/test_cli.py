@@ -30,9 +30,23 @@ class TestCLIParser:
         assert args.kernel == "matmul.*"
 
     def test_dispatches(self):
+        """Omniprobe dbb53ed's -d grammar passes through unchanged (validated by Omniprobe)."""
         parser = create_parser()
-        args = parser.parse_args(["memory", "--dispatches", "random", "./app"])
-        assert args.dispatches == "random"
+        for spec in ("all", "1", "2,5", "1-10", "10-", "1,3,4:3:100", "1::100"):
+            args = parser.parse_args(["memory", "--dispatches", spec, "./app"])
+            assert args.dispatches == spec
+
+    def test_malformed_dispatches_exit_2(self, monkeypatch, capsys):
+        """Omniprobe's DispatchSpecError (a ValueError) is a usage error: exit 2, message shown."""
+        import omniprobe_ik.cli.main as cli
+
+        def bad(args):
+            raise ValueError("invalid dispatch spec '2,x': expected a number")
+
+        monkeypatch.setattr(cli, "memory_command", bad)
+        monkeypatch.setattr(cli.sys, "argv", ["omniprobe-ik", "memory", "-d", "2,x", "./app"])
+        assert cli.main() == 2
+        assert "invalid dispatch spec '2,x'" in capsys.readouterr().err
 
     def test_output_flag(self):
         parser = create_parser()

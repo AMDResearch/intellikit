@@ -588,24 +588,7 @@ def omniprobe_messages(log: Optional[str]) -> list[str]:
     return seen
 
 
-def random_dispatch_missed(
-    log: Optional[str], kernel_filter: Optional[str], dispatches: str
-) -> bool:
-    """True if ``dispatches="random"`` with a filter is the likely reason nothing was captured.
-
-    Omniprobe 22c4d95 draws the random dispatch from all dispatches, including the
-    ones the kernel filter excludes (measured: 9 of 12 runs empty in pnimpl's repro,
-    4 of 4 here), so a kernel the filter matches can run uninstrumented.
-    """
-    if dispatches != "random" or kernel_filter is None or not log:
-        return False
-    excluded = set(_EXCLUDED.findall(log))
-    return any(name not in excluded for name in _INSTRUMENTED.findall(log))
-
-
-def _raise_no_data(
-    analysis, command, kernel_filter, uninstrumented, log, dispatches: str = "all"
-) -> None:
+def _raise_no_data(analysis, command, kernel_filter, uninstrumented, log) -> None:
     messages = omniprobe_messages(log)
     missed = kernel_filter_missed(log)
     if missed is not None:
@@ -614,16 +597,7 @@ def _raise_no_data(
         if messages:
             text += "\nOmniprobe's own messages:\n" + "\n".join(messages)
         raise KernelFilterMatchedNothingError(text, dispatched)
-    if random_dispatch_missed(log, kernel_filter, dispatches):
-        lines = [
-            f"Omniprobe captured nothing for {command!r} with dispatches='random' and "
-            f"kernel_filter {kernel_filter!r}. The filter matches an instrumented kernel, but "
-            "Omniprobe picks the random dispatch among all dispatches, including the ones the "
-            "filter excludes, so the matching kernel can run uninstrumented. The application is "
-            "instrumented; do not rebuild it. Use dispatches='all' (or '1') with a filter."
-        ]
-    else:
-        lines = [_no_data_message(analysis, command, kernel_filter, uninstrumented, log)]
+    lines = [_no_data_message(analysis, command, kernel_filter, uninstrumented, log)]
     if messages:
         lines.append("Omniprobe's own messages:\n" + "\n".join(messages))
     raise NoInstrumentedKernelsError("\n".join(lines))
@@ -703,6 +677,9 @@ class KernelMemoryResult:
     # Global accesses dropped because no ISA instruction was found for their source
     # line: all of them when the binary has no debug info (-g). Omniprobe 821ba07+.
     unattributed_accesses: int = 0
+    # This kernel's own dispatch number (its n-th launch, from 1), the number ``dispatches``
+    # selects; dispatch_id counts all kernels together. 0 before Omniprobe dbb53ed.
+    kernel_dispatch: int = 0
 
 
 @dataclass
@@ -744,6 +721,9 @@ class KernelBBResult:
     kernel_name: str
     dispatch_id: int
     basic_blocks: list[BasicBlock] = field(default_factory=list)
+    # This kernel's own dispatch number (its n-th launch, from 1), the number ``dispatches``
+    # selects; dispatch_id counts all kernels together. 0 before Omniprobe dbb53ed.
+    kernel_dispatch: int = 0
 
 
 @dataclass
@@ -811,10 +791,12 @@ class Omniprobe:
             kernel_filter: Optional ECMAScript regex, searched anywhere in the
                 demangled kernel name (a template kernel's name starts with its
                 return type, e.g. ``void name<4>(...)``, so ``^name`` misses it).
-            dispatches: Which dispatches to capture — ``"all"``, ``"random"``,
-                or ``"1"``. With a *kernel_filter*, ``"random"`` often captures
-                nothing (Omniprobe 22c4d95 draws from all dispatches, including the
-                excluded ones); the error then says so.
+            dispatches: Which dispatches of each kernel to instrument, numbered
+                per kernel from 1: ``"all"`` (default), ``"N"``, ``"A-B"``
+                (inclusive), ``"A-"`` (A-th and later), comma lists, and a
+                ``:count[:stride]`` repeat (``"1::100"`` = every 100th). Omniprobe
+                dbb53ed or later; a malformed spec raises ``ValueError``
+                (``DispatchSpecError``) before the application runs.
 
         Returns:
             A :class:`MemoryAnalysisResult` containing per-kernel memory
@@ -837,9 +819,7 @@ class Omniprobe:
         result.uninstrumented_kernels = _uninstrumented(upstream_result, log)
         result.omniprobe_messages = omniprobe_messages(log)
         if not result.kernels:
-            _raise_no_data(
-                "memory", command, kernel_filter, result.uninstrumented_kernels, log, dispatches
-            )
+            _raise_no_data("memory", command, kernel_filter, result.uninstrumented_kernels, log)
         _warn_uninstrumented(result.uninstrumented_kernels)
         return result
 
@@ -856,10 +836,12 @@ class Omniprobe:
             kernel_filter: Optional ECMAScript regex, searched anywhere in the
                 demangled kernel name (a template kernel's name starts with its
                 return type, e.g. ``void name<4>(...)``, so ``^name`` misses it).
-            dispatches: Which dispatches to capture — ``"all"``, ``"random"``,
-                or ``"1"``. With a *kernel_filter*, ``"random"`` often captures
-                nothing (Omniprobe 22c4d95 draws from all dispatches, including the
-                excluded ones); the error then says so.
+            dispatches: Which dispatches of each kernel to instrument, numbered
+                per kernel from 1: ``"all"`` (default), ``"N"``, ``"A-B"``
+                (inclusive), ``"A-"`` (A-th and later), comma lists, and a
+                ``:count[:stride]`` repeat (``"1::100"`` = every 100th). Omniprobe
+                dbb53ed or later; a malformed spec raises ``ValueError``
+                (``DispatchSpecError``) before the application runs.
 
         Returns:
             A :class:`BasicBlockResult` containing per-kernel basic-block
@@ -888,7 +870,6 @@ class Omniprobe:
                 kernel_filter,
                 result.uninstrumented_kernels,
                 log,
-                dispatches,
             )
         _warn_uninstrumented(result.uninstrumented_kernels)
         return result
@@ -921,6 +902,7 @@ class Omniprobe:
                 KernelMemoryResult(
                     kernel_name=k.kernel_name,
                     dispatch_id=k.dispatch_id,
+                    kernel_dispatch=getattr(k, "kernel_dispatch", 0) or 0,
                     accesses=accesses,
                     unanalyzed_flat_accesses=getattr(k, "unanalyzed_flat_accesses", 0) or 0,
                     unattributed_accesses=getattr(k, "unattributed_accesses", 0) or 0,
@@ -947,6 +929,7 @@ class Omniprobe:
                 KernelBBResult(
                     kernel_name=k.kernel_name,
                     dispatch_id=k.dispatch_id,
+                    kernel_dispatch=getattr(k, "kernel_dispatch", 0) or 0,
                     basic_blocks=blocks,
                 )
             )

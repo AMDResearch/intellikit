@@ -43,12 +43,12 @@ Omniprobe install on `PATH`; the plugins and the Python API are found from there
 
 ## Get the source
 
-IntelliKit is tested with Omniprobe commit `22c4d95`:
+IntelliKit is tested with Omniprobe commit `dbb53ed`:
 
 ```bash
 git clone --recurse-submodules https://github.com/AMDResearch/omniprobe.git
 cd omniprobe
-git checkout 22c4d95 && git submodule update --init --recursive
+git checkout dbb53ed && git submodule update --init --recursive
 python3 -m pip install -r omniprobe/requirements.txt
 ```
 
@@ -89,7 +89,7 @@ warns when the two differ. Measured on gfx90a: a trivial kernel compiled by ROCm
 6.4.1's `hipcc` with plugins built for 7.2.0 gave the same Omniprobe report as with 7.2.0's —
 a mismatch is not certain to fail, and not certain to work.
 
-At run time, Omniprobe 22c4d95 picks a ROCm installation by itself (`ROCM_PATH` if it has
+At run time, Omniprobe (22c4d95 and later) picks a ROCm installation by itself (`ROCM_PATH` if it has
 `llvm/bin/llvm-objdump`, otherwise the ROCm its libraries link against). Omniprobe builds older than
 `149cf2c` need `ROCM_PATH` set to that ROCm, or they report nothing.
 

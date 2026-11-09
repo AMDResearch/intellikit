@@ -54,8 +54,10 @@ Reading the source can suggest a culprit; Omniprobe measures it — report measu
    The regex is searched anywhere in the **demangled** name (`'advance'`, `'gstride<16>'`). A
    template kernel's name starts with its return type (`void gstride<16>(float const*, float*)`), so
    `'^gstride'` matches nothing; a filter that matches no dispatched kernel is an error listing the
-   kernels that were dispatched. With `--kernel`, `--dispatches random` often captures nothing
-   (Omniprobe draws the dispatch from all dispatches, including excluded ones). Omniprobe's own
+   kernels that were dispatched. `--dispatches` selects dispatches of each kernel, numbered per
+   kernel from 1: `all`, `N`, `A-B`, `A-`, comma lists, `:count[:stride]` repeats (`2,5`, `1::100`);
+   Omniprobe validates it and a malformed spec is an error before the run. Results carry
+   `kernel_dispatch` (that number) next to `dispatch_id` (all kernels together). Omniprobe's own
    warnings are in `omniprobe_messages` and quoted in errors.
 3. **Read the ranked summary** ("Top sites", or `summary` from MCP / `summarize_memory()`): worst
    sites first, with file:line:column, read/write, and a per-wave-execution value (below).
@@ -171,8 +173,8 @@ these (Omniprobe b9492cd and later for `handleAddressWave`), and its prints are 
 | Function | Called | `msg` keys |
 |---|---|---|
 | `handleAddressWave(msg)` | once per wave-level memory instruction | `addresses` (one int per active lane), `lanes`, `exec`, `access_type` (`"read"`/`"write"`/`"readwrite"`), `memory_space` (`"global"`, `"shared"`, `"constant"`, `"scratch"`, `"flat"`), `access_size` (bytes), `source_file`, `line`, `column`, `block_idx`, `wave_num`, `cu_id`, `se_id`, `xcc_id`, `timestamp` (`s_memtime` ticks), `kernel`, `dispatch_id` |
-| `handleAddressMessage(msg)` | once per active lane | `address`, `kernel`, `dispatch_id` |
-| `handleReport(msg)` | once per dispatch (optional) | `kernel`, `dispatch_id` |
+| `handleAddressMessage(msg)` | once per active lane | `address`, `kernel`, `dispatch_id`, `kernel_dispatch` |
+| `handleReport(msg)` | once per dispatch (optional) | `kernel`, `dispatch_id`, `kernel_dispatch` |
 
 ```python
 from collections import Counter

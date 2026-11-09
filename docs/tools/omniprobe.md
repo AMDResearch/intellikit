@@ -224,7 +224,7 @@ path. Pass the module's path as the analyzer (`omniprobe-ik run ./h.py ./app`,
 on a memory build. One interpreter serves the whole process, so module state persists across
 dispatches; calls never overlap. The module defines at least one of the message functions:
 
-| Function | Called | `msg` keys (all also have `kernel`, `dispatch_id`) |
+| Function | Called | `msg` keys (all also have `kernel`, `dispatch_id`, `kernel_dispatch`) |
 |---|---|---|
 | `handleAddressWave(msg)` | once per wave-level memory instruction | `addresses` (one int per active lane), `lanes`, `exec`, `access_type` (`"read"`, `"write"`, `"readwrite"`), `memory_space` (`"global"`, `"shared"`, `"constant"`, `"scratch"`, `"flat"`, `"gds"`), `access_size` (bytes), `source_file`, `line`, `column`, `block_idx`, `wave_num`, `cu_id`, `se_id`, `xcc_id`, `timestamp` (`s_memtime` ticks) |
 | `handleAddressMessage(msg)` | once per active lane | `address` |
@@ -267,7 +267,7 @@ probe = Omniprobe(
 
 - `command`: application command line to instrument
 - `kernel_filter`: optional ECMAScript regex limiting which kernels are analysed, searched anywhere in the **demangled** kernel name (for example `'gstride<16>'`; a mangled name such as `_Z7gstride...` matches nothing). A template kernel's demangled name starts with its return type (`void gstride<16>(float const*, float*)`), so `'^gstride'` does not match it. If the filter matches none of the dispatched kernels, both methods raise `KernelFilterMatchedNothingError` (a `NoInstrumentedKernelsError`) listing the kernels that ran (Omniprobe b71927b and later print that list).
-- `dispatches`: which dispatches to capture — `"all"` (default), `"random"`, or `"1"`. With a `kernel_filter`, `"random"` often captures nothing: Omniprobe 22c4d95 draws the random dispatch from all dispatches, including the ones the filter excludes (empty in 4 of 4 runs measured here); the error then names this cause. Results carry Omniprobe's own `omniprobe: WARNING:`/`ERROR:` messages in `omniprobe_messages`, and errors quote them.
+- `dispatches`: which dispatches of each kernel to instrument, numbered per kernel from 1 (Omniprobe dbb53ed and later): `"all"` (default), `"N"`, `"A-B"` (inclusive), `"A-"` (the A-th and every later one), comma lists, and a `:count[:stride]` repeat (`"1,3,4:3"`, `"1::100"` = every 100th). With a `kernel_filter`, the numbering is per matching kernel. Omniprobe validates the spec; a malformed one raises `ValueError` (Omniprobe's `DispatchSpecError`) before the application runs. `"random"` was removed in Omniprobe dbb53ed. Results carry Omniprobe's own `omniprobe: WARNING:`/`ERROR:` messages in `omniprobe_messages`, and errors quote them.
 
 Constructing `Omniprobe` raises `ImportError` if Omniprobe's Python API is not importable, and `FileNotFoundError` if the executable cannot be found. Both methods raise `NoInstrumentedKernelsError` (a `RuntimeError`) when Omniprobe reports no kernel — almost always a binary built without the plugin; the message names the flags to rebuild with.
 
@@ -298,7 +298,7 @@ access.access_type          # Read or write
 access.execution_count      # How many times it executed
 ```
 
-`MemoryAnalysisResult.kernels` is a list of `KernelMemoryResult`, each with `kernel_name`, `dispatch_id`, and `accesses`.
+`MemoryAnalysisResult.kernels` is a list of `KernelMemoryResult`, each with `kernel_name`, `dispatch_id` (counts all kernels together), `kernel_dispatch` (this kernel's own dispatch number, the one `dispatches` selects; 0 before Omniprobe dbb53ed), and `accesses`.
 
 ### `BasicBlock`
 
@@ -311,7 +311,7 @@ bb.wave_visits              # Times a wave entered the block
 bb.active_lanes             # Active lanes summed over those entries
 ```
 
-`BasicBlockResult.kernels` is a list of `KernelBBResult`, each with `kernel_name`, `dispatch_id`, and `basic_blocks`.
+`BasicBlockResult.kernels` is a list of `KernelBBResult`, each with `kernel_name`, `dispatch_id`, `kernel_dispatch`, and `basic_blocks`.
 
 ## CLI
 
@@ -333,8 +333,9 @@ omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app
 omniprobe-ik memory --kernel "matmul.*" ./my_gpu_app input.dat
 omniprobe-ik memory -- ./my_gpu_app --size 1024
 
-# Capture a single dispatch instead of all of them
+# Capture only some dispatches of each kernel (numbered per kernel from 1)
 omniprobe-ik memory --dispatches 1 ./my_gpu_app
+omniprobe-ik memory --dispatches 2,5 ./my_gpu_app
 
 # Write results to a file
 omniprobe-ik memory --output results.json ./my_gpu_app
@@ -376,7 +377,7 @@ and the GPU selection, in the server's configuration:
 
 The Python API is found next to the `omniprobe` executable (install prefix, or the source tree a
 build tree's symlink points to); a `PYTHONPATH` holding Omniprobe's install prefix is also honored.
-Omniprobe 22c4d95 picks its ROCm by itself. Omniprobe builds older than 149cf2c need `ROCM_PATH`
+Omniprobe 22c4d95 and later pick their ROCm by themselves. Omniprobe builds older than 149cf2c need `ROCM_PATH`
 set to the ROCm they were built against: without it they run `llvm-objdump` from `/opt/rocm`, and
 where it is missing they report no results even for an instrumented binary; `analyze_memory` then
 raises an error that names `ROCM_PATH` rather than asking for a rebuild. The `python3` found through

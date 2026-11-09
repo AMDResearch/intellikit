@@ -3,6 +3,8 @@
 
 """Unit tests for run_analyzer's result object (no GPU)."""
 
+import pytest
+
 from omniprobe_ik import AnalyzerRun
 
 
@@ -95,3 +97,23 @@ def test_unusable_python_handler_is_an_error(monkeypatch, tmp_path):
     handler.write_text("")
     with pytest.raises(RuntimeError, match="handleTimeMessage"):
         run_analyzer(str(handler), "./app", omniprobe_path=str(exe))
+
+
+def test_malformed_dispatch_spec_is_a_value_error(monkeypatch, tmp_path):
+    """Omniprobe dbb53ed rejects a malformed -d with exit 2 before the run; surface its message."""
+    import subprocess
+
+    from omniprobe_ik import raw
+
+    err = (
+        "usage: omniprobe [options] -- application\n"
+        "omniprobe: error: argument -d/--dispatches: invalid dispatch spec '2,x': "
+        "expected a number, a range a-b or an open range a-; got 'x'\n"
+    )
+    monkeypatch.setattr(
+        raw.subprocess, "run", lambda args, **kw: subprocess.CompletedProcess(args, 2, "", err)
+    )
+    exe = tmp_path / "omniprobe"
+    exe.write_text("")
+    with pytest.raises(ValueError, match=r"invalid dispatch spec '2,x'.*got 'x'"):
+        raw.run_analyzer("MemoryAnalysis", "./app", dispatches="2,x", omniprobe_path=str(exe))
