@@ -1,9 +1,7 @@
 """
-GFX1100 (RDNA3) Backend
-
-Counter-limits-only backend for AMD RDNA3 (RX 7000 series).
-Inherits metric computation from GFX1201Backend (YAML-based metrics via counter_defs.yaml).
-Only overrides device specs and counter block limits.
+GFX1100 (RDNA3) backend: GFX1201Backend with the gfx11 device specs and counter block limits.
+counter_defs.yaml defines only the gfx1100 metrics validated on a Radeon Pro W7900,
+and their counters need the profile_standard perf level.
 """
 
 from .device_info import query_device_specs
