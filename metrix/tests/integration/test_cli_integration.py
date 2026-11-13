@@ -6,6 +6,8 @@ import pytest
 import subprocess
 from pathlib import Path
 
+from ..unit.conftest import requires_metric
+
 EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples"
 VECTOR_ADD = EXAMPLES_DIR / "01_vector_add" / "vector_add"
 
@@ -91,6 +93,7 @@ def test_cli_with_metric_aggregated():
     assert "CACHE PERFORMANCE" in result.stdout  # Section header in aggregated mode
 
 
+@requires_metric("memory.l2_hit_rate")
 def test_cli_list_metrics():
     """Test metrix list metrics"""
     result = subprocess.run(

@@ -112,13 +112,33 @@ they ask for can be collected.
 
 ### Local Data Share
 - `memory.lds_bank_conflicts` - LDS bank conflicts per access
-- `memory.lds_bank_conflict_percent` - Active shared-memory access cycles with bank conflicts (%). *gfx1201 only.*
+- `memory.lds_bank_conflict_percent` - Active shared-memory access cycles with bank conflicts (%). *gfx1100 and gfx1201 only.*
 
 The percentage uses the number of cycles with active shared-memory accesses as its
 denominator. Samples with no active shared-memory access cycles are omitted.
 
 ### Atomic Operations
 - `memory.atomic_latency` - Atomic operation latency (cycles)
+
+## gfx1100
+
+On gfx1100 Metrix offers only the metrics validated on a Radeon Pro W7900:
+`compute.gpu_utilization`, `GPUBusy`, `Wavefronts`, `VALUInsts`, `SALUInsts`,
+`OccupancyPercent`, `memory.lds_bank_conflicts`, `memory.lds_bank_conflict_percent` and
+the VRAM metrics (`memory.hbm_*` and `memory.bytes_transferred_hbm`), which count
+L2-to-fabric traffic that the Infinity Cache can serve. Every other metric is
+unsupported, with the reason in `counter_defs.yaml`; for the `memory.*` metrics,
+`metrix info metric <name>` shows it.
+The `memory_cache` profile has none of its metrics here, so Metrix warns and runs it
+time-only.
+
+The counters read correctly only at the `profile_standard` perf level (`STABLE_STD` in
+amd-smi). Set it before profiling, by amd-smi GPU ID or BDF, and restore `AUTO` after:
+
+```bash
+sudo amd-smi set -g <GPU> -l STABLE_STD
+# or: echo profile_standard | sudo tee /sys/class/drm/card<N>/device/power_dpm_force_performance_level
+```
 
 ## CLI Options
 

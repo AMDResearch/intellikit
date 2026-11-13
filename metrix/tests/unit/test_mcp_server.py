@@ -51,10 +51,14 @@ class TestListAvailableMetrics:
     @requires_counter_metrics()
     def test_includes_common_metrics(self):
         """list_available_metrics should include well-known metrics"""
+        from metrix.backends import detect_or_default, get_backend
+
         result = list_available_metrics()
         metrics = result["metrics"]
         assert "memory.hbm_bandwidth_utilization" in metrics
-        assert "memory.l2_hit_rate" in metrics
+        # Absent only where the backend gives the reason (gfx1100 does for its GL2C hit rate).
+        unsupported = get_backend(detect_or_default(None)).get_unsupported_metrics()
+        assert "memory.l2_hit_rate" in metrics or "memory.l2_hit_rate" in unsupported
 
     def test_no_bogus_metric_names(self):
         """Explicitly check that previously-hardcoded wrong names are not returned"""

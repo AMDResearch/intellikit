@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from metrix import Metrix
+from . import rdna3_probes as P
 from ..unit.conftest import requires_arch, requires_cdna, requires_metric
 
 # ---------------------------------------------------------------------------
@@ -819,3 +820,86 @@ class TestMetricBounds:
             b = _compile_hip(_ATOMIC_HIGH_SRC, "bounds_atomic", p)
             m = _profile(b, ["memory.atomic_latency"], p)
         assert m["memory.atomic_latency"] >= 0.0
+
+
+# =========================================================================
+# gfx1100 (Radeon Pro W7900): the safe set, at the profile_standard perf level
+# =========================================================================
+
+
+@pytest.fixture(scope="module")
+def w7900_profiler():
+    """Metrix on a Radeon Pro W7900 that is already at profile_standard."""
+    profiler = Metrix()
+    name = profiler.backend.device_specs.name
+    if "W7900" not in name:
+        pytest.skip(f"the gfx1100 safe set is validated on a Radeon Pro W7900, not {name}")
+    try:
+        level = P.perf_level()
+    except OSError as exc:
+        pytest.skip(f"the GPU's perf level cannot be read: {exc}")
+    if level != P.PROFILE_STANDARD:
+        pytest.skip(
+            f"set the {P.PROFILE_STANDARD} perf level before running; the GPU is at {level}"
+        )
+    return profiler
+
+
+@pytest.fixture(scope="module")
+def rdna3_probes(tmp_path_factory):
+    """``(rocprofiler CU count, every probe built)``."""
+    num_cu = P.rocminfo_compute_units()
+    return num_cu, P.build_all(tmp_path_factory.mktemp("rdna3_probes"), num_cu)
+
+
+@requires_arch("gfx1100")
+class TestRDNA3SafeSetOnW7900:
+    """Every safe gfx1100 metric reads what each probe's construction says it must.
+
+    The probes and their expected values are in rdna3_probes.py. Needs a
+    Radeon Pro W7900 that is already at profile_standard; Metrix does not set it.
+    """
+
+    def test_backend_offers_exactly_the_safe_set(self, w7900_profiler):
+        assert sorted(w7900_profiler.list_metrics()) == sorted(P.SAFE_METRICS)
+
+    @pytest.mark.parametrize("probe", sorted(P.PROBE_KERNEL_REGEX))
+    def test_probe_reads_the_expected_values(
+        self, probe, w7900_profiler, rdna3_probes, tmp_path, monkeypatch
+    ):
+        profiler = w7900_profiler
+        num_cu, built = rdna3_probes
+        wave_log = tmp_path / P.WAVE_LOG_DEFAULT
+        monkeypatch.setenv(P.WAVE_LOG_ENV, str(wave_log))
+        results = profiler.profile(
+            command=str(built[probe].binary),
+            metrics=list(P.SAFE_METRICS),
+            kernel_filter=P.PROBE_KERNEL_REGEX[probe],
+            cwd=str(tmp_path),
+        )
+        assert sorted(k.name for k in results.kernels) == sorted(built[probe].isa)
+        logs = P.read_wave_log(wave_log) if wave_log.exists() else None
+        if probe == "alu_fma":
+            assert logs, f"the ALU probe wrote no wave log to {wave_log}"
+
+        peak_gbs = profiler.backend.device_specs.hbm_bandwidth_gbs
+        failures = []
+        for kernel in results.kernels:
+            expected = P.expected_for_kernel(
+                kernel.name,
+                built[probe].isa[kernel.name],
+                kernel.duration_us.avg,
+                peak_gbs,
+                num_cu,
+                logs,
+                dispatches=kernel.dispatch_count,
+            )
+            for metric, exp in expected.items():
+                stats = kernel.metrics.get(metric)
+                # Every dispatch, not just the mean, has to meet the expectation.
+                edges = {"min": ("avg", "min"), "max": ("avg", "max")}.get(
+                    exp.kind, ("avg", "min", "max")
+                )
+                if stats is None or not all(exp.check(getattr(stats, e)) for e in edges):
+                    failures.append(f"{kernel.name} {metric}: {stats}, expected {exp.describe()}")
+        assert not failures, "\n".join(failures)
