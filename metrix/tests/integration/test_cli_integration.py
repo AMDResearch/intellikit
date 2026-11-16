@@ -6,6 +6,8 @@ import pytest
 import subprocess
 from pathlib import Path
 
+from ..unit.conftest import requires_metric
+
 EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples"
 VECTOR_ADD = EXAMPLES_DIR / "01_vector_add" / "vector_add"
 
@@ -52,6 +54,7 @@ def test_cli_time_only_aggregated():
 
 
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
+@requires_metric("memory.l2_hit_rate")
 def test_cli_with_metric():
     """Test metrix --metrics (with runs, aggregates by dispatch)"""
     result = subprocess.run(
@@ -69,6 +72,7 @@ def test_cli_with_metric():
 
 
 @pytest.mark.skipif(not VECTOR_ADD.exists(), reason="vector_add not compiled")
+@requires_metric("memory.l2_hit_rate")
 def test_cli_with_metric_aggregated():
     """Test metrix profile --metrics --aggregate"""
     result = subprocess.run(
@@ -93,12 +97,17 @@ def test_cli_with_metric_aggregated():
 
 def test_cli_list_metrics():
     """Test metrix list metrics"""
+    from metrix.backends import detect_or_default, get_backend
+
     result = subprocess.run(
         ["metrix", "list", "metrics"], capture_output=True, text=True, timeout=5
     )
 
     assert result.returncode == 0
-    assert "memory.l2_hit_rate" in result.stdout
+    # Absent only where the backend gives the reason (gfx1100 does for its GL2C hit rate).
+    assert "memory.l2_hit_rate" in result.stdout or (
+        "memory.l2_hit_rate" in get_backend(detect_or_default(None)).get_unsupported_metrics()
+    )
 
 
 def test_cli_list_metrics_includes_compute():

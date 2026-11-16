@@ -1,10 +1,10 @@
 """
 Unit tests for backend metric computations (gfx942, gfx950, gfx90a, gfx1201,
-gfx1030, gfx1103, gfx1150, and gfx1151)
+gfx1030, gfx1100, gfx1103, gfx1150, and gfx1151)
 
 Tests use MOCK counter data (no hardware counters in test code!)
 Tests are parametrized to run on MI300X (gfx942), MI350X (gfx950), MI200 (gfx90a),
-RDNA4 (gfx1201), RDNA2 (gfx1030), RDNA3 (gfx1103) and RDNA 3.5 (gfx1150, gfx1151).
+RDNA4 (gfx1201), RDNA2 (gfx1030), RDNA3 (gfx1100, gfx1103) and RDNA 3.5 (gfx1150, gfx1151).
 All metrics are loaded from counter_defs.yaml.
 """
 
@@ -102,6 +102,18 @@ _TEST_SPECS = {
         hbm_bandwidth_gbs=256.0,
         l2_size_mb=8.0,
         lds_size_per_cu_kb=128.0,
+    ),
+    # gpu_query on the W7900 Dual Slot the gfx1100 safe set was validated on.
+    "gfx1100": DeviceSpecs(
+        arch="gfx1100",
+        name="AMD Radeon Pro W7900 Dual Slot",
+        num_cu=48,
+        max_waves_per_cu=64,
+        wavefront_size=32,
+        base_clock_mhz=1760.0,
+        hbm_bandwidth_gbs=863.232,
+        l2_size_mb=6.0,
+        lds_size_per_cu_kb=64.0,
     ),
 }
 
@@ -1456,3 +1468,235 @@ class TestPhoenixHasNoCounterMetrics:
         ):
             metrics = get_backend("gfx1103").get_available_metrics()
         assert "compute.gpu_utilization" in metrics
+
+
+# ═══════════════════════════════════════════════════════════════════
+# RDNA3 (gfx1100) tests
+# ═══════════════════════════════════════════════════════════════════
+
+# The metrics validated on a Radeon Pro W7900 at profile_standard.
+_GFX1100_SAFE_METRICS = {
+    "compute.gpu_utilization",
+    "GPUBusy",
+    "Wavefronts",
+    "VALUInsts",
+    "SALUInsts",
+    "OccupancyPercent",
+    "memory.hbm_read_bandwidth",
+    "memory.hbm_write_bandwidth",
+    "memory.hbm_bandwidth_utilization",
+    "memory.bytes_transferred_hbm",
+    "memory.lds_bank_conflicts",
+    "memory.lds_bank_conflict_percent",
+}
+
+# Every metric main offered on gfx1100; each is now either safe or unsupported.
+_MAIN_GFX1100_METRICS = {
+    "compute.gpu_utilization",
+    "OccupancyPercent",
+    "MemUnitBusy",
+    "WriteUnitStalled",
+    "VALUInsts",
+    "SALUInsts",
+    "Wavefronts",
+    "WAVE_DEP_WAIT",
+    "WAVE_ISSUE_WAIT",
+    "L2CacheHit",
+    "GPUBusy",
+    "ALUStalledByLDS",
+    "LdsLatency",
+    "MeanOccupancyPerActiveCU",
+    "TA_BUSY_avr",
+    "TA_BUFFER_LOAD_WAVEFRONTS_sum",
+    "TA_BUFFER_STORE_WAVEFRONTS_sum",
+    "memory.l2_hit_rate",
+    "memory.l2_bandwidth",
+    "memory.bytes_transferred_l2",
+    "memory.lds_bank_conflicts",
+    "memory.hbm_read_bandwidth",
+    "memory.hbm_write_bandwidth",
+    "memory.hbm_bandwidth_utilization",
+    "memory.bytes_transferred_hbm",
+}
+
+_VRAM_METRICS = (
+    "memory.hbm_read_bandwidth",
+    "memory.hbm_write_bandwidth",
+    "memory.hbm_bandwidth_utilization",
+    "memory.bytes_transferred_hbm",
+)
+
+# Mixed request sizes: 10x32B + 20x64B + 30x96B + 40x128B read, and 100 64-byte
+# writes out of 150 write requests (the other 50 at 32 bytes).
+_RDNA3_READS = {
+    "GL2C_EA_RDREQ_32B_sum": 10,
+    "GL2C_EA_RDREQ_64B_sum": 20,
+    "GL2C_EA_RDREQ_96B_sum": 30,
+    "GL2C_EA_RDREQ_128B_sum": 40,
+}
+_RDNA3_READ_BYTES = 10 * 32 + 20 * 64 + 30 * 96 + 40 * 128
+_RDNA3_WRITES = {"GL2C_EA_WRREQ_64B_sum": 100, "GL2C_MC_WRREQ_sum": 150}
+_RDNA3_WRITE_BYTES = 100 * 64 + 50 * 32
+
+# One dispatch of a 1 GiB stream copy: 128-byte reads, and 64-byte writes with no
+# 32-byte residual.
+_STREAM_COPY = {
+    "GL2C_EA_RDREQ_32B_sum": 0,
+    "GL2C_EA_RDREQ_64B_sum": 0,
+    "GL2C_EA_RDREQ_96B_sum": 0,
+    "GL2C_EA_RDREQ_128B_sum": 2**30 // 128,
+    "GL2C_EA_WRREQ_64B_sum": 2**30 // 64,
+    "GL2C_MC_WRREQ_sum": 2**30 // 64,
+}
+
+
+@pytest.fixture
+def rdna3_backend():
+    """gfx1100 backend with the W7900 Dual Slot's device specs"""
+    with patch(
+        "metrix.backends.gfx1100.query_device_specs",
+        return_value=_TEST_SPECS["gfx1100"],
+    ):
+        return get_backend("gfx1100")
+
+
+class TestRDNA3MetricDiscovery:
+    """The gfx1100 metric set is the probe-validated safe set and nothing else"""
+
+    def test_available_metrics_are_the_safe_set(self, rdna3_backend):
+        assert set(rdna3_backend.get_available_metrics()) == _GFX1100_SAFE_METRICS
+
+    def test_every_other_main_metric_is_unsupported_with_a_reason(self, rdna3_backend):
+        unsupported = rdna3_backend.get_unsupported_metrics()
+        assert set(unsupported) == _MAIN_GFX1100_METRICS - _GFX1100_SAFE_METRICS
+        for metric, reason in unsupported.items():
+            assert "gfx1100" in reason, metric
+            assert reason.endswith(".") and ". " not in reason, f"{metric}: one sentence"
+
+    def test_safe_set_adds_only_the_lds_conflict_percent(self):
+        added = _GFX1100_SAFE_METRICS - _MAIN_GFX1100_METRICS
+        assert added == {"memory.lds_bank_conflict_percent"}
+
+    @pytest.mark.parametrize(
+        "metric", ["TA_BUFFER_LOAD_WAVEFRONTS_sum", "TA_BUFFER_STORE_WAVEFRONTS_sum"]
+    )
+    def test_ta_buffer_wavefront_counts_are_not_validated(self, rdna3_backend, metric):
+        assert rdna3_backend.get_unsupported_metrics()[metric] == "Not validated on gfx1100."
+
+
+class TestRDNA3VRAMReadBandwidth:
+    """gfx1100 reads: 32-, 64-, 96- and 128-byte GL2C_EA_RDREQ buckets"""
+
+    def test_read_bandwidth_uses_each_request_size(self, rdna3_backend):
+        active_cycles = int(rdna3_backend.device_specs.base_clock_mhz * 1000)
+        rdna3_backend._raw_data = {
+            **_RDNA3_READS,
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna3_backend._current_duration_us = 1000.0
+        result = compute(rdna3_backend, "memory.hbm_read_bandwidth")
+        assert abs(result - (_RDNA3_READ_BYTES / 1e9) / 0.001) < 1e-9
+
+    def test_read_bandwidth_zero_cycles(self, rdna3_backend):
+        rdna3_backend._raw_data = {**_RDNA3_READS, "GRBM_GUI_ACTIVE": 0, "GRBM_COUNT": 0}
+        rdna3_backend._current_duration_us = 0.0
+        assert compute(rdna3_backend, "memory.hbm_read_bandwidth") == 0.0
+
+
+class TestRDNA3VRAMWriteBandwidth:
+    """gfx1100 writes: 64-byte requests, the rest of GL2C_MC_WRREQ at 32 bytes"""
+
+    def test_write_bandwidth_with_32B_residual(self, rdna3_backend):
+        active_cycles = int(rdna3_backend.device_specs.base_clock_mhz * 1000)
+        rdna3_backend._raw_data = {
+            **_RDNA3_WRITES,
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna3_backend._current_duration_us = 1000.0
+        result = compute(rdna3_backend, "memory.hbm_write_bandwidth")
+        assert abs(result - (_RDNA3_WRITE_BYTES / 1e9) / 0.001) < 1e-9
+
+
+class TestRDNA3BandwidthUtilization:
+    def test_percent_of_the_board_peak(self, rdna3_backend):
+        active_cycles = int(rdna3_backend.device_specs.base_clock_mhz * 1000)
+        rdna3_backend._raw_data = {
+            **_RDNA3_READS,
+            **_RDNA3_WRITES,
+            "GRBM_GUI_ACTIVE": active_cycles,
+            "GRBM_COUNT": active_cycles,
+        }
+        rdna3_backend._current_duration_us = 1000.0
+        result = compute(rdna3_backend, "memory.hbm_bandwidth_utilization")
+        gbs = ((_RDNA3_READ_BYTES + _RDNA3_WRITE_BYTES) / 1e9) / 0.001
+        assert abs(result - gbs / 863.232 * 100) < 1e-9
+
+
+class TestRDNA3BytesTransferred:
+    def test_stream_copy_counters_give_one_gib_each_way(self, rdna3_backend):
+        rdna3_backend._raw_data = dict(_STREAM_COPY)
+        result = compute(rdna3_backend, "memory.bytes_transferred_hbm")
+        assert result == 2 * 2**30
+
+    @pytest.mark.parametrize("metric", _VRAM_METRICS)
+    def test_vram_metrics_are_correlated(self, rdna3_backend, metric):
+        assert rdna3_backend._metrics[metric].get("aggregation") == "correlated"
+
+    def test_by_kernel_the_bytes_sum_a_runs_dispatches(self, rdna3_backend):
+        """As on gfx1201: two dispatches of a kernel in one run report both dispatches' bytes."""
+        results = []
+        for dispatch_id in (1, 2):
+            result = ProfileResult(
+                dispatch_id, "copy", 0, 4_000_000, (1, 1, 1), (1, 1, 1), dict(_STREAM_COPY)
+            )
+            result.run_id = 0
+            results.append(result)
+        metric = "memory.bytes_transferred_hbm"
+        per_dispatch = 2 * 2**30
+        by_kernel = rdna3_backend._aggregate_correlated_metric_stats(results, [metric], True)
+        assert by_kernel["copy"][metric].avg == 2 * per_dispatch
+        by_dispatch = rdna3_backend._aggregate_correlated_metric_stats(results, [metric], False)
+        assert {stats[metric].avg for stats in by_dispatch.values()} == {per_dispatch}
+
+
+class TestRDNA3L2Metrics:
+    """GL2C_HIT/GL2C_MISS miscount on gfx1100, so no L2 metric is offered"""
+
+    @pytest.mark.parametrize(
+        "metric",
+        ["memory.l2_hit_rate", "L2CacheHit", "memory.bytes_transferred_l2", "memory.l2_bandwidth"],
+    )
+    def test_l2_metrics_are_unsupported(self, rdna3_backend, metric):
+        assert metric not in rdna3_backend.get_available_metrics()
+        assert "GL2C_HIT" in rdna3_backend.get_unsupported_metrics()[metric]
+
+
+class TestRDNA3LDSBankConflicts:
+    """Both LDS metrics come from SQC_LDS_BANK_CONFLICT, not the SDK's LDSBankConflict"""
+
+    def test_conflict_percent(self, rdna3_backend):
+        metric = "memory.lds_bank_conflict_percent"
+        assert set(rdna3_backend.get_required_counters([metric])) == {
+            "SQC_LDS_BANK_CONFLICT",
+            "SQC_LDS_IDX_ACTIVE",
+        }
+        assert rdna3_backend._metrics[metric]["aggregation"] == "samples"
+        assert rdna3_backend._metrics[metric]["weight_counter"] == "SQC_LDS_IDX_ACTIVE"
+        # A 4-way conflict: 4 active cycles per access, 3 of them stalled.
+        rdna3_backend._raw_data = {
+            "SQC_LDS_BANK_CONFLICT": 3 * 4096,
+            "SQC_LDS_IDX_ACTIVE": 4 * 4096,
+        }
+        assert compute(rdna3_backend, metric) == 75.0
+
+    def test_conflicts_per_lds_instruction(self, rdna3_backend):
+        metric = "memory.lds_bank_conflicts"
+        assert set(rdna3_backend.get_required_counters([metric])) == {
+            "SQC_LDS_BANK_CONFLICT",
+            "SQ_INSTS_LDS",
+        }
+        # 4096 loop reads with 3 stalled cycles each, 16 conflict-free initial stores.
+        rdna3_backend._raw_data = {"SQC_LDS_BANK_CONFLICT": 3 * 4096, "SQ_INSTS_LDS": 4096 + 16}
+        assert abs(compute(rdna3_backend, metric) - 3 * 4096 / 4112) < 1e-12

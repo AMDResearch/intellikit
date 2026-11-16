@@ -27,8 +27,9 @@ from ..unit.conftest import ARCHS_WITH_COUNTER_DEFS, HW_ARCH
 from .test_inline_hip_profiling import _compile_hip
 
 # Every profile except `compute` (CDNA-only) has at least one metric on every
-# architecture that exposes hardware counters, so taking the "nothing available
-# here" branch for any of them is a regression rather than an expected outcome.
+# architecture that exposes hardware counters, apart from _NO_METRICS_ON_ARCH,
+# so taking the "nothing available here" branch for any of them is a regression
+# rather than an expected outcome.
 # On a GPU with no counters at all -- gfx1103, and any other arch missing from
 # counter_defs.yaml -- no profile can resolve, so there is nothing to guarantee.
 #
@@ -40,8 +41,15 @@ from .test_inline_hip_profiling import _compile_hip
 # green. An arch that counter_defs.yaml does define must produce metrics, and
 # fails loudly here when it does not.
 _GPU_HAS_NO_COUNTERS = HW_ARCH is not None and HW_ARCH not in ARCHS_WITH_COUNTER_DEFS
+# Profiles with no collectable metric on an arch that does have counters, keyed on
+# the arch for the same reason. On gfx1100 every memory_cache metric is
+# unsupported or undefined, so Metrix warns about each and runs time-only.
+_NO_METRICS_ON_ARCH = {"gfx1100": frozenset({"memory_cache"})}
+_TIME_ONLY_PROFILES = _NO_METRICS_ON_ARCH.get(HW_ARCH, frozenset())
 UNIVERSAL_PROFILES = (
-    frozenset() if _GPU_HAS_NO_COUNTERS else frozenset(METRIC_PROFILES) - {"compute"}
+    frozenset()
+    if _GPU_HAS_NO_COUNTERS
+    else frozenset(METRIC_PROFILES) - {"compute"} - _TIME_ONLY_PROFILES
 )
 
 # Larger than the shared vector_add fixture on purpose: the memory profiles
@@ -115,6 +123,11 @@ def test_builtin_profile_runs_or_reports_unavailable(profile_name, saxpy_binary)
     # Whatever survived the architecture filter must actually produce values.
     available = set(profiler.backend.get_available_metrics())
     expected = [m for m in METRIC_PROFILES[profile_name]["metrics"] if m in available]
+    if profile_name in _TIME_ONLY_PROFILES:
+        assert not expected, f"profile '{profile_name}' now has {expected} on {arch}"
+        assert not user_kernels[0].metrics
+        assert user_kernels[0].duration_us is not None
+        return
     assert expected, f"profile '{profile_name}' returned results but selected no metrics"
     missing = set(expected) - set(user_kernels[0].metrics)
     unexpected_missing = set()

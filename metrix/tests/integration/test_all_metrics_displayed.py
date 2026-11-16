@@ -124,6 +124,8 @@ def test_compute_profile_runs_without_error(vector_add_binary):
 @pytest.mark.integration
 def test_json_output_has_memory_metrics(vector_add_binary, tmp_path):
     """Verify JSON output contains all memory metrics"""
+    from metrix import Metrix
+
     output_file = tmp_path / "results.json"
 
     result = subprocess.run(
@@ -165,7 +167,10 @@ def test_json_output_has_memory_metrics(vector_add_binary, tmp_path):
     assert "memory.hbm_bandwidth_utilization" in kernel_data["metrics"]
     assert "memory.hbm_read_bandwidth" in kernel_data["metrics"]
     assert "memory.hbm_write_bandwidth" in kernel_data["metrics"]
-    assert "memory.l2_bandwidth" in kernel_data["metrics"]
+    # Absent only where the backend gives the reason (gfx1100 does for its GL2C requests).
+    assert "memory.l2_bandwidth" in kernel_data["metrics"] or (
+        "memory.l2_bandwidth" in Metrix().backend.get_unsupported_metrics()
+    )
 
 
 @pytest.mark.integration
