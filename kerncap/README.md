@@ -22,7 +22,7 @@ kerncap profiles a running application, intercepts a target kernel dispatch, cap
 
 ## Install
 
-Builds `libkerncap.so` from source against the host ROCm 7.0+ (requires `hipcc`, `cmake`, HSA headers, rocprofiler-sdk — all present in standard ROCm images). No PyTorch or Triton dependency. No network access needed during the C++ build (nlohmann/json is vendored).
+Builds `libkerncap.so` from source against the host ROCm 7.2+ (requires `hipcc`, `cmake`, HSA headers, rocprofiler-sdk — all present in standard ROCm images). No PyTorch or Triton dependency. No network access needed during the C++ build (nlohmann/json is vendored).
 
 ```bash
 # From local source

@@ -114,7 +114,7 @@ kerncap -v extract ...
 - **kerncap.hpp**: C++ declarations
 - **kerncap_log.hpp**: Logging macros
 
-Built with CMake + HIP language support. Requires ROCm 7.0+ (HSA headers and rocprofiler-sdk, present in standard ROCm installations).
+Built with CMake + HIP language support. Requires ROCm 7.2+ (HSA headers and rocprofiler-sdk, present in standard ROCm installations).
 
 ### Key Technical Details
 
