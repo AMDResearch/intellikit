@@ -89,12 +89,12 @@ print("Passed:", check.passed, "max_error:", check.max_error)
 | `reproducer.py`, `reference_output/` | — | Always |
 | `kernel_variant.py` (or a copy of the original source file) | — | Always |
 
-Read `capture/dispatch.json` first: it holds the grid/block dimensions, kernarg layout, and GPU architecture, which is the fastest way to understand what the kernel does and how it is launched before reading source.
+Read `capture/dispatch.json` and `capture/metadata.json` first, before reading source: `dispatch.json` holds the grid/block dimensions, total kernarg size, and GPU architecture; `metadata.json` holds the per-argument layout (`kernarg_slots`: offsets, sizes, kinds, types) when available.
 
 ## Workflow
 
 1. **Pick the target.** If the user named a kernel, use it. Otherwise run `kerncap profile` and choose the kernel with the highest total time; tell the user which one and why. Kernel names are matched as substrings and `extract` captures the *first* matching dispatch, so for templated kernels use a long, template-qualified substring (e.g. `mul_mat_q<(ggml_type)7, 32, true>` rather than `mul_mat_q`). Use `--dispatch N` to capture a later dispatch.
-2. **Extract.** Pass `--source-dir` and any `-D` defines the application is built with to get an editable project. Without source, the capture is still replayable and validatable, but not editable. For Triton, `--source-dir` may be omitted; Kerncap falls back to source snapshots recorded at JIT time (including `torch.compile`/Inductor kernels).
+2. **Extract.** Pass `--source-dir` and any `-D` defines the application is built with to get an editable project. Without source, the capture is still replayable and validatable, but not editable. For Triton, `--source-dir` may be omitted only if you pass `--language triton`; Kerncap then falls back to source snapshots recorded at JIT time (including `torch.compile`/Inductor kernels). Without either flag, the language is not detected and no snapshots are taken.
 3. **Replay the baseline.** HIP: `make run` in the reproducer directory. Triton: `python3 reproducer.py`. For stable timing, use `kerncap replay <dir> --iterations 100`.
 4. **Edit loop.** Do not change the kernel signature.
    - HIP: edit `kernel_variant.cpp` and/or files in `deps/`, run `make recompile` (writes `optimized.hsaco`), then `make run-variant`.
@@ -108,6 +108,7 @@ Read `capture/dispatch.json` first: it holds the grid/block dimensions, kernarg 
 - Without a rebuilt HSACO, `kerncap validate` is a smoke test only: it confirms the captured kernel replays, not that any change is correct.
 - A "source not found" warning names its cause: a wrong `--source-dir`, a Triton kernel routed as HIP (pass `--language triton`), or a kernel with no source trail (Tensile, hand-written assembly, JIT-generated or vendor HSACO blobs). The capture is still replayable.
 - Embedded device pointers (`T**` in batched BLAS, structs with pointer members) and Kokkos constant-memory launches work automatically; replay restores all memory at its original virtual addresses.
-- Triton autotune configurations are pinned at capture time. For FP16 mismatches, relax `--tolerance`/`--rtol` (e.g. `--tolerance 1e-3 --rtol 1e-2`). NaN in outputs usually points to uninitialized memory, FP16 overflow, or wrong dtype inference.
+- Validation of default captures (those with `capture/dispatch.json`, HIP and Triton alike) is byte-exact; `--tolerance`/`--rtol` are ignored. A FAIL means the rebuilt kernel really produces different bytes (e.g. a changed FP accumulation order), so do not retry with looser tolerances. Tolerances apply only to legacy captures without `dispatch.json`, such as `--triton-backend python`.
+- Triton autotune configurations are pinned at capture time, so replay uses the configuration the application selected.
 - To profile the isolated kernel with Metrix or Linex (`rocprofv3`), replay with `--hip-launch` to avoid conflicts with the default HSA dispatch path.
 - For very large device-memory snapshots, tune the staging buffer with `KERNCAP_SNAPSHOT_CHUNK_BYTES` (default 64 MiB). Raise `extract --timeout` for long-running applications.
