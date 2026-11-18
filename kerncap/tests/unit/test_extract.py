@@ -12,6 +12,40 @@ from kerncap.extract import ExtractResult, run_extract, _generate_reproducer
 class TestRunExtract:
     """Tests for the top-level run_extract function."""
 
+    @pytest.mark.parametrize("source_database", [False, True])
+    def test_recompile_with_out_of_tree_build(self, tmp_path, source_database):
+        source = tmp_path / "src"
+        source.mkdir()
+        kernel = source / "scale.cpp"
+        kernel.write_text("__global__ void scale(float* x) {}")
+        build = tmp_path / "build-mi300x"
+        build.mkdir()
+        app = build / "mixbench"
+        app.touch(mode=0o755)
+
+        databases = [(build, "FROM_BUILD")]
+        if source_database:
+            databases.append((source, "FROM_SOURCE"))
+        for directory, flag in databases:
+            entry = {
+                "file": str(kernel),
+                "directory": str(directory),
+                "command": f"hipcc -D{flag} -c {kernel} -o scale.o",
+            }
+            (directory / "compile_commands.json").write_text(json.dumps([entry]))
+
+        output = tmp_path / "isolated"
+        capture = output / "capture"
+        capture.mkdir(parents=True)
+        (capture / "dispatch.json").write_text(json.dumps({"kernel_name": "scale"}))
+        with patch("kerncap.extract.run_capture"):
+            run_extract("scale", [str(app)], source_dir=str(source), output=str(output))
+
+        makefile = (output / "Makefile").read_text()
+        for target in ("recompile", "run-variant", "validate-variant"):
+            assert f"\n{target}:" in makefile
+        assert ("-DFROM_SOURCE" if source_database else "-DFROM_BUILD") in makefile
+
     @patch("kerncap.extract._generate_reproducer")
     @patch("kerncap.extract.run_capture")
     @patch("kerncap.extract.detect_language")

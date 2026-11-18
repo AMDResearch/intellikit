@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import shlex
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -349,6 +350,7 @@ def run_extract(
         detected_lang,
         defines,
         triton_backend=triton_backend,
+        binary_path=shutil.which(cmd_list[0]) if cmd_list else None,
     )
 
 
@@ -360,6 +362,7 @@ def _generate_reproducer(
     language: Optional[str],
     defines: List[str],
     triton_backend: str = "hsa",
+    binary_path: Optional[str] = None,
 ) -> ExtractResult:
     """Route to Triton or HSACO reproducer generation."""
     dispatch_path = os.path.join(capture_dir, "dispatch.json")
@@ -408,6 +411,7 @@ def _generate_reproducer(
                 language,
                 defines,
                 metadata,
+                binary_path=binary_path,
             )
             # ``ExtractResult.language`` says how to *use* the reproducer, not
             # what the kernel was written in, and what came out of the fallback
@@ -440,6 +444,7 @@ def _generate_reproducer(
         language,
         defines,
         metadata,
+        binary_path=binary_path,
     )
 
 
@@ -620,6 +625,7 @@ def _generate_hsaco(
     language: Optional[str],
     defines: List[str],
     metadata: dict,
+    binary_path: Optional[str] = None,
 ) -> ExtractResult:
     """HIP/HSACO extract pipeline."""
     from kerncap.reproducer import generate_hsaco_reproducer
@@ -643,6 +649,7 @@ def _generate_hsaco(
             language=language,
             extra_defines=defines if defines else None,
             mangled_name=mangled_name,
+            binary_path=binary_path,
         )
         if kernel_src:
             logger.info("Found: %s (%s)", kernel_src.main_file, kernel_src.language)
