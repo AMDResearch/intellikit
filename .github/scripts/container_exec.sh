@@ -16,6 +16,28 @@ if [ -z "$COMMAND" ]; then
     exit 1
 fi
 
+# A git transfer has no timeout by default, so a stalled connection does not
+# fail -- it waits, and the job dies on timeout-minutes with the log stopped
+# mid-build naming nothing. The installs run in here clone four things:
+# accordo's CMake fetches spdlog, fmt and nlohmann/json while configuring, and
+# pip installs kerneldb from a git URL.
+#
+# Abort a transfer that moves under 1 KB/s for ten minutes. git then exits with
+# an error identifying the URL, which is the point -- the job timeout alone says
+# only that something took too long.
+#
+# Ten minutes, not one: git moves no bytes while the server enumerates objects,
+# so a healthy clone of a large-history repo can sit under any rate threshold
+# for a while, and a short window would abort good builds. This is deliberately
+# far looser than needed to catch a stall -- it still fires well inside both job
+# timeouts (20m for tests, 60m for container builds), and the value here is the
+# error naming the URL, not the minutes saved.
+#
+# Set as environment variables rather than `git config` -- --global would write
+# a .gitconfig into the bind-mounted workspace, since HOME points there under
+# docker, and --system is unwritable in a read-only Apptainer image.
+GIT_STALL_GUARD='export GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=600;'
+
 # Apptainer being installed does not mean it can build. Building runs %post as
 # root inside a user namespace: a setuid starter does that directly, otherwise
 # it needs a uid mapping, which AppArmor can refuse even when the userns
@@ -77,7 +99,7 @@ if [ "$CONTAINER_RUNTIME" = "apptainer" ]; then
     EXEC_CMD="$EXEC_CMD --bind ${PWD}:/intellikit_workspace --cwd /intellikit_workspace"
 
     EXIT_CODE=0
-    $EXEC_CMD "$IMAGE" bash -c "set -e; $COMMAND" || EXIT_CODE=$?
+    $EXEC_CMD "$IMAGE" bash -c "set -e; $GIT_STALL_GUARD $COMMAND" || EXIT_CODE=$?
 
     rm -f "${OVERLAY}" 2>/dev/null || true
     exit $EXIT_CODE
@@ -106,7 +128,7 @@ elif [ "$CONTAINER_RUNTIME" = "docker" ]; then
     # exiting -- including when the command failed. Apptainer does not need
     # this: it runs as the invoking user.
     EXIT_CODE=0
-    $RUN_CMD "$IMAGE_NAME" -c "set -e; $COMMAND" || EXIT_CODE=$?
+    $RUN_CMD "$IMAGE_NAME" -c "set -e; $GIT_STALL_GUARD $COMMAND" || EXIT_CODE=$?
 
     # The container runs as root, so anything it wrote into the bind-mounted
     # workspace is root-owned, and actions/checkout -- running as an ordinary
