@@ -541,7 +541,7 @@ hsa_status_t nexus::hsa_code_object_reader_create_from_memory(
 
   if (instance->kdb_) {
     if (filename.has_value()) {
-      instance->kdb_->addFile(filename.value(), instance->gpu_agent_.agent, "");
+      instance->kdb_->addFile(filename.value(), instance->gpu_agent_.agent, "", true);
     } else {
       LOG_DETAIL(
           "Failed to find the file name for the code object. Dumping to temp file.");
@@ -556,7 +556,7 @@ hsa_status_t nexus::hsa_code_object_reader_create_from_memory(
       temp_file_stream.write(reinterpret_cast<const char*>(code_object), size);
       temp_file_stream.close();
       LOG_DETAIL("Adding the code object {}", tmp.string());
-      instance->kdb_->addFile(tmp, instance->gpu_agent_.agent, "");
+      instance->kdb_->addFile(tmp, instance->gpu_agent_.agent, "", true);
     }
   }
 
