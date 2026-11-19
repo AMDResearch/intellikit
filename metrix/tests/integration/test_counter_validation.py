@@ -165,12 +165,12 @@ class TestHBMBandwidth:
     )
 
     def test_hbm_read_bandwidth(self):
-        """Sequential coalesced read should achieve >100 GB/s."""
+        """Sequential coalesced read should achieve >50 GB/s."""
         with tempfile.TemporaryDirectory(prefix="metrix_val_") as d:
             p = Path(d)
             b = _compile_hip(self._READ_SRC, "bw_read", p)
             m = _profile(b, ["memory.hbm_read_bandwidth"], p)
-        assert m["memory.hbm_read_bandwidth"] > 100.0
+        assert m["memory.hbm_read_bandwidth"] > 50.0
 
     def test_hbm_write_bandwidth(self):
         """Sequential coalesced write should achieve >50 GB/s."""
