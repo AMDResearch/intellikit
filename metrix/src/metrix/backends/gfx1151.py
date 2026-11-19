@@ -7,11 +7,11 @@ GFX11 counter-block layout with gfx1100, not GFX12's with gfx1201.
 """
 
 from .device_info import query_device_specs
-from .gfx1100 import GFX1100Backend
+from .rdna_common import GFX11Backend
 
 
-class GFX1151Backend(GFX1100Backend):
-    """AMD RDNA 3.5 (GFX1151) backend - same hardware config as gfx1100."""
+class GFX1151Backend(GFX11Backend):
+    """AMD RDNA 3.5 (GFX1151) backend - gfx11 counter-block layout."""
 
     def _get_device_specs(self):
         return query_device_specs("gfx1151")

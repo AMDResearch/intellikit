@@ -14,10 +14,10 @@ reads from DDR5 system memory rather than GDDR6 (see device_info.py).
 """
 
 from .device_info import query_device_specs
-from .gfx1100 import GFX1100Backend
+from .rdna_common import GFX11Backend
 
 
-class GFX1103Backend(GFX1100Backend):
+class GFX1103Backend(GFX11Backend):
     """AMD RDNA3 (GFX1103 / Phoenix) backend."""
 
     def _get_device_specs(self):

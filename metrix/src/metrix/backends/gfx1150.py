@@ -10,11 +10,11 @@ ALUStalledByLDS and LdsLatency derived counters (see counter_defs.yaml).
 """
 
 from .device_info import query_device_specs
-from .gfx1100 import GFX1100Backend
+from .rdna_common import GFX11Backend
 
 
-class GFX1150Backend(GFX1100Backend):
-    """AMD RDNA 3.5 (GFX1150) backend - same hardware config as gfx1100."""
+class GFX1150Backend(GFX11Backend):
+    """AMD RDNA 3.5 (GFX1150) backend - gfx11 counter-block layout."""
 
     def _get_device_specs(self):
         return query_device_specs("gfx1150")
