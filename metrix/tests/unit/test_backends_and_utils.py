@@ -21,6 +21,7 @@ from metrix.backends import detect as detect_mod
 from metrix.backends import device_info
 from metrix.backends.base import CounterBackend, DeviceSpecs, ProfileResult
 from metrix.backends.detect import detect_gpu_arch, detect_or_default
+from metrix.backends.rdna_common import GFX11Backend, RDNABackend
 from metrix.utils.common import split_counters_into_passes
 
 # --------------------------------------------------------------------------
@@ -259,8 +260,8 @@ def test_backend_run_rocprof_delegates_to_wrapper(module_name, class_name):
     import sys
 
     _mod, backend = _make_backend(module_name, class_name)
-    # The RDNA backends subclass GFX1201Backend and inherit _run_rocprof, so
-    # ROCProfV3Wrapper must be patched in whichever module defines it.
+    # The RDNA backends inherit _run_rocprof from RDNABackend in rdna_common.py,
+    # so ROCProfV3Wrapper must be patched in whichever module defines it.
     defining_mod = sys.modules[type(backend)._run_rocprof.__module__]
     sentinel = [object()]
     wrapper = MagicMock()
@@ -270,6 +271,51 @@ def test_backend_run_rocprof_delegates_to_wrapper(module_name, class_name):
     assert got is sentinel
     ctor.assert_called_once()
     assert wrapper.profile.call_args.kwargs["kernel_filter"] == "gemm.*"
+
+
+RDNA_BACKENDS = [b for b in BACKENDS if b[0].startswith("gfx1")]
+GFX11_BACKENDS = [b for b in RDNA_BACKENDS if b[0].startswith("gfx11")]
+
+
+def _backend_class(module_name, class_name):
+    import importlib
+
+    return getattr(importlib.import_module(f"metrix.backends.{module_name}"), class_name)
+
+
+@pytest.mark.parametrize("module_name,class_name", BACKENDS)
+def test_no_backend_inherits_from_another_architecture(module_name, class_name):
+    cls = _backend_class(module_name, class_name)
+    others = {_backend_class(m, c) for m, c in BACKENDS if c != class_name}
+    assert not others.intersection(cls.__mro__)
+
+
+@pytest.mark.parametrize("module_name,class_name", BACKENDS)
+def test_only_rdna_backends_derive_from_rdna_backend(module_name, class_name):
+    cls = _backend_class(module_name, class_name)
+    assert issubclass(cls, RDNABackend) == ((module_name, class_name) in RDNA_BACKENDS)
+
+
+@pytest.mark.parametrize("module_name,class_name", RDNA_BACKENDS)
+def test_rdna_backends_share_one_grouping_and_rocprof_run(module_name, class_name):
+    cls = _backend_class(module_name, class_name)
+    assert cls._get_counter_groups is RDNABackend._get_counter_groups
+    assert cls._run_rocprof is RDNABackend._run_rocprof
+
+
+@pytest.mark.parametrize(
+    "module_name,class_name", [("gfx1030", "GFX1030Backend"), ("gfx1201", "GFX1201Backend")]
+)
+def test_gfx10_and_gfx12_backends_derive_directly_from_rdna_backend(module_name, class_name):
+    assert _backend_class(module_name, class_name).__bases__ == (RDNABackend,)
+
+
+@pytest.mark.parametrize("module_name,class_name", GFX11_BACKENDS)
+def test_gfx11_backends_share_gfx11_backend(module_name, class_name):
+    """gfx1100 and the gfx11 APUs are siblings under GFX11Backend; no APU derives from gfx1100."""
+    cls = _backend_class(module_name, class_name)
+    assert cls.__bases__ == (GFX11Backend,)
+    assert cls._get_counter_block_limits is GFX11Backend._get_counter_block_limits
 
 
 def test_empty_counter_list_still_yields_one_pass():

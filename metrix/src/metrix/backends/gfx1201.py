@@ -4,38 +4,20 @@ GFX1201 (RDNA4) Backend
 Metrics are loaded from counter_defs.yaml.
 This file provides architecture-specific infrastructure only.
 Device specs are queried from hipGetDeviceProperties at runtime.
+Counter grouping and the rocprofv3 invocation are shared with the other RDNA
+backends through RDNABackend.
 """
 
-from .base import CounterBackend, ProfileResult
 from .device_info import query_device_specs
-from ..utils.common import split_counters_into_passes
-from ..profiler.rocprof_wrapper import ROCProfV3Wrapper
-from pathlib import Path
-from typing import List, Dict, Optional
+from .rdna_common import RDNABackend
+from typing import Dict
 
 
-class GFX1201Backend(CounterBackend):
+class GFX1201Backend(RDNABackend):
     """AMD RDNA4 (gfx1201) backend."""
 
     def _get_device_specs(self):
         return query_device_specs("gfx1201")
-
-    def _get_counter_groups(self, counters: List[str]) -> List[List[str]]:
-        """
-        Group counters into passes using GFX12-specific block limits.
-
-        Reuses the generic bin-packing helper from `common.py` with
-        GFX12 block limits and counter-block mapping.
-        """
-        from ..logger import logger
-
-        block_limits = self._get_counter_block_limits()
-        return split_counters_into_passes(
-            counters,
-            block_limits=block_limits,
-            get_counter_block=self._get_counter_block,
-            logger=logger,
-        )
 
     def _get_counter_block_limits(self) -> Dict[str, int]:
         """
@@ -72,25 +54,3 @@ class GFX1201Backend(CounterBackend):
             "CHC": 4,  # Coherency Hub Client
             "UTCL1": 4,  # Unified Translation Cache L1
         }
-
-    def _run_rocprof(
-        self,
-        command: str,
-        counters: List[str],
-        kernel_filter: Optional[str] = None,
-        cwd: Optional[str] = None,
-        timeout_seconds: Optional[int] = 0,
-        kernel_iteration_range: Optional[str] = None,
-    ) -> List[ProfileResult]:
-        wrapper = ROCProfV3Wrapper(timeout_seconds=timeout_seconds)
-        extra_counters_path = Path(__file__).parent / "counter_defs.yaml"
-
-        return wrapper.profile(
-            command=command,
-            counters=counters,
-            kernel_filter=kernel_filter,
-            cwd=cwd,
-            kernel_iteration_range=kernel_iteration_range,
-            extra_counters_path=extra_counters_path if extra_counters_path.exists() else None,
-            arch=self.device_specs.arch,
-        )

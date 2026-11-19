@@ -2,16 +2,17 @@
 GFX1030 (RDNA2) Backend
 
 Counter-limits-only backend for AMD RDNA2 (RX 6000 series).
-Inherits metric computation from GFX1201Backend (YAML-based metrics via counter_defs.yaml).
+Inherits counter grouping and rocprofv3 invocation from RDNABackend; metrics are
+the gfx1030 definitions in counter_defs.yaml.
 Only overrides device specs and counter block limits.
 """
 
 from .device_info import query_device_specs
-from .gfx1201 import GFX1201Backend
+from .rdna_common import RDNABackend
 from typing import Dict
 
 
-class GFX1030Backend(GFX1201Backend):
+class GFX1030Backend(RDNABackend):
     """AMD RDNA2 (gfx1030) backend."""
 
     def _get_device_specs(self):
