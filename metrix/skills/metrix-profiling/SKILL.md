@@ -1,6 +1,6 @@
 ---
 name: metrix-profiling
-description: Profile GPU kernels when performance analysis or optimization is required. Use for AMD ROCm GPU metrics, bandwidth, cache hit rates, coalescing, or kernel timing.
+description: Profile GPU kernels when performance analysis or optimization is required. Use for AMD ROCm GPU metrics, bandwidth, cache hit rates, coalescing, or kernel timing. Not for application timelines or CPU–GPU overlap traces.
 ---
 
 # Metrix: GPU Profiling

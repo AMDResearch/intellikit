@@ -3,7 +3,7 @@
     {
       "id": "metrix-profile-vector-add",
       "skill_should_trigger": true,
-      "prompt": "Measure my vector_add HIP kernel in vector_add.hip on this GPU: its run time, HBM bandwidth, and L2 cache hit rate. Save the raw profile to results.json and tell me whether it is memory bound.",
+      "prompt": "Use Metrix to measure my vector_add HIP kernel in vector_add.hip on this GPU: its run time, HBM bandwidth, and L2 cache hit rate. Save the raw profile to results.json and tell me whether it is memory bound.",
       "workspace": "evals/files/vector-add",
       "expected_behavior": [
         "Builds vector_add.hip with hipcc and profiles the resulting binary with Metrix, collecting memory bandwidth and L2 hit rate metrics",
@@ -22,7 +22,7 @@
     {
       "id": "metrix-time-only-replays",
       "skill_should_trigger": true,
-      "prompt": "Time my vector_add HIP kernel in vector_add.hip over 10 replays and tell me the average; I only need timing, not hardware counters. Save the result to timing.json.",
+      "prompt": "Use Metrix to time my vector_add HIP kernel in vector_add.hip over 10 replays and tell me the average; I only need timing, not hardware counters. Save the result to timing.json.",
       "workspace": "evals/files/vector-add",
       "expected_behavior": [
         "Uses Metrix's timing-only mode (no hardware counters) with 10 replays and saves the result to timing.json",
@@ -41,12 +41,12 @@
     {
       "id": "metrix-gemm-memory-bound",
       "skill_should_trigger": true,
-      "prompt": "My HIP GEMM kernel is a lot slower than I expected on our MI300X. Measure its memory bandwidth and L2 cache hit rate so I can tell whether it is memory bound."
+      "prompt": "Measure the memory bandwidth and L2 cache hit rate of a naive HIP GEMM kernel on this AMD GPU so I can tell whether it is memory bound."
     },
     {
       "id": "metrix-pytorch-kernel-timings",
       "skill_should_trigger": true,
-      "prompt": "Get per-kernel GPU timings for one training step of my PyTorch model on the AMD GPU, and tell me which kernels have poor memory coalescing."
+      "prompt": "Get per-kernel GPU timings for one training step of a small PyTorch MLP on this AMD GPU, and tell me which kernels have poor memory coalescing."
     },
     {
       "id": "metrix-negative-cuda-nsight",

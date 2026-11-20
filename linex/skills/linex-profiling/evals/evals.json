@@ -3,7 +3,7 @@
     {
       "id": "linex-find-hot-line",
       "skill_should_trigger": true,
-      "prompt": "Find which source line of my gather_scale HIP kernel in gather.hip costs the most GPU cycles and how much of that time is stalled, and write the top lines with their cycle counts and stall percentages to hotspots.md.",
+      "prompt": "Use Linex to find which source line of my gather_scale HIP kernel in gather.hip costs the most GPU cycles and how much of that time is stalled, and write the top lines with their cycle counts and stall percentages to hotspots.md.",
       "workspace": "evals/files/gather",
       "expected_behavior": [
         "Builds gather.hip with hipcc including debug symbols (-g) so cycles can be mapped to source lines",
@@ -19,7 +19,7 @@
     {
       "id": "linex-hot-line-instructions",
       "skill_should_trigger": true,
-      "prompt": "For the source line of my gather_scale HIP kernel in gather.hip that costs the most cycles, list the ISA instructions it compiled to with their latency and stall cycles in instructions.md.",
+      "prompt": "Use Linex to find the source line of my gather_scale HIP kernel in gather.hip that costs the most cycles, and list the ISA instructions it compiled to with their latency and stall cycles in instructions.md.",
       "workspace": "evals/files/gather",
       "expected_behavior": [
         "Builds gather.hip with debug symbols (-g) and profiles gather_scale with Linex",
@@ -35,12 +35,12 @@
     {
       "id": "linex-slowest-line-attention",
       "skill_should_trigger": true,
-      "prompt": "Which line of my HIP attention kernel is the slowest? I want cycles and stall percentages per source line on my MI300X."
+      "prompt": "Show me which source line of a simple HIP attention kernel is the slowest on this AMD GPU, with cycles and stall percentages per line."
     },
     {
       "id": "linex-triton-isa-stalls",
       "skill_should_trigger": true,
-      "prompt": "Show me the ISA instructions with the most stall cycles in my Triton kernel and which Python source lines they come from."
+      "prompt": "Show me the ISA instructions with the most stall cycles for a simple Triton kernel on this AMD GPU, and which Python source lines they come from."
     },
     {
       "id": "linex-negative-explicit-pc-sampling",
