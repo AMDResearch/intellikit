@@ -40,8 +40,9 @@ def detect_or_default(requested_arch: str = None) -> str:
     """
     Use the requested architecture, or detect the GPU's
 
-    Detection failure is an error rather than a guess: profiling a GPU with
-    another architecture's counter definitions yields wrong numbers, not none.
+    Detection failure is an error rather than a guess: a guessed architecture
+    selects another architecture's backend and reports the wrong arch, even
+    when the counter definitions happen to line up with the hardware.
     The message is shown by every caller, including metrix profile, which has
     no --arch, so its hint must name steps that work from each of them.
 
