@@ -1,6 +1,6 @@
 ---
 name: linex-profiling
-description: Profile GPU kernels at source-line granularity with cycle-level timing and stall analysis. Use when identifying performance hotspots at the source code level or analyzing instruction-level metrics mapped to source lines.
+description: Profile AMD GPU kernels on ROCm at source-line granularity with cycle-level timing and stall analysis. Use when identifying performance hotspots at the source code level or analyzing instruction-level metrics mapped to source lines. Not for requests that explicitly ask for PC sampling.
 ---
 
 # Linex: Source-Level GPU Performance Profiling
@@ -15,14 +15,20 @@ Map GPU performance metrics to your source code lines. Get cycle-level timing, s
 - Understanding cycle-level timing for each line of code
 - Instruction-level analysis mapped to source lines
 
+## Prerequisites
+
+- AMD GPU with ROCm 7.2 or later and `rocprofv3`, Ubuntu 22.04 or 24.04, and Python 3.10 or later.
+- Install: `pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=linex"`
+- On ROCm older than 7.13, the first `Linex()` downloads the trace decoder to `~/.cache/linex/`, which needs network access.
+
 ## Instructions
 
-1. **Ensure the target runs on AMD ROCm 7.0+** with `rocprofv3` available.
+1. **Ensure the target runs on AMD ROCm** with `rocprofv3` available.
 2. **Kernels must be compiled with `-g`** (debug symbols) for source mapping.
 3. **Choose execution path:**
    - If a Linex MCP server is available, use its MCP tools:
-     - `profile_application` to run and profile a target application with the options below.
-     - `analyze_instruction_hotspots` to perform instruction-level hotspot analysis on collected profiles.
+     - `linex-mcp:profile_application` to run and profile a target application with the options below.
+     - `linex-mcp:analyze_instruction_hotspots` to perform instruction-level hotspot analysis on collected profiles.
    - Otherwise use the Python API from the environment where Linex is installed.
 
 ### Python API
@@ -91,7 +97,6 @@ for line in profiler.source_lines[:1]:
 
 ## Notes
 
-- Requires ROCm 7.0+ with `rocprofv3` support.
 - Source mapping requires kernels compiled with `-g` (debug symbols).
 - `source_lines` are automatically sorted by `total_cycles` (descending).
 - Use `kernel_filter` to profile specific kernels by name (regex pattern).

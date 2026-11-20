@@ -14,11 +14,17 @@ Profile AMD GPU kernels and get human-readable metrics (bandwidth, cache, coales
 - Need HBM/L2/L1 bandwidth, hit rates, or compute metrics
 - Need timing-only runs (fast, no hardware counters)
 
+## Prerequisites
+
+- AMD GPU with ROCm 7.2 or later, Ubuntu 22.04 or 24.04, and Python 3.10 or later.
+- Install: `pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=metrix"`
+- Supported GPUs: gfx90a, gfx942, gfx950, gfx1030, gfx1100, gfx1150, gfx1151, gfx1201. Available metrics vary by GPU (`metrix list metrics`); gfx1103 reports kernel times only.
+
 ## Instructions
 
 1. **Ensure the target runs on AMD ROCm** (e.g. `hipcc`-built binary or Python script that launches HIP/ROCm kernels).
 2. **Choose execution path:**
-   - If a Metrix MCP server is available, use `list_available_metrics` to discover metric names, then `profile_metrics` to collect them (or omit `metrics` to collect all).
+   - If a Metrix MCP server is available, use `metrix-mcp:list_available_metrics` to discover metric names, then `metrix-mcp:profile_metrics` to collect them (or omit `metrics` to collect all).
    - Otherwise run the CLI or Python API from the environment where Metrix is installed.
 
 ### CLI
