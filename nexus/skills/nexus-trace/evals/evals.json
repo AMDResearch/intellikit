@@ -1,0 +1,57 @@
+{
+  "evaluations": [
+    {
+      "id": "nexus-trace-two-kernels",
+      "skill_should_trigger": true,
+      "prompt": "Use Nexus to find out which GPU kernels my HIP program, two_kernels.hip, actually launches, and tell me each one's name and how many assembly instructions it has. Save what you capture to trace.json.",
+      "workspace": "evals/files/two-kernels",
+      "expected_behavior": [
+        "Runs the built binary under Nexus and saves the captured trace to trace.json",
+        "Reports both the saxpy and the square kernels with the instruction counts taken from the Nexus trace"
+      ],
+      "unexpected_behavior": [
+        "Produces the assembly by disassembling the binary offline (for example with llvm-objdump or roc-obj) instead of capturing what ran with Nexus"
+      ],
+      "files_exist": [
+        "trace.json"
+      ]
+    },
+    {
+      "id": "nexus-square-asm-to-source",
+      "skill_should_trigger": true,
+      "prompt": "Use Nexus to capture the assembly that actually ran on the GPU for the square kernel in my HIP program, two_kernels.hip: save it to square.s and write square_map.md mapping it back to its HIP source lines.",
+      "workspace": "evals/files/two-kernels",
+      "expected_behavior": [
+        "Takes the square kernel's assembly from the Nexus capture and maps it to square's HIP source lines",
+        "Writes square.s with the square kernel's assembly and square_map.md relating it to the HIP source lines of square"
+      ],
+      "unexpected_behavior": [
+        "Produces the assembly by disassembling the binary offline (for example with llvm-objdump or roc-obj) instead of capturing what ran with Nexus"
+      ],
+      "files_exist": [
+        "square.s",
+        "square_map.md"
+      ]
+    },
+    {
+      "id": "nexus-pytorch-which-kernels",
+      "skill_should_trigger": true,
+      "prompt": "Show me which GPU kernels PyTorch actually launches on my AMD GPU for a simple matrix multiply, with their names and the source they came from."
+    },
+    {
+      "id": "nexus-triton-assembly-to-source",
+      "skill_should_trigger": true,
+      "prompt": "Show me the GPU assembly a simple Triton kernel compiles to on this AMD GPU, mapped back to its Python source lines."
+    },
+    {
+      "id": "nexus-negative-hipify",
+      "skill_should_trigger": false,
+      "prompt": "Convert this CUDA kernel to HIP so it builds and runs on my AMD GPU."
+    },
+    {
+      "id": "nexus-negative-pytorch-trace-gaps",
+      "skill_should_trigger": false,
+      "prompt": "Open this PyTorch profiler trace JSON and tell me where the CPU launch gaps are."
+    }
+  ]
+}

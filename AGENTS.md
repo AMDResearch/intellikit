@@ -181,15 +181,15 @@ Not all tools follow the same directory structure:
 
 | Tool | Layout | Package Location | C++ Source | Tests | Skills | CLI |
 |------|--------|------------------|------------|-------|--------|-----|
-| **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skill/` | Yes |
-| **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skill/` | No |
+| **metrix** | `src/` layout | `metrix/src/metrix/` | N/A | `metrix/tests/` | `metrix/skills/metrix-profiling/` | Yes |
+| **linex** | `src/` layout | `linex/src/linex/` | N/A | `linex/tests/` | `linex/skills/linex-profiling/` | No |
 | **rocm_mcp** | `src/` layout | `rocm_mcp/src/rocm_mcp/` | N/A | `rocm_mcp/tests/` | N/A | No |
 | **uprof_mcp** | `src/` layout | `uprof_mcp/src/uprof_mcp/` | N/A | none yet | N/A | No |
-| **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skill/` | Yes |
-| **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skill/` | Yes |
-| **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skill/` | No |
+| **accordo** | flat layout | `accordo/accordo/` | `accordo/src/` (runtime compiled) | `accordo/tests/` | `accordo/skills/accordo-validation/` | Yes |
+| **kerncap** | flat layout | `kerncap/kerncap/` | `kerncap/src/` (CMake built) | `kerncap/tests/` | `kerncap/skills/kerncap-isolate/` | Yes |
+| **nexus** | flat layout | `nexus/nexus/` | `nexus/csrc/` (CMake built) | `nexus/tests/` | `nexus/skills/nexus-trace/` | No |
 
-This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skill/` directory containing `SKILL.md` files for AI agent integration.
+This affects import paths and where to find source code. Tools with CLI support (`accordo`, `kerncap`, `metrix`) can be used standalone or via MCP. MCP-only tools (`linex`, `nexus`, `rocm_mcp`, `uprof_mcp`) are designed for LLM integration. Each main tool except rocm_mcp and uprof_mcp has a `skills/<skill-name>/` directory containing its agent skill.
 
 ## Dependency Management
 
@@ -450,15 +450,15 @@ cd nexus && pytest -v
 
 ### Working with Agent Skills
 
-Each main tool (except rocm_mcp and uprof_mcp) has a `skill/` directory with `SKILL.md` files for AI agent integration:
+Each main tool (except rocm_mcp and uprof_mcp) has a `skills/<skill-name>/` directory with a `SKILL.md`, `skill-card.md`, and `evals/` for AI agent integration:
 
 ```bash
 # Skills are located at:
-accordo/skill/SKILL.md
-kerncap/skill/SKILL.md
-linex/skill/SKILL.md
-metrix/skill/SKILL.md
-nexus/skill/SKILL.md
+accordo/skills/accordo-validation/SKILL.md
+kerncap/skills/kerncap-isolate/SKILL.md
+linex/skills/linex-profiling/SKILL.md
+metrix/skills/metrix-profiling/SKILL.md
+nexus/skills/nexus-trace/SKILL.md
 
 # Install skills for AI agents using the install script
 ./install/skills/install.sh                    # local: ./.agents/skills/
@@ -476,7 +476,7 @@ This project is built for LLM consumption:
 - Clean, human-readable APIs (not raw hardware counters)
 - MCP servers for all tools
 - Examples in every tool's `examples/` directory
-- Agent skills in `skill/SKILL.md` files for AI agent discovery
+- Agent skills in `skills/<skill-name>/SKILL.md` files for AI agent discovery
 - Comprehensive docstrings and type hints
 
 ### No Mapping Tables

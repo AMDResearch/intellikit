@@ -19,7 +19,7 @@ Profile a running application, capture one kernel dispatch's complete runtime st
 1. **Ensure prerequisites:** ROCm 7.2.x or later, Ubuntu 22.04/24.04, Python 3.10+, and an AMD GPU (Instinct MI300X, MI325X, MI355X recommended; Radeon supported). `hipcc`, `cmake`, and `rocprofv3` must be on `PATH`. Install with `pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=kerncap"`, which builds `libkerncap.so` against the host ROCm.
 2. **To edit and rebuild a HIP kernel, the application's build must provide `compile_commands.json`** (configure CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`). Without it, capture, replay, and validate still work, but the `make recompile` target is not generated. Check this before extracting if the user wants to modify the kernel.
 3. **Choose execution path:**
-   - If a Kerncap MCP server (`kerncap-mcp`) is available, use `profile_kernels` to rank kernels, `extract_kernel` to generate the reproducer, and `validate_reproducer` to check it. There is no MCP replay tool; use the CLI or Python API for replay and timing.
+   - If a Kerncap MCP server (`kerncap-mcp`) is available, use `kerncap-mcp:profile_kernels` to rank kernels, `kerncap-mcp:extract_kernel` to generate the reproducer, and `kerncap-mcp:validate_reproducer` to check it. There is no MCP replay tool; use the CLI or Python API for replay and timing.
    - Otherwise use the CLI or Python API from the environment where Kerncap is installed.
 
 ### CLI
