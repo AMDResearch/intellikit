@@ -7,15 +7,15 @@ Prompts and expectations live in ``evals.json``; this file holds only the
 environment plumbing the dataset format cannot express. The runner calls
 ``setup_session`` once before the cases run.
 
-When Nexus is already importable by ``python3`` on the runner it is used as is.
-Otherwise it is installed into a throwaway venv whose ``bin`` is put first on
-``PATH``, which the agent inherits. Inside the IntelliKit repo the venv gets the
-checked-out sources, so a pull request is graded against its own code; in a
-vendored copy (the amd/skills catalog) it gets IntelliKit ``main``.
+Inside the IntelliKit repo the checked-out sources are always installed into a
+throwaway venv, so a pull request is graded against its own code. In a vendored
+copy (the amd/skills catalog) a working Nexus already on the runner is reused;
+otherwise IntelliKit ``main`` is installed into the venv. The venv's ``bin`` is
+put first on ``PATH``, which the agent inherits.
 
 Nexus builds KernelDB, which compiles against libdwarf, libelf, and libzstd.
 IntelliKit's dev image installs their Ubuntu packages; a CI runner may have
-neither the headers nor the right to install them. When the headers are missing,
+neither the headers nor the right to install them. When any of them is missing,
 the same Ubuntu packages are downloaded with a private apt index, unpacked into
 the cache, and pointed to through the compiler and loader search paths, so
 nothing on the runner changes and no root is needed.
@@ -31,6 +31,8 @@ from pathlib import Path
 
 PACKAGE = "nexus"
 GIT_SOURCE = "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"
+# Importing nexus does not look for libnexus.so; constructing Nexus does.
+PROBE = "from nexus import Nexus; Nexus()"
 
 # Building from source can compile C++ (KernelDB, the HSA tool library), which
 # takes several minutes on a cold runner; 30 minutes leaves room for a slow mirror.
@@ -47,6 +49,11 @@ LIBDWARF_HEADER_DIRS = (
     "/usr/local/include/libdwarf",
     "/usr/local/include/libdwarf-0",
 )
+NATIVE_HEADERS = {
+    "libdwarf.h": LIBDWARF_HEADER_DIRS,
+    "libelf.h": ("/usr/include", "/usr/local/include"),
+    "zstd.h": ("/usr/include", "/usr/local/include"),
+}
 
 
 def _local_source() -> Path | None:
@@ -71,7 +78,7 @@ def _unpack_native_deps(cache_dir: str) -> None:
     apt_get, apt_cache, dpkg = (shutil.which(tool) for tool in ("apt-get", "apt-cache", "dpkg"))
     if apt_get is None or apt_cache is None or dpkg is None:
         msg = (
-            "libdwarf headers are missing and this runner has no apt-get/dpkg to "
+            "KernelDB's build headers are missing and this runner has no apt-get/dpkg to "
             f"fetch them; install {' '.join(NATIVE_DEV_PACKAGES)} on the runner."
         )
         raise RuntimeError(msg)
@@ -150,23 +157,29 @@ def setup_session(cache_dir: str) -> dict[str, str]:
     if python is None:
         msg = "python3 is not on PATH; the runner needs Python 3.10 or later."
         raise RuntimeError(msg)
-    # Run the probe outside the repo: from the IntelliKit root, the bare tool
-    # directory would import as a namespace package and look installed.
-    probe = subprocess.run(
-        [python, "-c", f"import {PACKAGE}"],
-        check=False,
-        capture_output=True,
-        cwd=cache_dir,
-    )
-    if probe.returncode == 0:
-        return {}
+    local = _local_source()
+    if local is None:
+        # Vendored copy: reuse a working installation if the runner has one.
+        # Probe outside any checkout, where a bare tool directory would import
+        # as a namespace package and look installed.
+        probe = subprocess.run(
+            [python, "-c", PROBE],
+            check=False,
+            capture_output=True,
+            cwd=cache_dir,
+        )
+        if probe.returncode == 0:
+            return {}
 
-    if not any(Path(d, "libdwarf.h").is_file() for d in LIBDWARF_HEADER_DIRS):
+    headers_present = all(
+        any(Path(d, header).is_file() for d in dirs) for header, dirs in NATIVE_HEADERS.items()
+    )
+    if not headers_present:
         _unpack_native_deps(cache_dir)
 
     venv_dir = Path(cache_dir) / "venv"
     subprocess.run([python, "-m", "venv", str(venv_dir)], check=True)
-    source = _local_source() or GIT_SOURCE
+    source = local or GIT_SOURCE
     subprocess.run(
         [str(venv_dir / "bin" / "pip"), "install", "--quiet", str(source)],
         check=True,
