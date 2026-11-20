@@ -5,6 +5,7 @@ Info command implementation
 from ..metrics import METRIC_CATALOG, METRIC_PROFILES
 from ..metrics.catalog import get_selected_metric_info
 from ..backends import get_backend, detect_or_default
+from ..logger import logger
 
 
 def info_command(args):
@@ -12,7 +13,11 @@ def info_command(args):
 
     if args.info_type == "metric":
         # Get architecture from args if available, otherwise auto-detect
-        arch = getattr(args, "arch", None) or detect_or_default()
+        try:
+            arch = getattr(args, "arch", None) or detect_or_default()
+        except RuntimeError as e:
+            logger.error(str(e))
+            return 1
         show_metric_info(args.name, arch)
     elif args.info_type == "profile":
         show_profile_info(args.name)

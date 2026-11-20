@@ -176,7 +176,7 @@ metrix list <metrics|profiles|devices> [--category CAT]
 metrix info <metric|profile> <name>
 ```
 
-Note: GPU architecture is auto-detected using `rocminfo`.
+Note: GPU architecture is auto-detected using `rocminfo`. If detection fails, Metrix stops with an error instead of guessing: make sure `rocminfo` runs and lists the GPU, or pass the architecture with `Metrix(arch=...)`, or with `--arch` for `metrix list` and `metrix info` (`metrix profile` has no `--arch`).
 
 ## Testing
 

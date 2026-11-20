@@ -29,11 +29,12 @@ def list_metrics(category=None, arch=None):
     print("║                     AVAILABLE METRICS                               ║")
     print("╚════════════════════════════════════════════════════════════════════╝\n")
 
-    selected_arch = detect_or_default(arch)
+    selected_arch = arch or "unknown"
     try:
+        selected_arch = detect_or_default(arch)
         backend = get_backend(selected_arch)
     except (RuntimeError, ValueError) as e:
-        # A mistyped --arch is a usage error; an unsupported detected GPU still lists the catalog.
+        # A mistyped --arch is a usage error; an unsupported or undetected GPU still lists the catalog.
         if isinstance(e, ValueError) and arch:
             raise
         backend = None

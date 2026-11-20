@@ -326,6 +326,18 @@ def test_dispatch_key_without_colon_prints_as_kernel(capsys):
     assert "Kernel: bare_name" in capsys.readouterr().out
 
 
+def test_profile_returns_1_when_detection_fails(caplog, capsys):
+    error = RuntimeError("Could not detect the GPU architecture: rocminfo not found")
+    with (
+        patch("metrix.cli.profile_cmd.detect_or_default", side_effect=error),
+        patch("metrix.cli.profile_cmd.get_backend") as get_backend,
+    ):
+        assert profile_command(Args()) == 1
+        get_backend.assert_not_called()
+    assert "Could not detect the GPU architecture: rocminfo not found" in caplog.text
+    assert capsys.readouterr().out == ""
+
+
 # --------------------------------------------------------------------------
 # list_cmd
 # --------------------------------------------------------------------------
@@ -387,6 +399,18 @@ def test_list_metrics_falls_back_to_catalog_when_backend_unavailable(capsys):
         "fatal error: 'hip/hip_runtime.h' file not found)"
     ) in out
     assert "1 error generated" not in out
+
+
+def test_list_metrics_falls_back_when_detection_fails(capsys):
+    error = RuntimeError("Could not detect the GPU architecture: rocminfo not found")
+    with patch("metrix.cli.list_cmd.detect_or_default", side_effect=error):
+        list_metrics()
+    out = capsys.readouterr().out
+    assert f"Total: {len(METRIC_CATALOG)} metrics" in out
+    assert (
+        "Architecture: unknown (backend unavailable: "
+        "Could not detect the GPU architecture: rocminfo not found)"
+    ) in out
 
 
 def test_list_metrics_rejects_unsupported_explicit_arch():
@@ -510,6 +534,14 @@ def test_info_command_metric_honours_explicit_arch():
         args = Args(info_type="metric", name=KNOWN_METRIC, arch="gfx950")
         info_command(args)
         det.assert_not_called()
+
+
+def test_info_command_metric_returns_1_when_detection_fails(caplog, capsys):
+    error = RuntimeError("Could not detect the GPU architecture: rocminfo not found")
+    with patch("metrix.cli.info_cmd.detect_or_default", side_effect=error):
+        assert info_command(Args(info_type="metric", name=KNOWN_METRIC)) == 1
+    assert "Could not detect the GPU architecture: rocminfo not found" in caplog.text
+    assert capsys.readouterr().out == ""
 
 
 def test_info_command_profile(capsys):

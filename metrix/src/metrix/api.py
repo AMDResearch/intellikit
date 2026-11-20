@@ -73,6 +73,9 @@ class Metrix:
         Args:
             arch: GPU architecture (gfx942, gfx90a) or None to auto-detect
 
+        Raises:
+            RuntimeError: If ``arch`` is None and the GPU architecture cannot be detected
+
         Note: Use Python's logging module to control verbosity (logging.INFO, logging.DEBUG, etc.)
         """
         self.arch = detect_or_default(arch)
