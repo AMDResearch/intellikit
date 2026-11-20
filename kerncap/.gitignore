@@ -83,6 +83,7 @@ profile_*.csv
 # ...but track test fixtures
 !tests/unit/fixtures/*.json
 !tests/unit/fixtures/*.bin
+!skills/*/evals/*.json
 *.hip.capture/
 *.triton.capture/
 isolated/

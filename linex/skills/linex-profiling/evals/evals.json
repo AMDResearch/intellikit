@@ -1,0 +1,56 @@
+{
+  "evaluations": [
+    {
+      "id": "linex-find-hot-line",
+      "skill_should_trigger": true,
+      "prompt": "Find which source line of my gather_scale HIP kernel in gather.hip costs the most GPU cycles and how much of that time is stalled, and write the top lines with their cycle counts and stall percentages to hotspots.md.",
+      "workspace": "evals/files/gather",
+      "expected_behavior": [
+        "Builds gather.hip with hipcc including debug symbols (-g) so cycles can be mapped to source lines",
+        "Profiles the binary with Linex filtered to gather_scale and writes hotspots.md listing gather.hip source lines with the total cycles and stall percentages Linex reported"
+      ],
+      "unexpected_behavior": [
+        "Names a hotspot line or cycle counts without having run Linex, or reports numbers that do not appear in the Linex output"
+      ],
+      "files_exist": [
+        "hotspots.md"
+      ]
+    },
+    {
+      "id": "linex-hot-line-instructions",
+      "skill_should_trigger": true,
+      "prompt": "For the source line of my gather_scale HIP kernel in gather.hip that costs the most cycles, list the ISA instructions it compiled to with their latency and stall cycles in instructions.md.",
+      "workspace": "evals/files/gather",
+      "expected_behavior": [
+        "Builds gather.hip with debug symbols (-g) and profiles gather_scale with Linex",
+        "Writes instructions.md naming the hottest gather.hip source line and listing its ISA instructions with the latency and stall cycles Linex reported"
+      ],
+      "unexpected_behavior": [
+        "Lists instructions or cycle counts without having run Linex, for example from a disassembly with no profile"
+      ],
+      "files_exist": [
+        "instructions.md"
+      ]
+    },
+    {
+      "id": "linex-slowest-line-attention",
+      "skill_should_trigger": true,
+      "prompt": "Which line of my HIP attention kernel is the slowest? I want cycles and stall percentages per source line on my MI300X."
+    },
+    {
+      "id": "linex-triton-isa-stalls",
+      "skill_should_trigger": true,
+      "prompt": "Show me the ISA instructions with the most stall cycles in my Triton kernel and which Python source lines they come from."
+    },
+    {
+      "id": "linex-negative-explicit-pc-sampling",
+      "skill_should_trigger": false,
+      "prompt": "Use rocprofv3 PC sampling on my HIP application and break down the stall reasons it reports."
+    },
+    {
+      "id": "linex-negative-nvidia-nsight-source",
+      "skill_should_trigger": false,
+      "prompt": "Find the slowest source line of my CUDA kernel on an NVIDIA A100 using Nsight Compute's source view."
+    }
+  ]
+}

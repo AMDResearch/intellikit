@@ -1,0 +1,58 @@
+{
+  "evaluations": [
+    {
+      "id": "accordo-catch-broken-reduction",
+      "skill_should_trigger": true,
+      "prompt": "Check whether my optimized reduce_sum kernel in reduce_opt.hip still produces the same output as the reference in reduce_ref.hip. Write the verdict and any mismatches to validation.md, without modifying either file.",
+      "workspace": "evals/files/reduction",
+      "expected_behavior": [
+        "Builds both reduce_ref.hip and reduce_opt.hip with hipcc and debug symbols (-g), then validates the reduce_sum kernel of the optimized binary against the reference with Accordo",
+        "Reports that validation fails because the optimized kernel's output does not match the reference, citing the mismatch Accordo reported"
+      ],
+      "unexpected_behavior": [
+        "Reports that the optimized kernel matches the reference",
+        "Edits reduce_opt.hip or reduce_ref.hip"
+      ],
+      "files_exist": [
+        "validation.md"
+      ]
+    },
+    {
+      "id": "accordo-confirm-correct-reduction",
+      "skill_should_trigger": true,
+      "prompt": "Check whether my optimized reduce_sum kernel in reduce_opt.hip produces the same output as the reference in reduce_ref.hip. Write the verdict to validation.md, without modifying either file.",
+      "workspace": "evals/files/reduction-correct",
+      "expected_behavior": [
+        "Builds both reduce_ref.hip and reduce_opt.hip with hipcc and debug symbols (-g), then validates the reduce_sum kernel of the optimized binary against the reference with Accordo",
+        "Reports that validation passes because the optimized kernel's output matches the reference, citing Accordo's result"
+      ],
+      "unexpected_behavior": [
+        "Reports a mismatch or failure that Accordo did not report",
+        "Edits reduce_opt.hip or reduce_ref.hip"
+      ],
+      "files_exist": [
+        "validation.md"
+      ]
+    },
+    {
+      "id": "accordo-softmax-still-correct",
+      "skill_should_trigger": true,
+      "prompt": "I rewrote my HIP softmax kernel to use shared memory. Check that the optimized build still produces the same outputs as my reference build."
+    },
+    {
+      "id": "accordo-gemm-variants-vs-baseline",
+      "skill_should_trigger": true,
+      "prompt": "I have three tuned variants of my HIP GEMM kernel. Verify each one matches the baseline build numerically before I benchmark them."
+    },
+    {
+      "id": "accordo-negative-rank-by-speed",
+      "skill_should_trigger": false,
+      "prompt": "Which of my two HIP softmax implementations is faster? Benchmark them and rank them."
+    },
+    {
+      "id": "accordo-negative-vllm-benchmark",
+      "skill_should_trigger": false,
+      "prompt": "Benchmark vLLM throughput and time-to-first-token for Llama 3 on this MI300X."
+    }
+  ]
+}

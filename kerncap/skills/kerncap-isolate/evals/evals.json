@@ -1,0 +1,65 @@
+{
+  "evaluations": [
+    {
+      "id": "kerncap-isolate-hottest-kernel",
+      "skill_should_trigger": true,
+      "prompt": "Isolate the kernel that takes the most GPU time in my HIP app, mini_pipeline.hip, into a standalone reproducer under ./isolated, replay it, and check it reproduces the captured run. Write report.md with the kernel you chose and why, the reproducer path, the replay timing, and the validation result.",
+      "workspace": "evals/files/mini-pipeline",
+      "expected_behavior": [
+        "Ranks the application's kernels with Kerncap and picks the kernel with the highest total GPU time from that ranking, saying why",
+        "Extracts that kernel with Kerncap into a reproducer under ./isolated, passing the workspace as the source directory, then replays it and runs Kerncap validation",
+        "Reports the replay timing and the validation result taken from Kerncap's output, and notes that validating without an edited kernel only confirms the capture replays"
+      ],
+      "unexpected_behavior": [
+        "Chooses the kernel by reading the source instead of profiling, or reports timings or a validation result that do not appear in Kerncap's output"
+      ],
+      "logs_contain": [
+        "kerncap extract"
+      ],
+      "files_exist": [
+        "dispatch.json",
+        "report.md"
+      ]
+    },
+    {
+      "id": "kerncap-isolate-named-kernel",
+      "skill_should_trigger": true,
+      "prompt": "Isolate the vector_scale kernel from my HIP app, mini_pipeline.hip, into a standalone reproducer under ./isolated and replay it for 50 iterations to get a stable time. Write report.md with the reproducer path and the replay timing.",
+      "workspace": "evals/files/mini-pipeline",
+      "expected_behavior": [
+        "Extracts the vector_scale kernel with Kerncap into a reproducer under ./isolated, passing the workspace as the source directory",
+        "Replays the reproducer with Kerncap for 50 iterations and reports the timing from Kerncap's output in report.md"
+      ],
+      "unexpected_behavior": [
+        "Extracts a different kernel than vector_scale, or reports a timing that does not appear in Kerncap's output"
+      ],
+      "logs_contain": [
+        "kerncap replay"
+      ],
+      "files_exist": [
+        "dispatch.json",
+        "report.md"
+      ]
+    },
+    {
+      "id": "kerncap-llamacpp-reproducer",
+      "skill_should_trigger": true,
+      "prompt": "Pull the slowest GPU kernel out of my llama.cpp benchmark run into a standalone reproducer I can iterate on without rerunning llama-bench every time."
+    },
+    {
+      "id": "kerncap-triton-kernel-iterate",
+      "skill_should_trigger": true,
+      "prompt": "I want to tune one Triton kernel from my PyTorch training script on our MI300X without rerunning the whole training loop after every change. Capture it so I can replay, edit, and check it on its own."
+    },
+    {
+      "id": "kerncap-negative-vllm-benchmark",
+      "skill_should_trigger": false,
+      "prompt": "Benchmark vLLM throughput and time-to-first-token for Llama 3 on this MI300X."
+    },
+    {
+      "id": "kerncap-negative-app-timeline",
+      "skill_should_trigger": false,
+      "prompt": "Capture an end-to-end rocprofv3 timeline of my training run so I can see CPU and GPU overlap."
+    }
+  ]
+}
