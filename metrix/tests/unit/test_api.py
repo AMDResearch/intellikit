@@ -16,11 +16,26 @@ class TestMetrixInit:
     """Test Metrix initialization"""
 
     def test_init_default(self):
-        """Test default initialization (falls back to gfx942 if no hardware detected)"""
+        """Test default initialization on the detected architecture"""
         profiler = Metrix()
         # Should succeed on any registered architecture
         assert profiler.backend is not None
         assert len(profiler.arch) > 0
+
+    def test_init_raises_when_detection_fails(self):
+        """Without an arch, a detection failure reaches the caller and no backend is built"""
+        with (
+            patch(
+                "metrix.backends.detect.detect_gpu_arch",
+                side_effect=RuntimeError("rocminfo not found"),
+            ),
+            patch("metrix.api.get_backend") as get_backend,
+        ):
+            with pytest.raises(
+                RuntimeError, match="Could not detect the GPU architecture: rocminfo not found"
+            ):
+                Metrix()
+            get_backend.assert_not_called()
 
     @pytest.mark.parametrize("arch", ["gfx942", "gfx90a"])
     def test_init_custom_arch(self, arch):

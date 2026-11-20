@@ -19,7 +19,11 @@ def profile_command(args):
     """Execute profile command using clean backend API"""
 
     # Auto-detect architecture
-    arch = detect_or_default(None)
+    try:
+        arch = detect_or_default(None)
+    except RuntimeError as e:
+        logger.error(str(e))
+        return 1
     logger.info(f"Detected architecture: {arch}")
 
     # Get backend

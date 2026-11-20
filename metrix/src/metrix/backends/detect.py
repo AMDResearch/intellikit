@@ -31,28 +31,38 @@ def detect_gpu_arch() -> str:
         raise RuntimeError("No AMD GPU architecture found in rocminfo output")
 
     except FileNotFoundError:
-        raise RuntimeError(
-            "rocminfo not found. Please install ROCm or specify architecture with --arch"
-        )
+        raise RuntimeError("rocminfo not found on PATH")
     except subprocess.TimeoutExpired:
         raise RuntimeError("rocminfo timed out")
 
 
 def detect_or_default(requested_arch: str = None) -> str:
     """
-    Detect architecture or use provided/default
+    Use the requested architecture, or detect the GPU's
+
+    Detection failure is an error rather than a guess: a guessed architecture
+    selects another architecture's backend and reports the wrong arch, even
+    when the counter definitions happen to line up with the hardware.
+    The message is shown by every caller, including metrix profile, which has
+    no --arch, so its hint must name steps that work from each of them.
 
     Args:
         requested_arch: User-requested architecture, or None to auto-detect
 
     Returns:
         Architecture string
+
+    Raises:
+        RuntimeError: If no architecture was requested and detection fails
     """
     if requested_arch:
         return requested_arch
 
     try:
         return detect_gpu_arch()
-    except RuntimeError:
-        # Fall back to gfx942 if detection fails
-        return "gfx942"
+    except RuntimeError as exc:
+        raise RuntimeError(
+            f"Could not detect the GPU architecture: {str(exc).strip()}. Metrix will not guess one: "
+            "make sure rocminfo runs and lists this GPU, or pass the architecture explicitly "
+            "(Metrix(arch=...) in Python, --arch for metrix list and metrix info)."
+        ) from exc

@@ -77,9 +77,16 @@ def test_detect_or_default_autodetects_when_unset():
         assert detect_or_default() == "gfx950"
 
 
-def test_detect_or_default_falls_back_to_gfx942():
-    with patch.object(detect_mod, "detect_gpu_arch", side_effect=RuntimeError("no gpu")):
-        assert detect_or_default() == "gfx942"
+def test_detect_or_default_raises_instead_of_guessing():
+    with patch.object(detect_mod, "detect_gpu_arch", side_effect=RuntimeError("no gpu\n")):
+        with pytest.raises(
+            RuntimeError,
+            match=r"Could not detect the GPU architecture: no gpu\. Metrix will not guess one",
+        ) as excinfo:
+            detect_or_default()
+    message = str(excinfo.value)
+    assert "make sure rocminfo runs and lists this GPU" in message
+    assert "(Metrix(arch=...) in Python, --arch for metrix list and metrix info)" in message
 
 
 # --------------------------------------------------------------------------
