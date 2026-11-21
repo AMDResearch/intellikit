@@ -237,18 +237,21 @@ def _find_hip_kernel(
     source_dir: str,
     extra_defines: Optional[List[str]] = None,
     mangled_name: str = "",
+    binary_path: Optional[str] = None,
 ) -> Optional[KernelSource]:
     """Locate a __global__ HIP kernel in a C++/HIP source tree."""
-    if mangled_name:
-        cc_path = _find_compile_commands_from_source_dir(source_dir)
-        if cc_path:
-            result = _find_hip_kernel_via_dwarf(
-                kernel_name, mangled_name, source_dir, cc_path, extra_defines
-            )
-            if result:
-                _logger.info("Source discovery via DWARF debug info succeeded")
-                return result
-            _logger.debug("DWARF discovery failed, falling back to source grep")
+    cc_path = _find_compile_commands_from_source_dir(source_dir)
+    if cc_path is None and binary_path:
+        cc_path = _find_compile_commands(binary_path)
+
+    if mangled_name and cc_path:
+        result = _find_hip_kernel_via_dwarf(
+            kernel_name, mangled_name, source_dir, cc_path, extra_defines
+        )
+        if result:
+            _logger.info("Source discovery via DWARF debug info succeeded")
+            return result
+        _logger.debug("DWARF discovery failed, falling back to source grep")
 
     search_files: List[str] = []
     for root, _, files in os.walk(source_dir):
@@ -329,7 +332,6 @@ def _find_hip_kernel(
     )
 
     # Find the .cu translation unit that actually compiles the kernel
-    cc_path = _find_compile_commands_from_source_dir(source_dir)
     tu_path, compile_cmd, compile_dir = _find_translation_unit(
         main_file,
         source_dir,
@@ -1420,6 +1422,7 @@ def find_kernel_source(
     language: Optional[str] = None,
     extra_defines: Optional[List[str]] = None,
     mangled_name: str = "",
+    binary_path: Optional[str] = None,
 ) -> Optional[KernelSource]:
     """Find the source code for a kernel.
 
@@ -1437,6 +1440,9 @@ def find_kernel_source(
     mangled_name : str, optional
         Mangled kernel symbol name from ``dispatch.json``.  Used to
         disambiguate template-instantiation translation units.
+    binary_path : str, optional
+        Captured executable used to locate the build directory when the
+        source tree does not contain a compilation database.
 
     Returns
     -------
@@ -1454,6 +1460,7 @@ def find_kernel_source(
             source_dir,
             extra_defines,
             mangled_name,
+            binary_path,
         )
     else:
         result = _find_triton_kernel(kernel_name, source_dir)
@@ -1464,4 +1471,5 @@ def find_kernel_source(
             source_dir,
             extra_defines,
             mangled_name,
+            binary_path,
         )
