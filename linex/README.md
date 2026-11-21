@@ -35,8 +35,12 @@ for line in profiler.source_lines[:5]:
 
 ## Requirements
 
-- Python >= 3.8
-- ROCm 7.0+ with `rocprofv3`
+| Requirement | Notes |
+|-------------|-------|
+| Python | 3.10 or later. |
+| OS | Ubuntu 22.04 and 24.04. |
+| ROCm | 7.2.x or later, with `rocprofv3`. |
+| GPU | Both Instinct and Radeon GPUs are supported. Instinct MI300X, MI325X, MI355X, and MI450 are recommended for full GPU functionality. |
 
 ### Compiling with and without `-g`
 
