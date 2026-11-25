@@ -10,7 +10,7 @@ set -e
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/skills/install.sh"
 # Env default (--base-url overrides); use args when piping to bash so overrides apply
 BASE_URL="${INTELLIKIT_RAW_URL:-https://raw.githubusercontent.com/AMDResearch/intellikit/main}"
-# Skill folders relative to the repo root; the installed folder is named after the tool
+# Skill folders relative to the repo root; the installed folder is named after the skill
 SKILL_DIRS=(
   metrix/skills/metrix-profiling
   accordo/skills/accordo-validation
@@ -104,9 +104,8 @@ if [[ "$DRY_RUN" != true ]]; then
 fi
 
 for skill_dir in "${SKILL_DIRS[@]}"; do
-  tool="${skill_dir%%/*}"
   url="${BASE_URL}/${skill_dir}/SKILL.md"
-  dest_dir="${SKILLS_ROOT}/${tool}"
+  dest_dir="${SKILLS_ROOT}/${skill_dir##*/}"
   dest_file="${dest_dir}/SKILL.md"
 
   if [[ "$DRY_RUN" == true ]]; then
@@ -127,6 +126,6 @@ if [[ "$DRY_RUN" != true ]]; then
   echo ""
   echo "IntelliKit skills are in ${SKILLS_ROOT}:"
   for skill_dir in "${SKILL_DIRS[@]}"; do
-    echo "  ${SKILLS_ROOT}/${skill_dir%%/*}/SKILL.md"
+    echo "  ${SKILLS_ROOT}/${skill_dir##*/}/SKILL.md"
   done
 fi
