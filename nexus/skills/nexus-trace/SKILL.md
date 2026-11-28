@@ -1,6 +1,6 @@
 ---
 name: nexus-trace
-description: Extract GPU kernel assembly and HIP source from HSA packet traces. Use when analyzing what code ran on the GPU, debugging kernel dispatch, or inspecting assembly and source mapping.
+description: Extract GPU kernel assembly and HIP source from HSA packet traces. Use when analyzing what code ran on the GPU, debugging kernel dispatch, inspecting assembly and source mapping, or mapping a kernel's GPU assembly back to its source lines.
 ---
 
 # Nexus: HSA Packet Source Code Extractor
@@ -13,11 +13,17 @@ Intercepts HSA packets from a running process and extracts, per kernel, assembly
 - Debugging or analyzing GPU dispatch and code generation
 - Inspecting assembly-to-source mapping for a HIP (or ROCm) application
 
+## Prerequisites
+
+- AMD GPU with ROCm 7.2 or later, Ubuntu 22.04 or 24.04, and Python 3.10 or later.
+- `cmake`, `libdwarf-dev`, and `libzstd-dev` for the C++ build; the install fails without them.
+- Install: `pip install "git+https://github.com/AMDResearch/intellikit.git#subdirectory=nexus"`
+
 ## Instructions
 
 1. **Ensure the target runs on AMD ROCm** and uses HSA (e.g. HIP application or ROCm runtime).
 2. **Choose execution path:**
-   - If a Nexus MCP server is available, use its tools: `list_kernels` to enumerate kernels in a trace, and `extract_kernel_code` to get assembly and HIP/source mapping (signature, files, lines). See `nexus/nexus/mcp/server.py` for tool parameters and schemas.
+   - If a Nexus MCP server is available, use its tools. Both take the command to run as a list: `nexus-mcp:list_kernels` lists the kernels it launched, and `nexus-mcp:extract_kernel_code` returns each kernel's HIP or Triton source (and, with `include_assembly=True`, the first 100 assembly lines). For full assembly, signatures, and source-line mapping, use the Python API.
    - Otherwise use the Python API from the environment where Nexus is installed.
 
 ### Python API (recommended when no MCP)
@@ -66,6 +72,7 @@ Optional: `NEXUS_EXTRA_SEARCH_PREFIX` (colon-separated) for HIP source search; `
 2. If using the Python API: create `Nexus(log_level=...)`, call `nexus.run([...])`, then iterate `trace` and optionally `trace.save(...)`.
 3. If using the env method: set `HSA_TOOLS_LIB` and `NEXUS_OUTPUT_FILE`, then run the app; open the JSON and parse the `kernels` structure.
 4. Use kernel `signature`, `assembly`, `hip`, `files`, and `lines` to analyze what ran and map assembly back to source.
+   `hip`, `files`, and `lines` list each distinct source line the kernel came from (they line up with each other, not one per `assembly` instruction).
 5. Use relative paths for commands and output files.
 
 ## Notes

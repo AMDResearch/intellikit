@@ -57,7 +57,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
   | bash -s -- --target cursor
 ```
 
-Skills are installed in `.cursor/skills/{tool}/SKILL.md`. The Cursor agent automatically detects and uses installed skills.
+Skills are installed in `.cursor/skills/{skill}/SKILL.md`. The Cursor agent automatically detects and uses installed skills.
 
 ### Claude Code
 
@@ -66,7 +66,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
   | bash -s -- --target claude
 ```
 
-Skills are installed in `.claude/skills/{tool}/SKILL.md`.
+Skills are installed in `.claude/skills/{skill}/SKILL.md`.
 
 ### Codex
 
@@ -82,7 +82,7 @@ curl -sSL https://raw.githubusercontent.com/AMDResearch/intellikit/main/install/
   | bash -s -- --target github
 ```
 
-Skills are installed in `.github/agents/skills/{tool}/SKILL.md`.
+Skills are installed in `.github/agents/skills/{skill}/SKILL.md`.
 
 ## Global vs project-level
 
@@ -107,15 +107,17 @@ curl -sSL .../install/skills/install.sh | bash -s -- --base-url https://raw.gith
 
 ## Installed file structure
 
-After installation, each tool gets its own `SKILL.md` file:
+After installation, each skill gets its own folder, named after the skill:
 
 ```
 .cursor/skills/          # or .claude/skills/, .agents/skills/, etc.
-├── metrix/SKILL.md
-├── kerncap/SKILL.md
-├── linex/SKILL.md
-├── nexus/SKILL.md
-└── accordo/SKILL.md
+├── metrix-profiling/SKILL.md
+├── kerncap-isolate/SKILL.md
+├── linex-profiling/SKILL.md
+├── nexus-trace/SKILL.md
+└── accordo-validation/SKILL.md
 ```
 
-Each file has a YAML frontmatter with `name` and `description`, followed by the full skill playbook.
+Each file has a YAML frontmatter with `name` and `description`, followed by the full skill playbook. The `name` matches the folder name.
+
+Earlier versions of the installer named the folders after the tool (`metrix/`, `kerncap/`, `linex/`, `nexus/`, `accordo/`). If you installed skills before this change, delete those folders after reinstalling so each skill is installed only once.

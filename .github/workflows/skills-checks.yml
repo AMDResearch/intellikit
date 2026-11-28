@@ -1,0 +1,191 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Grade the agent skills under <tool>/skills/ with skillscope, the same harness
+# the amd/skills catalog uses on its vendored copies, so breakage shows up in
+# the pull request that causes it instead of in the catalog's nightly run.
+#
+# Structural checks need no model and run on a hosted runner. Routing and
+# behavioral checks call Claude through an internal LLM gateway that only the
+# self-hosted MI3xx runners can reach. They read two repository secrets:
+#
+#   SKILLS_ANTHROPIC_API_KEY   gateway API key
+#   SKILLS_ANTHROPIC_BASE_URL  gateway base URL
+#
+# Routing runs on every skill pull request; behavioral needs a GPU and runs only
+# on manual dispatch. Until both secrets exist, those jobs skip their steps.
+
+name: AMD Skills Checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*/skills/**"
+      - ".github/workflows/skills-checks.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "*/skills/**"
+      - ".github/workflows/skills-checks.yml"
+  workflow_dispatch:
+    inputs:
+      structural:
+        description: Structural Tests
+        type: boolean
+        default: true
+      routing:
+        description: Routing Tests
+        type: boolean
+        default: true
+      behavioral:
+        description: Behavioral Tests (MI3xx runner)
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Free and offline, so it runs on a hosted runner and gates the paid jobs
+  # below: a malformed dataset should not be found halfway through a token run.
+  structural:
+    name: Structural
+    uses: amd/skillscope/.github/workflows/reusable.yml@v0.1.3
+    with:
+      skills: "*/skills/*"
+      # Each step can be set to `required`, `optional`, or `off`. Routing and
+      # behavioral run in the jobs below, on a runner that reaches the gateway.
+      structural: ${{ github.event_name != 'workflow_dispatch' && 'required' || inputs.structural && 'required' || 'off' }}
+      routing: "off"
+      behavioral: "off"
+
+  # Whether each skill fires on the prompts it owns and stays quiet on its near
+  # misses. All five skills share one room, so each skill's prompts are also
+  # negatives for the others. This uses the composite action rather than the
+  # reusable workflow, which runs every job on one runner and expects Python to
+  # be set up already; the action sets up its own.
+  routing:
+    name: Routing Tests
+    needs: structural
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.routing) }}
+    runs-on: [self-hosted, mi3xx]
+    timeout-minutes: 40
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.SKILLS_ANTHROPIC_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ secrets.SKILLS_ANTHROPIC_BASE_URL }}
+      # The gateway is Azure API Management, which reads the key from this
+      # header rather than the x-api-key header the claude CLI sends.
+      ANTHROPIC_CUSTOM_HEADERS: "Ocp-Apim-Subscription-Key: ${{ secrets.SKILLS_ANTHROPIC_API_KEY }}"
+      IS_SANDBOX: "1"
+    steps:
+      # Secrets cannot appear in a job-level `if`, so the check is a step.
+      - name: Check gateway secrets
+        id: gateway
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] && [ -n "$ANTHROPIC_BASE_URL" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::SKILLS_ANTHROPIC_API_KEY or SKILLS_ANTHROPIC_BASE_URL is not available; skipping routing."
+          fi
+
+      - name: Check out repository
+        if: steps.gateway.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Run the routing eval
+        if: steps.gateway.outputs.ready == 'true'
+        uses: amd/skillscope@v0.1.3
+        with:
+          command: routing
+          skills: "*/skills/*"
+          # One wrong routing decision fails the job, the same bar amd/skills
+          # grades these skills against.
+          # --timeout 0 leaves the cap to timeout-minutes; the harness default
+          # of 15 minutes is sized for a single skill.
+          args: >-
+            --routing-room all
+            --min-accuracy 1
+            --timeout 0
+            --output routing-report.json
+            --keep-logs routing-logs
+          install-claude: "true"
+
+      - name: Upload the routing report
+        if: always() && steps.gateway.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: routing-report
+          path: |
+            routing-report.json
+            routing-logs/
+          if-no-files-found: warn
+
+  # What each skill does once it has fired: every case with expectations runs
+  # to completion on a GPU and is graded on what the agent actually did. One
+  # job per skill, as skillscope's own workflows do, so a skill that cannot be
+  # set up does not hide the others' results.
+  behavioral:
+    name: Behavioral Tests (${{ matrix.skill }})
+    needs: structural
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.behavioral }}
+    runs-on: [self-hosted, mi3xx]
+    strategy:
+      fail-fast: false
+      matrix:
+        skill:
+          - accordo-validation
+          - kerncap-isolate
+          - linex-profiling
+          - metrix-profiling
+          - nexus-trace
+    # The skill's hooks may build its tool from source before its cases run.
+    timeout-minutes: 60
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.SKILLS_ANTHROPIC_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ secrets.SKILLS_ANTHROPIC_BASE_URL }}
+      # The gateway is Azure API Management, which reads the key from this
+      # header rather than the x-api-key header the claude CLI sends.
+      ANTHROPIC_CUSTOM_HEADERS: "Ocp-Apim-Subscription-Key: ${{ secrets.SKILLS_ANTHROPIC_API_KEY }}"
+      IS_SANDBOX: "1"
+    steps:
+      - name: Check gateway secrets
+        id: gateway
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] && [ -n "$ANTHROPIC_BASE_URL" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::SKILLS_ANTHROPIC_API_KEY or SKILLS_ANTHROPIC_BASE_URL is not available; skipping behavioral."
+          fi
+
+      - name: Check out repository
+        if: steps.gateway.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Show the runner's operating system
+        run: cat /etc/os-release
+
+      - name: Run the behavioral evals
+        if: steps.gateway.outputs.ready == 'true'
+        uses: amd/skillscope@v0.1.3
+        with:
+          command: behavioral
+          skills: "*/skills/*"
+          # --timeout 0 leaves the cap to timeout-minutes.
+          args: >-
+            --skill ${{ matrix.skill }}
+            --timeout 0
+            --output behavioral-report.json
+          install-claude: "true"
+
+      - name: Upload the behavioral report
+        if: always() && steps.gateway.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: behavioral-report-${{ matrix.skill }}
+          path: behavioral-report.json
+          if-no-files-found: warn
